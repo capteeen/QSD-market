@@ -48,20 +48,20 @@ A user pays the sum of three amounts, in lamports (1 SOL = 1 000 000 000). The v
 
 Until all three are set, `/launch` says "not available" and refuses to launch.
 
-`/launch` also needs `QSD_GENESIS_CONFIG`, the generation-1 channel table (airdrop pool of 4–5 % of supply). On Vercel paste the JSON itself:
+`/launch` also needs `QSD_GENESIS_CONFIG`, the generation-1 channel table (airdrop pool of 0.30–0.34 % of supply). On Vercel paste the JSON itself:
 
 ```
-QSD_GENESIS_CONFIG={"supplyUnits":"1000000000000000","decimals":6,"poolUnits":{"min":"40000000000000","max":"50000000000000"},"channels":[{"id":"fast","probabilityPpm":500000,"label":"fast decay","halfLifeSec":{"min":3600,"max":86400},"poolUnits":{"min":"40000000000000","max":"45000000000000"}},{"id":"slow","probabilityPpm":500000,"label":"slow decay","halfLifeSec":{"min":86400,"max":604800},"poolUnits":{"min":"45000000000000","max":"50000000000000"}}]}
+QSD_GENESIS_CONFIG={"supplyUnits":"1000000000000000","decimals":6,"poolUnits":{"min":"3000000000000","max":"3400000000000"},"channels":[{"id":"fast","probabilityPpm":500000,"label":"fast decay","halfLifeSec":{"min":3600,"max":86400},"poolUnits":{"min":"3000000000000","max":"3200000000000"}},{"id":"slow","probabilityPpm":500000,"label":"slow decay","halfLifeSec":{"min":86400,"max":604800},"poolUnits":{"min":"3200000000000","max":"3400000000000"}}]}
 ```
 
-**Collapses are paid by the fee wallet, not by users.** Each daughter is launched with a dev buy just large enough to cover its airdrop pool (4–5 % of supply with `genesis.example.json`, about 1.2–1.5 SOL, estimated from pump.fun's starting price). If the mother coin's dev-buy tokens don't cover the collapse reward, the wallet buys the difference from the mother's curve. A collapse the wallet can't afford stops and resumes after you top it up. Two limits cap what one collapse can spend:
+**Collapses are paid by the fee wallet, not by users.** Each daughter is launched with a dev buy just large enough to cover its airdrop pool. With `genesis.example.json` the pool is 0.30–0.34 % of the daughter's supply, which costs just under 0.1 SOL (estimated from pump.fun's starting price), plus network fees. The collapse reward (normally 1 % of the mother's supply, 20 % of it to the measurer, the rest burned) is capped to the mother tokens the launch dev buy bought, about 0.35 %, so nothing else is bought. A collapse the wallet can't afford stops and resumes after you top it up.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `QSD_DAUGHTER_DEV_BUY_MAX_SOL` | `2` | Largest daughter dev buy allowed. |
-| `QSD_REWARD_SHORTFALL_MAX_SOL` | `0.5` | Largest reward top-up buy allowed. |
+| `QSD_DAUGHTER_DEV_BUY_MAX_SOL` | `0.1` | Largest daughter dev buy allowed; a bigger pool waits. |
+| `QSD_REWARD_SHORTFALL_MAX_SOL` | `0` | `0` caps the reward to what the treasury holds. Above `0`, the wallet buys the rest of the 1 % on the curve, up to this much SOL. |
 
-Launch fees leave only about 0.02 SOL each after costs (estimate), so expect to fund collapses yourself. `QSD_MAX_COLLAPSES_PER_DAY` (default `3` on mainnet) caps how many collapses run in any 24 hours; extra ones wait their turn.
+Launch fees leave only about 0.02 SOL each after costs (estimate), so expect to fund collapses yourself (about 0.1 SOL each). `QSD_MAX_COLLAPSES_PER_DAY` (default `3` on mainnet) caps how many collapses run in any 24 hours; extra ones wait their turn.
 
 **Launch phase.** With `QSD_FAST_LAUNCH_PHASE=true`, every new coin gets a 5-minute half-life and the worker measures it after 10 quiet minutes, so with no trading it usually collapses within 10 to 30 minutes and its daughter appears. Daughters keep the genesis half-lives (1 hour or more), so only the first generation is fast. This needs the worker running.
 

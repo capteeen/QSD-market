@@ -214,6 +214,21 @@ describe('executeCollapse', () => {
       expect(buys).toHaveLength(1);
     });
 
+    it('with shortfall buys off, caps the reward to the mother units the treasury holds and buys nothing', async () => {
+      const { chain, mother, deps, buys } = await setup(1_000_000_000n);
+      const held = 3_500_000_000_000n; // what a 0.10 SOL launch dev buy gets, roughly
+      chain.mintTo(new PublicKey(mother.ca), deps.sender.payer, held);
+      const capped = { ...deps, pump: { ...deps.pump, maxShortfallSol: 0 } };
+      await expect(executeCollapse(mother, capped)).rejects.toThrow(/dev buy needs/);
+      expect(buys).toEqual([]);
+      const j = (await capped.journal.load())!;
+      const r = j.steps.rewards!.result;
+      expect(r.removedUnits).toBe(held);
+      expect(r.measurerUnits + r.burnedUnits).toBe(held);
+      expect(j.rewardRemovedUnits).toBe(held.toString());
+      expect(await chain.getTokenBalance(deps.sender.payer, new PublicKey(mother.ca))).toBe(0n);
+    });
+
     it('refuses a pool whose dev buy exceeds the limit, and a shortfall buy above its limit', async () => {
       const a = await setup(100_000_000_000n);
       await expect(executeCollapse(a.mother, { ...a.deps, pump: { ...a.deps.pump, maxDaughterDevBuySol: 1 } })).rejects.toThrow(/above the 1 SOL limit; launch refused/);

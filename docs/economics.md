@@ -158,6 +158,12 @@ supply — is paid to the measurer and the other 80 % is burned. All
 divisions round down; the measurer's units plus the burned units equal the
 removed amount exactly.
 
+On mainnet the removed units come from the mother tokens the protocol bought
+with the launch dev buy. An operator who does not buy more
+(`QSD_REWARD_SHORTFALL_MAX_SOL=0`, the default) caps the removed amount at
+what the protocol holds, so it can be less than 1 %; the 20 % / 80 % split
+is unchanged and the collapse record shows the units actually removed.
+
 **Tunnel.** On 2.5 % (`TUNNEL_PROBABILITY_PPM`) of collapses, decided by
 bytes 8–15 of the same draw, the coin does not produce a daughter. It
 re-emerges as *itself*: same address, same holders, same generation, quiet

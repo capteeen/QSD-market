@@ -67,8 +67,8 @@ export async function runCollapse(ca: string, log: (line: string) => void = cons
   }
   const chain = getChain();
   const { creator, sender, reader, transferSender, anchor, getMintRentLamports } = await chain.withCreator();
-  const maxDaughterDevBuySol = solLimit('QSD_DAUGHTER_DEV_BUY_MAX_SOL', 2);
-  const maxShortfallSol = solLimit('QSD_REWARD_SHORTFALL_MAX_SOL', 0.5);
+  const maxDaughterDevBuySol = solLimit('QSD_DAUGHTER_DEV_BUY_MAX_SOL', 0.1);
+  const maxShortfallSol = solLimit('QSD_REWARD_SHORTFALL_MAX_SOL', 0);
   // H-W13: the holder snapshot is taken at the slot the collapse proof was anchored in (recorded on the
   // collapsing measurement), not at whatever slot this worker happens to start at.
   const collapseSlot = proofAnchorSlot(row);
@@ -158,7 +158,7 @@ export async function runCollapse(ca: string, log: (line: string) => void = cons
       coinCa: daughter.ca,
       tx: outcome.launch.txSignature,
       summary: `${daughter.ticker} born (generation ${daughter.generation}) from ${mother.ticker}; ${table.entries.length} holder${table.entries.length === 1 ? '' : 's'} allocated ${formatUnits(table.allocatedUnits, daughter.supply.decimals)} units, root ${table.merkleRoot.slice(0, 16)}…`,
-      data: { motherCa: ca, merkleRoot: table.merkleRoot, rootAnchorTx: airdrop.rootAnchorSignature, burnTx: rewards.burnTx, measurerTx: rewards.measurerTx ?? null },
+      data: { motherCa: ca, merkleRoot: table.merkleRoot, rootAnchorTx: airdrop.rootAnchorSignature, burnTx: rewards.burnTx || null, measurerTx: rewards.measurerTx ?? null },
     });
     await logEvent({
       type: 'airdrop',

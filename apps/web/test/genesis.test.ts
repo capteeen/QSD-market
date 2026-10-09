@@ -18,7 +18,7 @@ describe('QSD_GENESIS_CONFIG', () => {
     const inline = (await import('@/server/genesis')).genesisStatus();
     expect(inline.error).toBeUndefined();
     expect(inline.config).toEqual(fromFile.config);
-    expect(inline.config!.poolUnits).toEqual({ min: 40_000_000_000_000n, max: 50_000_000_000_000n });
+    expect(inline.config!.poolUnits).toEqual({ min: 3_000_000_000_000n, max: 3_400_000_000_000n });
   });
 
   it('reports bad inline JSON instead of defaulting', async () => {

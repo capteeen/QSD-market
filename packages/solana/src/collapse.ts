@@ -81,6 +81,8 @@ export interface CollapseJournalDoc extends Leasable {
   startedAt: string;
   /** Per-transaction records inside steps, keyed by `<step>.<name>`. */
   sends: Record<string, TrackedSend>;
+  /** Mother units the reward removes, fixed before its first transaction (less than 1 % when capped to the treasury's holdings). */
+  rewardRemovedUnits?: string;
   steps: {
     rewards?: StepRecord<RewardsResult>;
     snapshot?: StepRecord<SnapshotResult>;
@@ -121,7 +123,11 @@ export interface CollapseDeps {
     buy(p: { mint: PublicKey; units: bigint; decimals: number }, onSent: (sent: SentTransaction) => Promise<void>): Promise<string>;
     /** Refuse a daughter launch whose dev buy would cost more than this (SOL). */
     maxDaughterDevBuySol: number;
-    /** Refuse a reward shortfall buy that would cost more than this (SOL). */
+    /**
+     * Refuse a reward shortfall buy that would cost more than this (SOL).
+     * 0 = never buy: the reward is then capped to the mother units the
+     * treasury already holds (from the launch dev buy) instead of 1 %.
+     */
     maxShortfallSol: number;
     /** Kept back for transaction costs when checking the wallet can pay (lamports). Default 0.03 SOL. */
     overheadLamports?: bigint;
@@ -251,6 +257,11 @@ async function executeCollapseLeased(mother: Coin, deps: CollapseDeps, d: Collap
     return result;
   };
 
+  /** The protocol's reward split applied to a removed amount smaller than 1 %. */
+  const rewardsFor = (removedUnits: bigint) => {
+    const measurerUnits = (removedUnits * BigInt(PROTOCOL_PARAMS.MEASURER_SHARE_OF_BURN_BPS)) / 10_000n;
+    return { removedUnits, measurerUnits, burnedUnits: removedUnits - measurerUnits };
+  };
   /** Buy `units` mother units on its bonding curve; the signature is journalled under 'rewards.shortfall-buy' so a resume never buys twice. */
   const buyRewardShortfall = async (units: bigint): Promise<void> => {
     const pump = deps.pump!;
@@ -305,13 +316,21 @@ async function executeCollapseLeased(mother: Coin, deps: CollapseDeps, d: Collap
 
   // 2. rewards (after the snapshot, so the measurer's reward is not part of the holder set)
   const rewards = await step('rewards', async () => {
-    const r = collapseRewards(mother.supply.remainingUnits);
+    let r = collapseRewards(mother.supply.remainingUnits);
+    if (d.rewardRemovedUnits !== undefined) r = rewardsFor(BigInt(d.rewardRemovedUnits));
     if (!d.sends['rewards.burn']) {
       let held = await deps.reader.getTokenBalance(treasury, motherMint);
       if (held < r.removedUnits && deps.cluster === 'mainnet-beta' && deps.pump) {
-        await buyRewardShortfall(r.removedUnits - held);
-        held = await deps.reader.getTokenBalance(treasury, motherMint);
+        if (deps.pump.maxShortfallSol > 0) {
+          await buyRewardShortfall(r.removedUnits - held);
+          held = await deps.reader.getTokenBalance(treasury, motherMint);
+        } else {
+          log(`collapse ${mother.ca}: reward capped to the treasury's ${held} mother units (1 % would be ${r.removedUnits})`);
+          r = rewardsFor(held);
+        }
       }
+      d.rewardRemovedUnits = r.removedUnits.toString();
+      await save();
       if (held < r.removedUnits) {
         throw new ChainUnavailableError(`treasury holds ${held} mother units but the collapse reward removes ${r.removedUnits}; cannot execute rewards honestly`);
       }
@@ -320,6 +339,7 @@ async function executeCollapseLeased(mother: Coin, deps: CollapseDeps, d: Collap
     const measurer = last.by;
     const payMeasurer = measurer !== PROTOCOL_PARAMS.AUTO_MEASURER_ID && r.measurerUnits > 0n;
     const burnUnits = payMeasurer ? r.burnedUnits : r.removedUnits;
+    if (r.removedUnits === 0n) return { ...r, burnTx: '', measurer };
     const burn = await sendOnce('rewards.burn', () => [createBurnInstruction(ata, motherMint, treasury, burnUnits)]);
     deps.observer?.emit({ type: 'burnSent', txSignature: burn.signature, mint: mother.ca, units: burnUnits.toString() });
     const out: RewardsResult = { ...r, burnTx: burn.signature, measurer };
