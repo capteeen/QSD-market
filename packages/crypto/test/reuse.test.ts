@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  CryptoInputError,
   KeyReuseError,
   KeysExhaustedError,
   LEAVES,
@@ -16,6 +17,7 @@ import {
   remainingIndices,
   sign,
   signWithIndex,
+  validateState,
   verify,
   type IdentityState,
 } from "../src/index.js";
@@ -24,18 +26,62 @@ const identity = createIdentity(new Uint8Array(32).fill(42));
 const msg = new TextEncoder().encode("reuse me");
 
 describe("reuse rejection (pure functions)", () => {
-  it("sign() twice from the same state object is rejected on the second call... when the state is reused", () => {
+  it("sign() with the returned state advances; explicit reuse of a consumed index throws", () => {
     const s0 = identity.initialState();
     const first = sign(identity, s0, msg);
-    // The caller correctly uses the new state: index 1 is consumed, not 0.
+    expect(first.index).toBe(0);
     const second = sign(identity, first.state, msg);
     expect(second.index).toBe(1);
-    // Replaying the old state object would hand out index 0 again, so the
-    // store-backed Signer below is the mandatory path for persistence; here we
-    // show that explicit reuse of a consumed index throws.
     expect(() => signWithIndex(identity, first.state, 0, msg)).toThrow(KeyReuseError);
     expect(() => signWithIndex(identity, second.state, 0, msg)).toThrow(KeyReuseError);
     expect(() => signWithIndex(identity, second.state, 1, msg)).toThrow(KeyReuseError);
+  });
+
+  it("H-C1: sign() twice with the same stale state object throws KeyReuseError", () => {
+    const s0 = identity.initialState();
+    const r1 = sign(identity, s0, msg);
+    expect(() => sign(identity, s0, msg)).toThrow(KeyReuseError);
+    try {
+      sign(identity, s0, msg);
+    } catch (e) {
+      expect((e as KeyReuseError).index).toBe(r1.index);
+    }
+  });
+
+  it("H-C1: the identity remembers; a fresh or JSON-edited state cannot reissue a consumed index", () => {
+    const r = signWithIndex(identity, identity.initialState(), 9, msg);
+    // fresh state, all bits clear
+    expect(() => signWithIndex(identity, identity.initialState(), 9, msg)).toThrow(KeyReuseError);
+    // JSON round trip with the bit cleared by hand
+    const cleared = JSON.parse(JSON.stringify(r.state)) as IdentityState;
+    cleared.used = identity.initialState().used;
+    cleared.nextIndex = 0;
+    expect(() => signWithIndex(identity, cleared, 9, msg)).toThrow(KeyReuseError);
+    // sign() with a fresh state skips every remembered index instead of reissuing one
+    const used = new Set(identity.usedIndices());
+    const next = sign(identity, identity.initialState(), msg);
+    expect(used.has(next.index)).toBe(false);
+    for (const u of used) expect(isIndexUsed(next.state, u)).toBe(true);
+  });
+
+  it("H-C2: no public method on Identity produces a signature", () => {
+    const proto = Object.getPrototypeOf(identity) as Record<string, unknown>;
+    const names = [...Object.getOwnPropertyNames(identity), ...Object.getOwnPropertyNames(proto)];
+    expect(names).not.toContain("_sign");
+    for (const n of names) {
+      const v = (identity as unknown as Record<string, unknown>)[n];
+      if (typeof v === "function" && n !== "constructor") {
+        expect(["initialState", "usedIndices", "memoryState", "node", "toJSON"]).toContain(n);
+      }
+    }
+  });
+
+  it("an index issued through a Signer cannot be reissued through the stateless API", async () => {
+    const signer = new Signer(identity, new MemoryStateStore());
+    const r = await signer.signWithIndex(123, msg);
+    expect(r.index).toBe(123);
+    expect(identity.usedIndices()).toContain(123);
+    expect(() => signWithIndex(identity, identity.initialState(), 123, msg)).toThrow(KeyReuseError);
   });
 
   it("signWithIndex on a used index throws KeyReuseError with the index", () => {
@@ -73,6 +119,16 @@ describe("reuse rejection (pure functions)", () => {
     expect(isIndexUsed(merged, 1)).toBe(true);
     expect(isIndexUsed(merged, 2)).toBe(true);
     expect(merged.nextIndex).toBe(0);
+  });
+
+  it("H-C4: validateState rejects non-hex content and mergeStates rejects a pubSeed mismatch", () => {
+    const s = identity.initialState();
+    expect(() => validateState({ ...s, used: "zz".repeat(32) })).toThrow(CryptoInputError);
+    expect(() => validateState({ ...s, root: "g".repeat(64) })).toThrow(CryptoInputError);
+    expect(() => validateState({ ...s, pubSeed: " ".repeat(64) })).toThrow(CryptoInputError);
+    const otherSeed = { ...s, pubSeed: "00".repeat(32) };
+    expect(() => mergeStates(s, otherSeed)).toThrow(/public seed/);
+    expect(() => sign(identity, otherSeed, msg)).toThrow(/pubSeed mismatch/);
   });
 
   it("out-of-range indices are rejected", () => {

@@ -82,9 +82,12 @@ describe('stateless API: sign / signWithIndex', () => {
   });
 
   it('FINDING H-C1 (variant): signWithIndex twice with the same stale state, same index, does not throw', () => {
+    // Index 40 is untouched by the earlier tests in this file; a correct implementation
+    // remembers that sign() consumed 0..4 above and must refuse those even on a fresh state.
     const s0 = idA.initialState();
-    signWithIndex(idA, s0, 3, msg('a'));
-    expect(() => signWithIndex(idA, s0, 3, msg('b'))).toThrow(KeyReuseError);
+    signWithIndex(idA, s0, 40, msg('a'));
+    expect(() => signWithIndex(idA, s0, 40, msg('b'))).toThrow(KeyReuseError);
+    expect(() => signWithIndex(idA, s0, 3, msg('c'))).toThrow(KeyReuseError);
   });
 
   it('FINDING H-C2: Identity._sign is a public method that signs with any index, unlimited times', () => {

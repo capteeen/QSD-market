@@ -83,21 +83,26 @@ describe('Identity never exposes secrets through ordinary channels', () => {
     }
   });
 
-  it('FINDING H-C3 (documented, MEDIUM): the unredacted keygen stream contains every one-time secret key', () => {
-    // README §3 documents this. Recorded here so the integrator (scene/app) cannot miss it:
-    // chainStep depth 0 for leaf k chain i IS sk_k[i]. A leaked recording = a leaked private key.
+  it('FINDING H-C3 (fixed): recordEvents() redacts by default; the raw keygen stream is opt-in and contains every one-time secret key', () => {
+    // chainStep depth 0 for leaf k chain i IS sk_k[i]. A leaked raw recording = a leaked private key,
+    // so the default recording must be redacted and the raw stream requires { redact: false }.
     const sk0 = wotsExpandSecretKey(wotsSecretSeed(material.skSeed, 0)).map(toHex);
-    const depth0 = rec.events.filter((e) => e.type === 'chainStep' && e.leaf === 0 && e.depth === 0) as Array<{
-      chainIdx: number;
-      hash: Uint8Array;
-    }>;
+    const pick = (events: readonly CryptoEvent[]) =>
+      events.filter((e) => e.type === 'chainStep' && e.leaf === 0 && e.depth === 0) as Array<{
+        chainIdx: number;
+        hash: Uint8Array;
+      }>;
+    // `rec` above was recorded with the default options: must already be redacted.
+    const depth0 = pick(rec.events);
     expect(depth0.length).toBe(67);
-    for (const e of depth0) expect(toHex(e.hash)).toBe(sk0[e.chainIdx]);
-    // redactEvents fixes it:
-    const red = redactEvents(rec.events).filter((e) => e.type === 'chainStep' && e.leaf === 0 && e.depth === 0) as Array<{
-      chainIdx: number;
-      hash: Uint8Array;
-    }>;
-    for (const e of red) expect(toHex(e.hash)).not.toBe(sk0[e.chainIdx]);
+    for (const e of depth0) expect(toHex(e.hash)).not.toBe(sk0[e.chainIdx]);
+    // The raw stream is available only on explicit opt-in.
+    const raw = recordEvents({ redact: false });
+    createIdentity(SEED, { observer: raw.observer });
+    const rawDepth0 = pick(raw.events);
+    expect(rawDepth0.length).toBe(67);
+    for (const e of rawDepth0) expect(toHex(e.hash)).toBe(sk0[e.chainIdx]);
+    // and redactEvents() cleans a raw stream:
+    for (const e of pick(redactEvents(raw.events))) expect(toHex(e.hash)).not.toBe(sk0[e.chainIdx]);
   });
 });

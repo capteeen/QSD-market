@@ -100,16 +100,46 @@ export function signUnsafeDevAttestation(
 
 export interface AttestationVerifyOptions {
   /**
-   * Witness public keys that are trusted for 'witness-signed' attestations.
-   * If omitted, the signature is checked against the key inside the
-   * attestation (proves internal consistency, not identity). Pass the
-   * published QSD protocol key to prove identity.
+   * Published QSD witness public keys (hex). A 'witness-signed' attestation is
+   * accepted ONLY if its key is in this set. With no set, every witness-signed
+   * attestation is rejected (fail closed). See `trustedWitnessKeysFromEnv()`.
    */
   trustedWitnessKeys?: readonly Hex[];
-  /** Same for 'provider-signed': the provider's published keys. */
+  /** Same for 'provider-signed': the provider's published keys. Required for acceptance. */
   trustedProviderKeys?: readonly Hex[];
   /** Whether 'unsafe-dev' attestations are acceptable. Default false. */
   allowUnsafeDev?: boolean;
+  /**
+   * Diagnostic only: accept a witness/provider signature made by the key
+   * embedded in the attestation even if it is not a published key. The result
+   * then carries `trust: 'self-consistent-only'` and must never be shown as
+   * "verified". Default false.
+   */
+  trustAnyKey?: boolean;
+}
+
+/** Env var holding published witness public keys: comma-separated 64-hex-char keys. */
+export const WITNESS_PUBLIC_KEYS_ENV = 'QSD_WITNESS_PUBLIC_KEYS';
+
+/**
+ * Read the published witness key set from an env object (default: the real
+ * process env). Returns [] when unset, which makes verification fail closed.
+ */
+export function trustedWitnessKeysFromEnv(env?: Record<string, string | undefined>): Hex[] {
+  let e = env;
+  if (!e) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      e = ((globalThis as any).process?.env ?? {}) as Record<string, string | undefined>;
+    } catch {
+      e = {};
+    }
+  }
+  const raw = e[WITNESS_PUBLIC_KEYS_ENV] ?? '';
+  return raw
+    .split(',')
+    .map((k) => k.trim().toLowerCase())
+    .filter((k) => k.length === 64 && isHex(k));
 }
 
 function checkCommonFields(att: Record<string, unknown>): string | null {
@@ -127,7 +157,28 @@ function checkCommonFields(att: Record<string, unknown>): string | null {
   if (!isHex(att['signature']) || (att['signature'] as string).length !== 128) {
     return 'attestation.signature is not a 64-byte hex signature';
   }
+  if (att['inputsHash'] !== undefined && (!isHex(att['inputsHash']) || (att['inputsHash'] as string).length !== 64)) {
+    return 'attestation.inputsHash is not a sha256 hex digest';
+  }
+  if (att['nonce'] !== undefined && (!isHex(att['nonce']) || (att['nonce'] as string).length === 0)) {
+    return 'attestation.nonce is not hex';
+  }
+  if ((att['inputsHash'] === undefined) !== (att['nonce'] === undefined)) {
+    return 'attestation.inputsHash and attestation.nonce must be present together';
+  }
   return null;
+}
+
+/** Is the provider's signed message bound to this draw? */
+function providerMessageIsBound(p: ProviderSignedAttestation): boolean {
+  const bodyHex = bytesToHex(utf8(p.response.body));
+  if (p.signedMessage === bodyHex) return true;
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(hexToBytes(p.signedMessage));
+    return text.includes(p.bytesSha256);
+  } catch {
+    return false;
+  }
 }
 
 function checkCapturedResponse(r: unknown): string | null {
@@ -168,11 +219,17 @@ export function verifyAttestation(
         if (!isHex(w.witnessPublicKey) || w.witnessPublicKey.length !== 64) {
           return { ok: false, reason: 'witnessPublicKey is not a 32-byte hex key' };
         }
-        if (opts.trustedWitnessKeys && !opts.trustedWitnessKeys.includes(w.witnessPublicKey)) {
-          return { ok: false, reason: 'witnessPublicKey is not in the trusted witness key set' };
-        }
         if (!ed25519Verify(w.signature, attestationSigningMessage(w), w.witnessPublicKey)) {
           return { ok: false, reason: 'witness signature does not verify' };
+        }
+        if (!(opts.trustedWitnessKeys ?? []).includes(w.witnessPublicKey)) {
+          if (opts.trustAnyKey) return { ok: true, trust: 'self-consistent-only' };
+          return {
+            ok: false,
+            reason: opts.trustedWitnessKeys
+              ? 'witnessPublicKey is not in the trusted witness key set'
+              : 'no trusted witness keys were supplied; a witness-signed attestation cannot be accepted',
+          };
         }
         return { ok: true };
       }
@@ -187,11 +244,23 @@ export function verifyAttestation(
           return { ok: false, reason: 'provider publicKey is not a 32-byte hex key' };
         }
         if (!isHex(p.signedMessage)) return { ok: false, reason: 'signedMessage is not hex' };
-        if (opts.trustedProviderKeys && !opts.trustedProviderKeys.includes(p.publicKey)) {
-          return { ok: false, reason: 'provider publicKey is not in the trusted provider key set' };
+        if (!providerMessageIsBound(p)) {
+          return {
+            ok: false,
+            reason: 'provider signedMessage is not bound to this draw (must be the response body or contain bytesSha256)',
+          };
         }
         if (!ed25519Verify(p.signature, hexToBytes(p.signedMessage), p.publicKey)) {
           return { ok: false, reason: 'provider signature does not verify' };
+        }
+        if (!(opts.trustedProviderKeys ?? []).includes(p.publicKey)) {
+          if (opts.trustAnyKey) return { ok: true, trust: 'self-consistent-only' };
+          return {
+            ok: false,
+            reason: opts.trustedProviderKeys
+              ? 'provider publicKey is not in the trusted provider key set'
+              : 'no trusted provider keys were supplied; a provider-signed attestation cannot be accepted',
+          };
         }
         return { ok: true };
       }

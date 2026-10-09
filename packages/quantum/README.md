@@ -62,8 +62,10 @@ rejects everything else, any length mismatch, and any malformed value with a
 | `QSD_QRNG_PROVIDER` | no | `anu-quantum-numbers` (default) or `UNSAFE_DEV_RANDOM` (refused when `NODE_ENV=production`) |
 | `QSD_QRNG_API_KEY` | for ANU | ANU Quantum Numbers API key. Never logged, never in errors, never in attestations |
 | `QSD_QRNG_ENDPOINT` | no | Endpoint override for ANU (e.g. a proxy). Default `https://api.quantumnumbers.com.au` |
-| `QSD_WITNESS_SECRET_KEY` | for ANU | 64 hex chars: a 32-byte Ed25519 seed for the QSD witness key. Never logged. Publish the corresponding public key (`provider.witnessPublicKey`) |
-| `NODE_ENV` | — | `production` makes `UNSAFE_DEV_RANDOM` impossible to construct or use |
+| `QSD_WITNESS_SECRET_KEY` | for ANU (producer side) | 64 hex chars: a 32-byte Ed25519 seed for the QSD witness key. Never logged. Publish the corresponding public key (`provider.witnessPublicKey`) |
+| `QSD_WITNESS_PUBLIC_KEYS` | verifier side | Comma-separated published witness public keys (64 hex each). Read with `trustedWitnessKeysFromEnv()` and passed to `verify()`. The app must also ship this list to the browser (e.g. as a build-time constant) so in-browser verification is fail-closed |
+| `QSD_ALLOW_UNSAFE_DEV` | dev only | Must be exactly `1`, together with `NODE_ENV=development`, to permit `UNSAFE_DEV_RANDOM` |
+| `NODE_ENV` | — | Only `test` (alone) or `development` (with `QSD_ALLOW_UNSAFE_DEV=1`) permit the dev provider. Anything else, including unset, `prod`, `Production`, or no `process` object at all, is production |
 
 Generate a witness seed once, keep it as a secret, and publish the public key:
 
@@ -79,11 +81,11 @@ console.log('witness public key:', ed25519SignerFromSeed(seed).publicKey); // pu
 ```ts
 import {
   // client
-  createQrngClient, createProviderFromEnv, ENV,
+  createQrngClient, createProviderFromEnv, ENV, trustedWitnessKeysFromEnv,
   // providers
   AnuQuantumNumbersProvider, UnsafeDevRandomProvider, UNSAFE_DEV_RANDOM_ID,
   // bundles
-  verify, verifyBundle, buildProofBundle, serializeBundle, parseBundle, bundleHash,
+  verify, verifyBundle, bundleBinding, buildProofBundle, serializeBundle, parseBundle, bundleHash,
   serializeDraw, deserializeDraw,
   // attestations
   verifyAttestation, signWitnessAttestation, ed25519SignerFromSeed, ephemeralEd25519Signer,
@@ -91,8 +93,9 @@ import {
   computeCommitment, canonicalJson, hashJson, sha256Hex, bytesToHex, hexToBytes,
   // events
   QuantumEventBus, recordEvents,
-  // errors
+  // errors & guard
   MeasurementUnavailableError, ProductionGuardError, QuantumConfigError, NotImplementedError,
+  unsafeDevPermission, isProduction,
 } from '@qsd/quantum';
 ```
 
@@ -102,8 +105,10 @@ import {
 interface QrngProvider {
   readonly id: string;
   readonly attestationKind: 'provider-signed' | 'witness-signed' | 'unsafe-dev';
-  draw(nBytes: number, observer?: DrawObserver): Promise<Draw>;
+  draw(nBytes: number, observer?: DrawObserver, binding?: DrawBinding): Promise<Draw>;
 }
+
+interface DrawBinding { inputsHash: Hex; nonce: Hex }   // see "Draw binding and grinding"
 
 interface Draw {
   bytes: Uint8Array;
@@ -111,8 +116,11 @@ interface Draw {
   requestedAt: IsoTimestamp;
   receivedAt: IsoTimestamp;
   attestation: Attestation;
-  commitment: Hex;   // sha256(LP(domain)||LP(providerId)||LP(requestedAt)||LP(bytes)||LP(canonical(attestation)))
+  commitment: Hex;   // sha256(LP(domain)||LP(providerId)||LP(requestedAt)||LP(bytes)||LP(inputsHash||"")||LP(nonce||"")||LP(canonical(attestation)))
 }
+
+// every attestation kind also carries: providerId, requestedAt, receivedAt, bytesSha256,
+// and (for witness/provider kinds, when drawn via measure()) inputsHash + nonce
 
 type Attestation = ProviderSignedAttestation | WitnessSignedAttestation | UnsafeDevAttestation;
 
@@ -130,7 +138,10 @@ interface ProofBundle<I> {
   resolvedAt: IsoTimestamp;
 }
 
-type VerifyResult = { ok: true } | { ok: false; reason: string };
+type VerifyResult =
+  | { ok: true }                                   // under a trusted key
+  | { ok: true; trust: 'self-consistent-only' }    // ONLY with trustAnyKey: true — never render as "verified"
+  | { ok: false; reason: string };
 ```
 
 ### Measuring
@@ -142,16 +153,44 @@ const client = createQrngClient({ provider });
 client.subscribe((e) => scene.handle(e));           // entropyRequested → entropyArrived → commitmentComputed → outcomeResolved
 
 try {
-  const { bundle, outcome } = await client.measure(inputs, protocolResolver);
-  // anchor bundleHash(bundle) on-chain; show bundle on the collapse screen
+  const { bundle, outcome, binding } = await client.measure(inputs, protocolResolver, {
+    nonce: measurementId,                            // hex; the protocol's measurement id
+    beforeDraw: (b) => chain.anchorBinding(b),       // anchor (inputsHash, nonce) BEFORE the draw
+  });
+  // then anchor bundleHash(bundle); show bundle on the collapse screen
 } catch (e) {
-  if (e instanceof MeasurementUnavailableError) ui.show(e.message); // "Measurement unavailable: ..."
+  if (e instanceof MeasurementUnavailableError) ui.show(e.message); // fixed copy + sanitised excerpt; e.detail is raw, not for UI
   else throw e;
 }
 ```
 
-`measure()` draws 32 bytes by default (`{ nBytes }` to change), applies the
-resolver, emits `outcomeResolved`, and returns a bundle that `verify()` accepts.
+`measure()` computes `inputsHash = sha256(canonical(inputs))`, derives or takes
+a `nonce`, awaits `beforeDraw(binding)` (if it throws, no draw is made), draws
+32 bytes by default (`{ nBytes }` to change) bound to that pair, applies the
+resolver, emits `outcomeResolved`, and returns a bundle that `verify()` accepts
+under the published witness key.
+
+### Draw binding and grinding
+
+The witness key holder is the operator. Without binding, it could request N
+draws for one measurement and publish the favourable one, and every bundle
+would verify. Binding makes that *detectable*, not impossible:
+
+1. `measure()` puts `inputsHash` and `nonce` into the draw request. The ANU
+   provider includes both in the witness statement, so they are signed and
+   are part of the commitment.
+2. The chain package anchors `(inputsHash, nonce)` on-chain in `beforeDraw`,
+   i.e. before the provider is contacted, and anchors `bundleHash(bundle)`
+   after. `bundleBinding(bundle)` returns the pair for comparison.
+3. `verify()` rejects a bundle whose `attestation.inputsHash` differs from
+   `inputs.hash`, so a draw cannot be re-applied to different inputs. With
+   `requireInputBinding: true` it also rejects unbound draws; production
+   verifiers should pass it.
+4. A second draw for the same inputs needs a second anchor (public) or a
+   bundle that does not match the anchor. `verify()` itself cannot see other
+   draws; the anchor comparison is what catches grinding.
+
+The dev provider deliberately produces unbound attestations.
 
 ### Events
 
@@ -172,16 +211,29 @@ draws.
 ### Dev provider
 
 `UNSAFE_DEV_RANDOM` draws from `crypto.getRandomValues` and signs an
-`unsafe-dev` attestation with an ephemeral key. Guards:
+`unsafe-dev` attestation with an ephemeral key. The guard is **fail-closed**
+(`unsafeDevPermission()`): the provider is permitted only with positive
+evidence of a non-production environment, read from the real process:
 
-- constructor throws `ProductionGuardError` when `NODE_ENV=production`;
+| `NODE_ENV` (trimmed, lower-cased) | `QSD_ALLOW_UNSAFE_DEV` | result |
+|---|---|---|
+| `test` | any | allowed |
+| `development` | `1` | allowed |
+| `development` | anything else | denied |
+| unset, empty, `production`, `prod`, `staging`, anything else | any | denied |
+| no `process` object (browser bundle) | — | denied |
+
+- constructor throws `ProductionGuardError` when denied;
 - `draw()` re-checks, so a provider constructed earlier refuses once the
-  environment flips;
+  environment changes;
 - `createProviderFromEnv()` only constructs it when
-  `QSD_QRNG_PROVIDER=UNSAFE_DEV_RANDOM` *and* `NODE_ENV !== 'production'`, and
-  reads `NODE_ENV` from the real process, not from any injected env;
+  `QSD_QRNG_PROVIDER=UNSAFE_DEV_RANDOM` *and* the guard permits, and reads
+  `NODE_ENV`/`QSD_ALLOW_UNSAFE_DEV` from the real process, never from an
+  injected env object;
 - `verify()` rejects `unsafe-dev` bundles unless `{ allowUnsafeDev: true }` is
-  passed, so a dev bundle can never pass as a real one by accident.
+  passed, so a dev bundle can never pass as a real one by accident;
+- dev attestations carry no draw binding, so they also fail
+  `requireInputBinding`.
 
 There is no retry, cache, or fallback anywhere in this package.
 
@@ -190,7 +242,8 @@ There is no retry, cache, or fallback anywhere in this package.
 Every draw carries one of:
 
 **`witness-signed`** (what ANU draws carry today). Contents: provider id,
-`requestedAt`, `receivedAt`, `bytesSha256`, `transport: 'https'`, the
+`requestedAt`, `receivedAt`, `bytesSha256`, `inputsHash`, `nonce`,
+`transport: 'https'`, the
 verbatim HTTP response (`status`, allow-listed headers such as `date`,
 `x-amzn-requestid`, `etag`; the raw `body`; `bodySha256`; the request `url`
 with no key), the witness public key, and an Ed25519 signature over
@@ -198,17 +251,30 @@ with no key), the witness public key, and an Ed25519 signature over
 
 A valid witness signature proves: *the holder of the QSD witness key attests
 that this exact response body, with these headers, was received over TLS
-from this provider at this time, and that these bytes are what it decoded.*
-It does **not** prove that ANU sent the body; a dishonest witness key holder
-could fabricate a body. The published witness key, the captured AWS request
-id, and ANU's own logs are what a dispute would be settled with. This is a
-witness attestation, not a provider signature, and the UI must label it as
-such.
+from this provider at this time, for the measurement identified by
+(inputsHash, nonce), and that these bytes are what it decoded.*
+It does **not** prove that ANU sent the body (a dishonest witness key holder
+could fabricate one), that the timestamps are truthful (they are asserted by
+the witness), or that this was the only draw requested (see "Draw binding
+and grinding"). The published witness key, the captured AWS request id, the
+on-chain anchors and ANU's own logs are what a dispute would be settled
+with. This is a witness attestation, not a provider signature, and the UI
+must label it as such.
+
+**Fail closed.** `verify()` accepts a witness-signed attestation only if its
+key is in `trustedWitnessKeys`. With no key set, every witness-signed (and
+provider-signed) attestation is rejected: the key embedded in the
+attestation is never trusted on its own. `trustAnyKey: true` exists for
+diagnostics and returns `{ ok: true, trust: 'self-consistent-only' }`, which a
+UI must never render as "verified".
 
 **`provider-signed`** (expressible now; no evaluated provider offers it).
 Contents: scheme (`ed25519` only today), the provider's public key, the exact
-signed message, the signature, and the captured response. A valid signature
-against the provider's published key proves the bytes came from the provider.
+signed message, the signature, and the captured response. `verify()` requires
+`signedMessage` to be bound to the draw: it must be exactly the UTF-8 bytes of
+`response.body`, or its decoded text must contain `bytesSha256`; a signature
+over anything else is rejected. A valid, bound signature against a key in
+`trustedProviderKeys` proves the bytes came from the provider.
 
 **`unsafe-dev`**: proves nothing. Carries a warning string in every bundle.
 
@@ -222,24 +288,35 @@ draw cannot be swapped after the fact.
 No account, no network, runs in a browser:
 
 ```ts
-import { verify, parseBundle } from '@qsd/quantum';
+import { verify, parseBundle, bundleBinding, bundleHash } from '@qsd/quantum';
 import { measurementResolver } from '@qsd/protocol'; // the pure rule, by id
 
 const bundle = parseBundle(jsonText);
 const result = verify(bundle, measurementResolver, {
-  trustedWitnessKeys: ['<published QSD witness public key hex>'],
+  trustedWitnessKeys: QSD_WITNESS_PUBLIC_KEYS,   // the published list; [] rejects everything
+  requireInputBinding: true,
 });
 // { ok: true } or { ok: false, reason: '...' } — never throws
+
+// then compare with the chain:
+bundleBinding(bundle);  // { inputsHash, nonce } — must equal the pair anchored BEFORE the draw
+bundleHash(bundle);     // must equal the hash anchored AFTER the draw
 ```
 
 `verify()` checks, in order: bundle shape and version; that the draw's
 `providerId`/`requestedAt`/`receivedAt` match the attestation; that
 `attestation.bytesSha256` equals `sha256(bytes)`; the attestation signature
-(per kind, against the trusted key set if given); that the commitment
-recomputes; that `inputs.hash` equals `sha256(canonical(inputs.value))`; that
+and key trust (per kind); that the commitment recomputes; that `inputs.hash`
+equals `sha256(canonical(inputs.value))`; that `attestation.inputsHash`, when
+present, equals `inputs.hash` (and is present if `requireInputBinding`); that
 the supplied resolver's `id` equals `bundle.resolverId`; and that
 `resolver.resolve(bytes, inputs)` reproduces `outcome.value` and
 `outcome.label` exactly. Any failure returns `{ ok: false, reason }`.
+
+Unknown **top-level** bundle fields are accepted (documented decision): they
+change `bundleHash()`, so the anchor comparison catches them, and rejecting
+them would break forward-compatible readers. Unknown fields inside the
+attestation are covered by its signature and are rejected.
 
 To compare against the on-chain anchor, compute `bundleHash(bundle)`
 (sha256 of the canonical JSON) and compare with the anchored value.
@@ -249,21 +326,28 @@ To compare against the on-chain anchor, compute `bundleHash(bundle)`
 `pnpm --filter @qsd/quantum test`
 
 - attestation rejection on bad signature (witness, provider-signed, dev), key
-  substitution, trusted-key enforcement, body edits with and without hash
-  recomputation
-- production guards: constructor, draw-time, `createProviderFromEnv`, and
-  that injected env cannot override the real `NODE_ENV`
+  substitution, fail-closed default (no trusted keys → rejected),
+  `trustAnyKey` labelling, provider `signedMessage` binding, draw-binding
+  signing, body edits with and without hash recomputation
+- production guards: constructor, draw-time, `createProviderFromEnv`;
+  `NODE_ENV` unset / missing `process` / case and whitespace variants /
+  `development` without the flag all denied; injected env cannot override
+  the real process
 - bundle round trip through `JSON.stringify`/`parse` and canonical
   serialisation; stable `bundleHash` regardless of key order
 - `verify()` rejects tampering of bytes, commitment, inputs (with and without
   hash recomputation), outcome value and label, attestation signature and
   key, providerId, requestedAt, receivedAt, resolverId, version, resolvedAt,
-  attestation kind; never throws on garbage or a throwing resolver
+  attestation kind; a bound ANU draw rejects inputs substitution even when
+  the outcome would be identical; `requireInputBinding` rejects dev bundles;
+  never throws on garbage or a throwing resolver
 - event order, monotonic `seq`, payloads equal to the real draw values
 - ANU parser against `test/fixtures/anu-documented-response.json` (a
   documented example, not live data); full draw through a mocked `fetch`
-  including header capture, key non-leakage, 403/429/network/timeout/bad-shape
-  handling, endpoint override
+  including `beforeDraw` ordering, binding echo, header capture, key
+  non-leakage (JSON, inspect, errors, scrubbed `cause`), sanitised provider
+  text with raw `detail`, 403/429/network/timeout/bad-shape handling,
+  endpoint override
 - live ANU test runs only when `QSD_QRNG_API_KEY` is set; otherwise it is
   skipped with a printed notice and the suite still passes
 
@@ -274,4 +358,10 @@ To compare against the on-chain anchor, compute `bundleHash(bundle)`
   `{ ok: false, reason: 'unsupported provider signature scheme' }` rather than
   being skipped.
 - The witness key must be kept in a secret store; if it leaks, witness
-  attestations lose their value until the published key is rotated.
+  attestations lose their value until the published key is rotated. Rotation
+  is a list change in `QSD_WITNESS_PUBLIC_KEYS`; old bundles stay verifiable
+  as long as the old key stays listed.
+- Grinding is made detectable by anchoring, not impossible; `verify()` alone
+  cannot see other draws. A provider that signs per-request nonces, or a
+  public randomness beacon, would close this fully and would slot into the
+  `provider-signed` variant.

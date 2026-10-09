@@ -9,8 +9,12 @@ The short version, which every other page on this site must agree with:
 
 - **The randomness is genuinely quantum.** Every measurement of a coin
   consumes bytes from a hardware quantum random number generator operated by
-  a third-party provider, and every outcome ships with a proof bundle anyone
-  can verify.
+  a third-party provider, and every outcome ships with a proof bundle that
+  anyone can check against QSD's published witness key. What the bundle
+  proves is our signed record of the provider's response and what we did
+  with it — not the photons, and not that it was the only draw we made. The
+  section *Why quantum randomness is different from pseudorandomness* spells
+  out exactly where the trust sits.
 - **The coins are not quantum objects.** A token on Solana is a row in a
   ledger. It is not in a superposition, it does not collapse, it is not
   entangled with anything, and nothing tunnels. When we use those words we
@@ -30,10 +34,12 @@ A quantum system does not have to be in one definite state. It can be in a
 *superposition*: a combination of several states at once, each with a
 complex-valued weight called an amplitude. The squared magnitude of each
 amplitude is the probability of finding the system in that state *if you
-measure it*. Until you measure, there is no fact of the matter about which
-state it is "really" in; the superposition is the complete description.
-This is not ignorance about a hidden value — experiments (Bell tests) rule
-out the simplest versions of "it was always secretly one or the other."
+measure it*. In the standard textbook account, until you measure there is no
+fact of the matter about which state it is "really" in; the superposition is
+the complete description. Experiments (Bell tests) rule out the simplest
+versions of "it was always secretly one or the other" — any theory that
+reproduces them has to give something up, locality or determinism or both —
+but they do not single out one interpretation, and QSD does not either.
 
 ### How QSD uses it as a mechanic
 
@@ -68,8 +74,10 @@ measurement the system is in the state corresponding to the outcome; the
 other possibilities are gone. This transition is called *collapse* (in the
 standard textbook account; other interpretations describe the same
 predictions differently, and QSD takes no position on interpretation). Which
-outcome you get is, as far as any known physics can tell, not determined by
-anything that existed before the measurement. It is irreducibly random.
+outcome you get is, in the standard account, not determined by anything that
+existed before the measurement; interpretations that keep determinism do so
+at the price of non-locality, and no known interpretation lets anyone
+*predict* the outcome in advance. In practice it is random.
 
 ### How QSD uses it as a mechanic
 
@@ -92,7 +100,8 @@ The outcome is binding. "Collapse" moves the coin to the `collapsed` game
 state and triggers the birth of a daughter coin. The whole thing — bytes,
 attestation, commitment, inputs, outcome — is packaged as a **proof bundle**
 that anyone can re-verify with `verify()` from the open-source `@qsd/quantum`
-package, with no account and no trust in us.
+package, with no account, trusting only the published QSD witness key (see
+*where the trust actually sits*, below).
 
 The *randomness* in step 2 is the genuinely quantum part. The provider's
 hardware performs a physical quantum measurement (for example, measuring
@@ -260,13 +269,17 @@ A **quantum random number generator (QRNG)** instead digitises the outcomes
 of a physical quantum measurement — for example the quadrature of a vacuum
 state of light, the arrival time of single photons, or which of two paths a
 photon takes at a beam splitter. According to quantum mechanics these
-outcomes are not determined by any prior state of the universe. There is no
-seed. Nobody — not the operator, not the manufacturer — could have
-predicted the bytes before they were produced. Each byte carries fresh
-entropy from the physical world.
+outcomes are not determined by any prior state of the universe, so there is
+no seed to learn. In a real device the quantum signal is mixed with ordinary
+classical noise from the detectors and electronics, and the raw samples go
+through deterministic post-processing — a randomness extractor — to produce
+uniform bytes; how unpredictable the output is therefore rests on the
+device's entropy model and calibration, not on quantum mechanics alone. Done
+properly, each byte carries fresh entropy from the physical world that no
+one, including the operator, had access to before it was produced.
 
 That is the difference: a PRNG *hides* a deterministic value; a QRNG
-*creates* a non-deterministic one.
+*harvests* a non-deterministic one (and then cleans it up).
 
 ### How QSD uses it as a mechanic
 
@@ -277,7 +290,10 @@ in production**: if the provider cannot be reached, measurement is
 unavailable and the interface says so plainly. The only non-quantum
 provider in the codebase is named `UNSAFE_DEV_RANDOM`, exists for local
 tests, and is built so that it cannot be constructed or used when
-`NODE_ENV=production`. That guard is itself covered by tests.
+`NODE_ENV=production` — or when `NODE_ENV` is missing, misspelt, or the
+code is running somewhere with no environment at all. It is permitted only
+with positive evidence of a test or development environment. That guard is
+itself covered by tests.
 
 ### What QSD does NOT claim — and where the trust actually sits
 
@@ -301,6 +317,27 @@ question. Nobody downstream of a QRNG service can verify that; it rests on
 the provider's reputation, their published certifications, and (where the
 provider offers one) their own cryptographic signature over the response.
 
+Two more things a bundle cannot show on its own, and we want them in plain
+sight:
+
+- **That the published draw was the only draw.** An operator holding the
+  witness key could request several draws for the same measurement and
+  publish the one it likes ("grinding"). To make that detectable rather than
+  invisible, every draw is bound to the measurement before it is requested:
+  the hash of the inputs and a per-measurement nonce are included in the
+  witness statement and the commitment, and the protocol anchors that pair
+  on-chain *before* asking the provider for bytes. A verifier compares the
+  anchored pair with the bundle; a second draw for the same inputs would
+  need a second anchor, visible to everyone, or a bundle that does not match
+  the anchor. This raises the cost of grinding from zero to "leave public
+  evidence"; it does not make it physically impossible, and we do not claim
+  it does.
+- **When it happened.** The `requestedAt` and `receivedAt` timestamps are
+  asserted by the witness (QSD), not by the provider. The provider's own
+  `date` header and request id are captured alongside, and the on-chain
+  anchors carry block times, so a wrong timestamp is contradictable, but the
+  bundle's timestamps are our statement, not a proof.
+
 The attestation inside each bundle is therefore one of two kinds, and the
 bundle says which:
 
@@ -310,8 +347,9 @@ bundle says which:
   offers it.
 - **`witness-signed`** — the provider's response (body and relevant
   headers) was captured verbatim over TLS, and the QSD protocol key signed
-  a statement binding the provider id, the request time, and the hash of
-  that response. Verifying the signature proves that *QSD's key* attests to
+  a statement binding the provider id, the request time, the hash of that
+  response, and the inputs hash and nonce of the measurement it was requested
+  for. Verifying the signature proves that *QSD's key* attests to
   having received that response at that time. It does **not** by itself
   prove the provider sent it; you are trusting QSD's witness statement
   about what came over the TLS connection. We publish the protocol public

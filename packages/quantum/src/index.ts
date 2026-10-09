@@ -13,6 +13,9 @@ export {
   NotImplementedError,
   isProduction,
   currentNodeEnv,
+  unsafeDevPermission,
+  ALLOW_UNSAFE_DEV_ENV,
+  type DevPermission,
 } from './errors.js';
 
 export {
@@ -37,6 +40,8 @@ export {
   signWitnessAttestation,
   signUnsafeDevAttestation,
   verifyAttestation,
+  trustedWitnessKeysFromEnv,
+  WITNESS_PUBLIC_KEYS_ENV,
   type Ed25519Signer,
   type AttestationVerifyOptions,
 } from './attestation.js';
@@ -51,6 +56,7 @@ export {
   parseBundle,
   bundleHash,
   verifyBundle,
+  bundleBinding,
   type VerifyBundleOptions,
 } from './bundle.js';
 
@@ -59,6 +65,7 @@ export {
   DEFAULT_DRAW_BYTES,
   type QrngClient,
   type QrngClientOptions,
+  type MeasureOptions,
   type MeasureResult,
 } from './client.js';
 
@@ -69,6 +76,7 @@ export {
   ANU_MAX_BYTES_PER_REQUEST,
   CAPTURED_RESPONSE_HEADERS,
   parseAnuResponse,
+  sanitizeExcerpt,
   type AnuProviderOptions,
   type AnuSuccessResponse,
 } from './providers/anu.js';

@@ -5,8 +5,8 @@ import {
 } from '../attestation.js';
 import { computeCommitment } from '../commitment.js';
 import { nowIso, sha256Hex } from '../encoding.js';
-import { isProduction, ProductionGuardError } from '../errors.js';
-import type { Draw, DrawObserver, QrngProvider } from '../types.js';
+import { ProductionGuardError, unsafeDevPermission } from '../errors.js';
+import type { Draw, DrawBinding, DrawObserver, QrngProvider } from '../types.js';
 
 export const UNSAFE_DEV_RANDOM_ID = 'UNSAFE_DEV_RANDOM' as const;
 
@@ -14,32 +14,46 @@ export const UNSAFE_DEV_WARNING =
   'UNSAFE_DEV_RANDOM: bytes come from the local CSPRNG (crypto.getRandomValues), NOT a quantum source. ' +
   'This attestation is signed by an ephemeral key with no evidential value. Development and tests only.';
 
-const GUARD_MESSAGE =
-  'UNSAFE_DEV_RANDOM cannot be used when NODE_ENV=production. ' +
-  'Measurement requires a real quantum provider; there is no deterministic fallback.';
+function guard(): void {
+  const p = unsafeDevPermission();
+  if (!p.allowed) {
+    throw new ProductionGuardError(
+      `UNSAFE_DEV_RANDOM is not permitted here: ${p.reason}. ` +
+        'It is allowed only with NODE_ENV=test, or NODE_ENV=development plus QSD_ALLOW_UNSAFE_DEV=1. ' +
+        'Measurement requires a real quantum provider; there is no deterministic fallback.',
+    );
+  }
+}
 
 /**
- * Dev-only provider. Refuses to exist in production: the constructor throws if
- * NODE_ENV=production, and draw() re-checks so a provider constructed before
- * the environment flipped still refuses.
+ * Dev-only provider. Fail-closed: the constructor throws unless the
+ * environment positively permits it (see unsafeDevPermission), and draw()
+ * re-checks so a provider constructed before the environment changed still
+ * refuses.
  */
 export class UnsafeDevRandomProvider implements QrngProvider {
   readonly id = UNSAFE_DEV_RANDOM_ID;
   readonly attestationKind = 'unsafe-dev' as const;
-  private readonly signer: Ed25519Signer;
+  readonly #signer: Ed25519Signer;
 
   constructor() {
-    if (isProduction()) throw new ProductionGuardError(GUARD_MESSAGE);
-    this.signer = ephemeralEd25519Signer();
+    guard();
+    this.#signer = ephemeralEd25519Signer();
   }
 
   /** The ephemeral public key; useful for passing as a trusted key in tests. */
   get publicKey(): string {
-    return this.signer.publicKey;
+    return this.#signer.publicKey;
   }
 
-  async draw(nBytes: number, observer?: DrawObserver): Promise<Draw> {
-    if (isProduction()) throw new ProductionGuardError(GUARD_MESSAGE);
+  /**
+   * Note: the dev attestation deliberately carries NO draw binding. It has no
+   * evidential value, so binding it would only let a dev bundle pass a
+   * `requireInputBinding` verifier by accident. `_binding` is accepted for
+   * interface compatibility and ignored.
+   */
+  async draw(nBytes: number, observer?: DrawObserver, _binding?: DrawBinding): Promise<Draw> {
+    guard();
     if (!Number.isInteger(nBytes) || nBytes <= 0 || nBytes > 65536) {
       throw new RangeError(`UNSAFE_DEV_RANDOM: nBytes must be an integer in 1..65536, got ${String(nBytes)}`);
     }
@@ -59,7 +73,7 @@ export class UnsafeDevRandomProvider implements QrngProvider {
         bytesSha256: sha256Hex(bytes),
         warning: UNSAFE_DEV_WARNING,
       },
-      this.signer,
+      this.#signer,
     );
     observer?.emit({ type: 'entropyArrived', bytes, attestation });
 
@@ -67,6 +81,10 @@ export class UnsafeDevRandomProvider implements QrngProvider {
     observer?.emit({ type: 'commitmentComputed', hash: commitment });
 
     return { bytes, providerId: this.id, requestedAt, receivedAt, attestation, commitment };
+  }
+
+  toJSON(): { id: string; attestationKind: string; publicKey: string } {
+    return { id: this.id, attestationKind: this.attestationKind, publicKey: this.publicKey };
   }
 }
 

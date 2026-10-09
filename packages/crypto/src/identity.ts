@@ -1,7 +1,9 @@
 /**
  * QSD launch identities: an XMSS-style tree of height 8 (256 one-time WOTS+
  * keys) whose Merkle root is the identity. Index usage is tracked in a
- * serialisable `IdentityState`; a used leaf can never be reused.
+ * serialisable `IdentityState` AND in the Identity object's own private
+ * memory; a used leaf can never be reused through any public path of this
+ * object. Cross-process safety is the StateStore's job (see Signer).
  */
 import { equalBytes, fromHex, toHex } from "./bytes.js";
 import { CryptoInputError, KeyReuseError, KeysExhaustedError } from "./errors.js";
@@ -37,14 +39,40 @@ export interface IdentityState {
 }
 
 const USED_BYTES = LEAVES / 8; // 32
+const HEX_32 = /^[0-9a-f]{64}$/i;
 
 export interface CreateIdentityOptions {
   observer?: CryptoObserver;
 }
 
 /**
- * A derived identity. Secret material lives in private fields so that
- * JSON.stringify / console.log / structuredClone never expose it.
+ * Everything secret or reuse-critical about an Identity lives here, keyed by
+ * the Identity object in a module-scoped WeakMap. Nothing in this record is
+ * reachable from outside this module: not by property access, reflection,
+ * JSON, util.inspect or structuredClone.
+ */
+interface Internals {
+  material: XmssSecretMaterial;
+  keyPair: XmssKeyPair;
+  /** Every index this Identity object has signed with, through any path. */
+  used: Uint8Array;
+  /** State objects `sign()` has already auto-allocated from, and the index issued. */
+  signedFrom: WeakMap<IdentityState, number>;
+}
+
+const internals = new WeakMap<Identity, Internals>();
+
+function internalsOf(identity: Identity): Internals {
+  const i = internals.get(identity);
+  if (!i) throw new CryptoInputError("not an Identity created by createIdentity()");
+  return i;
+}
+
+/**
+ * A derived identity. Secret material and the in-process usage memory are
+ * held in a module-private WeakMap, so `JSON.stringify` / `console.log` /
+ * reflection show only `{ root, pubSeed, height }` and no method on this
+ * class can produce a signature.
  */
 export class Identity {
   readonly height = TREE_HEIGHT;
@@ -54,20 +82,26 @@ export class Identity {
   readonly rootHex: string;
   /** Wall-clock milliseconds spent on key generation. */
   readonly keygenMs: number;
-  readonly #material: XmssSecretMaterial;
-  readonly #keyPair: XmssKeyPair;
 
   /** @internal use createIdentity() */
   constructor(material: XmssSecretMaterial, keyPair: XmssKeyPair, keygenMs: number) {
-    this.#material = material;
-    this.#keyPair = keyPair;
     this.root = keyPair.root;
     this.rootHex = toHex(keyPair.root);
     this.publicKey = { root: keyPair.root, pubSeed: keyPair.pubSeed };
     this.keygenMs = keygenMs;
+    internals.set(this, {
+      material,
+      keyPair,
+      used: new Uint8Array(USED_BYTES),
+      signedFrom: new WeakMap(),
+    });
   }
 
-  /** Fresh state with no index used. */
+  /**
+   * A fresh state object with no index marked used. Note that the Identity
+   * itself still remembers every index it has signed with (see `usedIndices`):
+   * signing with a fresh state never reissues one of those.
+   */
   initialState(): IdentityState {
     return {
       version: 1,
@@ -78,18 +112,22 @@ export class Identity {
     };
   }
 
+  /** Indices this Identity object has signed with, through any path, in this process. */
+  usedIndices(): number[] {
+    return bitmapIndices(internalsOf(this).used);
+  }
+
+  /** A state that reflects `usedIndices()` — what a store should hold at minimum. */
+  memoryState(): IdentityState {
+    return stateFromBitmap(this, internalsOf(this).used);
+  }
+
   /** Merkle node at `level` (0 = leaves) and position `index`. Public values. */
   node(level: number, index: number): Uint8Array {
-    const row = this.#keyPair.tree.levels[level];
+    const row = internalsOf(this).keyPair.tree.levels[level];
     const n = row?.[index];
     if (!n) throw new CryptoInputError(`no node at level ${level} index ${index}`);
     return n;
-  }
-
-  /** @internal */
-  _sign(index: number, message: Uint8Array, observer?: CryptoObserver): Uint8Array {
-    const sig = xmssSign(this.#material, this.#keyPair, index, message, observer);
-    return encodeSignature(sig);
   }
 
   toJSON(): { root: string; pubSeed: string; height: number } {
@@ -114,37 +152,78 @@ function now(): number {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
 
+// ───────────────────────── bitmap helpers ─────────────────────────
+
+function bitSet(bits: Uint8Array, index: number): boolean {
+  return (bits[index >>> 3]! & (1 << (index & 7))) !== 0;
+}
+
+function setBit(bits: Uint8Array, index: number): void {
+  bits[index >>> 3] = bits[index >>> 3]! | (1 << (index & 7));
+}
+
+function lowestFree(bits: Uint8Array): number {
+  for (let i = 0; i < LEAVES; i++) if (!bitSet(bits, i)) return i;
+  return LEAVES;
+}
+
+function bitmapIndices(bits: Uint8Array): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < LEAVES; i++) if (bitSet(bits, i)) out.push(i);
+  return out;
+}
+
+function orBitmaps(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const out = new Uint8Array(USED_BYTES);
+  for (let i = 0; i < USED_BYTES; i++) out[i] = a[i]! | b[i]!;
+  return out;
+}
+
+function stateFromBitmap(identity: Identity, bits: Uint8Array): IdentityState {
+  return {
+    version: 1,
+    root: identity.rootHex,
+    pubSeed: toHex(identity.publicKey.pubSeed),
+    nextIndex: lowestFree(bits),
+    used: toHex(bits),
+  };
+}
+
+function checkIndex(index: number): void {
+  if (!Number.isInteger(index) || index < 0 || index >= LEAVES) {
+    throw new CryptoInputError(`index ${index} out of range 0..${LEAVES - 1}`);
+  }
+}
+
 // ───────────────────────── state helpers ─────────────────────────
 
 export function validateState(state: IdentityState): void {
   if (!state || typeof state !== "object") throw new CryptoInputError("state must be an object");
   if (state.version !== 1) throw new CryptoInputError("unsupported state version");
-  if (typeof state.root !== "string" || state.root.length !== 2 * N) throw new CryptoInputError("state.root invalid");
-  if (typeof state.pubSeed !== "string" || state.pubSeed.length !== 2 * N) {
-    throw new CryptoInputError("state.pubSeed invalid");
+  if (typeof state.root !== "string" || !HEX_32.test(state.root)) {
+    throw new CryptoInputError("state.root must be 64 hex characters");
+  }
+  if (typeof state.pubSeed !== "string" || !HEX_32.test(state.pubSeed)) {
+    throw new CryptoInputError("state.pubSeed must be 64 hex characters");
   }
   if (!Number.isInteger(state.nextIndex) || state.nextIndex < 0 || state.nextIndex > LEAVES) {
     throw new CryptoInputError("state.nextIndex invalid");
   }
-  if (typeof state.used !== "string" || state.used.length !== 2 * USED_BYTES) {
-    throw new CryptoInputError("state.used invalid");
+  if (typeof state.used !== "string" || !HEX_32.test(state.used)) {
+    throw new CryptoInputError(`state.used must be ${2 * USED_BYTES} hex characters`);
   }
-  fromHex(state.used);
 }
 
 export function isIndexUsed(state: IdentityState, index: number): boolean {
-  if (!Number.isInteger(index) || index < 0 || index >= LEAVES) {
-    throw new CryptoInputError(`index ${index} out of range 0..${LEAVES - 1}`);
-  }
-  const bits = fromHex(state.used);
-  return (bits[index >>> 3]! & (1 << (index & 7))) !== 0;
+  checkIndex(index);
+  return bitSet(fromHex(state.used), index);
 }
 
-/** Indices still available for signing. */
+/** Indices still available for signing according to `state`. */
 export function remainingIndices(state: IdentityState): number[] {
   const bits = fromHex(state.used);
   const out: number[] = [];
-  for (let i = 0; i < LEAVES; i++) if ((bits[i >>> 3]! & (1 << (i & 7))) === 0) out.push(i);
+  for (let i = 0; i < LEAVES; i++) if (!bitSet(bits, i)) out.push(i);
   return out;
 }
 
@@ -154,31 +233,37 @@ export function remainingCount(state: IdentityState): number {
 
 /** Return a NEW state with `index` marked used. Throws KeyReuseError if already used. */
 export function markUsed(state: IdentityState, index: number): IdentityState {
+  checkIndex(index);
   validateState(state);
-  if (isIndexUsed(state, index)) throw new KeyReuseError(index, state.root);
   const bits = fromHex(state.used);
-  bits[index >>> 3] = bits[index >>> 3]! | (1 << (index & 7));
-  let next = state.nextIndex;
-  while (next < LEAVES && (bits[next >>> 3]! & (1 << (next & 7))) !== 0) next++;
-  return { version: 1, root: state.root, pubSeed: state.pubSeed, nextIndex: next, used: toHex(bits) };
+  if (bitSet(bits, index)) throw new KeyReuseError(index, state.root);
+  setBit(bits, index);
+  return {
+    version: 1,
+    root: state.root,
+    pubSeed: state.pubSeed,
+    nextIndex: Math.max(state.nextIndex, 0) <= index ? lowestFree(bits) : state.nextIndex,
+    used: toHex(bits),
+  };
 }
 
 /**
  * Union of two states for the same identity: an index used in either is used
  * in the result. This is how a restored/stale state is reconciled with what a
  * store knows, so rolling back a state file can never resurrect a key.
+ * Root and pubSeed must both match.
  */
 export function mergeStates(a: IdentityState, b: IdentityState): IdentityState {
   validateState(a);
   validateState(b);
-  if (a.root !== b.root) throw new CryptoInputError("cannot merge states of different identities");
-  const ba = fromHex(a.used);
-  const bb = fromHex(b.used);
-  const out = new Uint8Array(USED_BYTES);
-  for (let i = 0; i < USED_BYTES; i++) out[i] = ba[i]! | bb[i]!;
-  let next = 0;
-  while (next < LEAVES && (out[next >>> 3]! & (1 << (next & 7))) !== 0) next++;
-  return { version: 1, root: a.root, pubSeed: a.pubSeed, nextIndex: next, used: toHex(out) };
+  if (a.root.toLowerCase() !== b.root.toLowerCase()) {
+    throw new CryptoInputError("cannot merge states of different identities (root mismatch)");
+  }
+  if (a.pubSeed.toLowerCase() !== b.pubSeed.toLowerCase()) {
+    throw new CryptoInputError("cannot merge states with different public seeds");
+  }
+  const out = orBitmaps(fromHex(a.used), fromHex(b.used));
+  return { version: 1, root: a.root, pubSeed: a.pubSeed, nextIndex: lowestFree(out), used: toHex(out) };
 }
 
 // ───────────────────────── sign / verify ─────────────────────────
@@ -192,21 +277,54 @@ export interface SignResult {
   signature: Uint8Array;
   /** The one-time key index that was consumed. */
   index: number;
-  /** New state with `index` marked used. The input state is not mutated. */
+  /**
+   * New state with `index` marked used. It is the union of the supplied state
+   * and everything this Identity object has signed with. The input state is
+   * never mutated.
+   */
   state: IdentityState;
 }
 
 function checkStateMatches(identity: Identity, state: IdentityState): void {
   validateState(state);
-  if (state.root !== identity.rootHex) {
+  if (state.root.toLowerCase() !== identity.rootHex) {
     throw new CryptoInputError("state belongs to a different identity (root mismatch)");
+  }
+  if (state.pubSeed.toLowerCase() !== toHex(identity.publicKey.pubSeed)) {
+    throw new CryptoInputError("state belongs to a different identity (pubSeed mismatch)");
   }
 }
 
 /**
+ * The only code path that produces a signature. Marks `index` in the
+ * Identity's private memory BEFORE computing, refusing if already marked
+ * (unless `trustCaller` — used by Signer, whose StateStore is authoritative
+ * and has already reserved the index durably).
+ */
+function signCore(
+  identity: Identity,
+  index: number,
+  message: Uint8Array,
+  observer: CryptoObserver | undefined,
+  trustCaller: boolean,
+): Uint8Array {
+  const int = internalsOf(identity);
+  if (!(message instanceof Uint8Array)) throw new CryptoInputError("message must be a Uint8Array");
+  if (!trustCaller && bitSet(int.used, index)) {
+    throw new KeyReuseError(index, identity.rootHex, "already used by this identity in this process");
+  }
+  // Reserve first. Only then compute and release the signature.
+  setBit(int.used, index);
+  const sig = encodeSignature(xmssSign(int.material, int.keyPair, index, message, observer));
+  observer?.emit({ type: "signatureReady", index, bytes: sig });
+  return sig;
+}
+
+/**
  * Sign `message` with a specific one-time key. Throws KeyReuseError if that
- * index is already marked used in `state`. The returned state marks the index
- * used; it is produced BEFORE the signature is returned.
+ * index is marked used in `state` OR has ever been signed with by this
+ * Identity object. The index is marked used before the signature is returned;
+ * the returned state is the union of `state` and the identity's memory.
  */
 export function signWithIndex(
   identity: Identity,
@@ -215,26 +333,44 @@ export function signWithIndex(
   message: Uint8Array,
   opts: SignOptions = {},
 ): SignResult {
+  checkIndex(index);
   checkStateMatches(identity, state);
   if (!(message instanceof Uint8Array)) throw new CryptoInputError("message must be a Uint8Array");
-  if (!Number.isInteger(index) || index < 0 || index >= LEAVES) {
-    throw new CryptoInputError(`index ${index} out of range 0..${LEAVES - 1}`);
+  const int = internalsOf(identity);
+  const union = orBitmaps(fromHex(state.used), int.used);
+  if (bitSet(union, index)) {
+    throw new KeyReuseError(
+      index,
+      identity.rootHex,
+      bitSet(fromHex(state.used), index) ? "marked used in the supplied state" : "already used by this identity in this process",
+    );
   }
-  if (isIndexUsed(state, index)) throw new KeyReuseError(index, state.root);
-  // Mark used first. Only then compute and release the signature.
-  const nextState = markUsed(state, index);
-  const signature = identity._sign(index, message, opts.observer);
-  opts.observer?.emit({ type: "signatureReady", index, bytes: signature });
-  return { signature, index, state: nextState };
+  const signature = signCore(identity, index, message, opts.observer, false);
+  setBit(union, index);
+  return { signature, index, state: stateFromBitmap(identity, union) };
 }
 
-/** Sign with the lowest unused one-time key of `state`. */
+/**
+ * Sign with the lowest one-time key that is unused in BOTH `state` and this
+ * Identity's memory. Passing the same state object to `sign()` twice is a
+ * reuse attempt (it asks for the same key again) and throws KeyReuseError;
+ * always continue from the returned state.
+ */
 export function sign(identity: Identity, state: IdentityState, message: Uint8Array, opts: SignOptions = {}): SignResult {
   checkStateMatches(identity, state);
-  const free = remainingIndices(state);
-  const index = free[0];
-  if (index === undefined) throw new KeysExhaustedError(state.root);
-  return signWithIndex(identity, state, index, message, opts);
+  if (!(message instanceof Uint8Array)) throw new CryptoInputError("message must be a Uint8Array");
+  const int = internalsOf(identity);
+  const previous = int.signedFrom.get(state);
+  if (previous !== undefined) {
+    throw new KeyReuseError(previous, identity.rootHex, "this state object already produced a signature; use the state returned by that call");
+  }
+  const union = orBitmaps(fromHex(state.used), int.used);
+  const index = lowestFree(union);
+  if (index >= LEAVES) throw new KeysExhaustedError(identity.rootHex);
+  const signature = signCore(identity, index, message, opts.observer, false);
+  int.signedFrom.set(state, index);
+  setBit(union, index);
+  return { signature, index, state: stateFromBitmap(identity, union) };
 }
 
 export interface VerifyOptions {
@@ -258,7 +394,10 @@ export function decodePublicKey(bytes: Uint8Array): IdentityPublicKey {
 
 function toPublicKey(pk: IdentityPublicKey | IdentityState | Uint8Array): IdentityPublicKey {
   if (pk instanceof Uint8Array) return decodePublicKey(pk);
-  if ("version" in pk) return { root: fromHex(pk.root), pubSeed: fromHex(pk.pubSeed) };
+  if ("version" in pk) {
+    validateState(pk);
+    return { root: fromHex(pk.root), pubSeed: fromHex(pk.pubSeed) };
+  }
   if (!(pk.root instanceof Uint8Array) || !(pk.pubSeed instanceof Uint8Array)) {
     throw new CryptoInputError("public key must have Uint8Array root and pubSeed");
   }
@@ -345,9 +484,14 @@ export class MemoryStateStore implements StateStore {
 /**
  * A signer bound to a store. Every signature goes through the store: the
  * latest state is read, the index is reserved by writing the new state, and
- * only then is the signature returned. A caller-supplied (possibly stale or
+ * only then is the signature produced. A caller-supplied (possibly stale or
  * restored) state is merged with the store's state first, so an index the
  * store knows about can never be reused by rolling back a state file.
+ *
+ * The store is the authority for a Signer: indices it issues are recorded in
+ * the Identity's memory (so the stateless API cannot reuse them), but the
+ * Signer does not consult that memory — one identity must be bound to exactly
+ * ONE store (README §7). Two Signers with two different stores WILL reuse.
  */
 export class Signer {
   constructor(
@@ -383,9 +527,7 @@ export class Signer {
     message: Uint8Array,
     opts: SignOptions & { state?: IdentityState } = {},
   ): Promise<SignResult> {
-    if (!Number.isInteger(index) || index < 0 || index >= LEAVES) {
-      throw new CryptoInputError(`index ${index} out of range 0..${LEAVES - 1}`);
-    }
+    checkIndex(index);
     return this.reserveAndSign(index, message, opts);
   }
 
@@ -394,6 +536,7 @@ export class Signer {
     message: Uint8Array,
     opts: SignOptions & { state?: IdentityState },
   ): Promise<SignResult> {
+    if (!(message instanceof Uint8Array)) throw new CryptoInputError("message must be a Uint8Array");
     for (let attempt = 0; attempt < Signer.MAX_RETRIES; attempt++) {
       const { stored, current } = await this.latest(opts.state);
       let index: number;
@@ -415,9 +558,8 @@ export class Signer {
         if (e instanceof StateConflictError) continue; // someone else moved the state; re-read and retry
         throw e;
       }
-      const signOpts: SignOptions = opts.observer ? { observer: opts.observer } : {};
-      const result = signWithIndex(this.identity, current, index, message, signOpts);
-      return { ...result, state: reserved };
+      const signature = signCore(this.identity, index, message, opts.observer, true);
+      return { signature, index, state: reserved };
     }
     throw new StateConflictError(this.identity.rootHex);
   }

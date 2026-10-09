@@ -186,14 +186,17 @@ export interface Recording {
  * Create an observer that collects every event into `events`. Use the returned
  * `observer` as the `observer` option of createIdentity / sign / verify.
  *
- * With `redact: true` the recorded stream has secret chain values replaced by
- * their SHA-256 commitments (see `redactEvents`), so it can be stored or shared.
+ * By default (`redact: true`) the recorded stream has secret chain values
+ * replaced by their SHA-256 commitments (see `redactEvents`), so it can be
+ * stored or shared. Pass `redact: false` only for a live, in-memory rendering
+ * that never leaves the process: the raw keygen stream IS the private key.
  */
 export function recordEvents(opts: { observer?: CryptoObserver; redact?: boolean } = {}): Recording {
   const observer = opts.observer ?? new CryptoObserver();
   const events: CryptoEvent[] = [];
+  const redact = opts.redact ?? true;
   const stop = observer.subscribe((e) => {
-    events.push(opts.redact ? redactEvent(e) : e);
+    events.push(redact ? redactEvent(e) : e);
   });
   return { observer, events, stop };
 }

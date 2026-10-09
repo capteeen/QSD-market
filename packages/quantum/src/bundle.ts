@@ -12,6 +12,7 @@ import {
 import {
   PROOF_BUNDLE_VERSION,
   type Draw,
+  type DrawBinding,
   type JsonValue,
   type Outcome,
   type OutcomeResolver,
@@ -78,7 +79,24 @@ export function parseBundle(text: string): ProofBundle {
   return JSON.parse(text) as ProofBundle;
 }
 
-export interface VerifyBundleOptions extends AttestationVerifyOptions {}
+export interface VerifyBundleOptions extends AttestationVerifyOptions {
+  /**
+   * Reject bundles whose attestation carries no draw binding (inputsHash +
+   * nonce). Every bundle produced by `createQrngClient().measure()` is bound;
+   * production verifiers should pass true. Default false so that bundles from
+   * providers used via bare `draw()` still verify.
+   */
+  requireInputBinding?: boolean;
+}
+
+/** The (inputsHash, nonce) pair the chain anchors before the draw, or null if the bundle is unbound. */
+export function bundleBinding(bundle: ProofBundle): DrawBinding | null {
+  const a = bundle?.draw?.attestation;
+  if (a && typeof a.inputsHash === 'string' && typeof a.nonce === 'string') {
+    return { inputsHash: a.inputsHash, nonce: a.nonce };
+  }
+  return null;
+}
 
 /**
  * Verify a proof bundle end to end. Never throws.
@@ -90,8 +108,18 @@ export interface VerifyBundleOptions extends AttestationVerifyOptions {}
  *  4. attestation signature (per kind; see verifyAttestation)
  *  5. commitment recomputes
  *  6. inputs.hash == sha256(canonical(inputs.value))
- *  7. resolver.id == bundle.resolverId
- *  8. resolver(bytes, inputs) reproduces outcome.value and outcome.label
+ *  7. if the attestation carries a binding, attestation.inputsHash == inputs.hash
+ *     (and with requireInputBinding, a binding must be present)
+ *  8. resolver.id == bundle.resolverId
+ *  9. resolver(bytes, inputs) reproduces outcome.value and outcome.label
+ *
+ * Unknown TOP-LEVEL fields are accepted (documented decision, H-Q7): they
+ * change `bundleHash()`, so the on-chain anchor comparison catches them, and
+ * rejecting them would break forward-compatible readers. Unknown fields inside
+ * the attestation are covered by its signature and therefore rejected.
+ *
+ * On success with a key the caller trusts, returns exactly `{ ok: true }`.
+ * With `trustAnyKey`, may return `{ ok: true, trust: 'self-consistent-only' }`.
  */
 export function verifyBundle<I extends JsonValue>(
   bundle: unknown,
@@ -141,6 +169,15 @@ export function verifyBundle<I extends JsonValue>(
     if (!isHex(b.inputs.hash) || b.inputs.hash.length !== 64) return fail('inputs.hash is not a sha256 hex digest');
     if (b.inputs.value === undefined) return fail('inputs.value missing');
     if (hashJson(b.inputs.value) !== b.inputs.hash) return fail('inputs.hash does not match inputs.value');
+
+    // --- draw binding (anti-grinding)
+    if (att.inputsHash !== undefined) {
+      if (att.inputsHash !== b.inputs.hash) {
+        return fail('attestation.inputsHash does not match inputs.hash: this draw was requested for different inputs');
+      }
+    } else if (opts.requireInputBinding) {
+      return fail('attestation carries no draw binding (inputsHash/nonce) and requireInputBinding is set');
+    }
 
     // --- resolver
     if (resolver.id !== b.resolverId) {

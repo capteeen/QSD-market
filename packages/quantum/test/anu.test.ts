@@ -10,6 +10,10 @@ import {
   parseAnuResponse,
   recordEvents,
   verifyBundle,
+  bundleBinding,
+  hashJson,
+  sanitizeExcerpt,
+  QuantumConfigError,
 } from '../src/index.js';
 import { sampleInputs, testResolver } from './helpers.js';
 
@@ -54,7 +58,20 @@ describe('AnuQuantumNumbersProvider with mocked transport', () => {
     const client = createQrngClient({ provider });
     const rec = recordEvents(client);
 
-    const { draw, bundle } = await client.measure(sampleInputs, testResolver, { nBytes: 8 });
+    const anchored: unknown[] = [];
+    const { draw, bundle, binding } = await client.measure(sampleInputs, testResolver, {
+      nBytes: 8,
+      nonce: 'beef',
+      beforeDraw: (b) => {
+        anchored.push({ ...b, callsSoFar: calls.length });
+      },
+    });
+    // beforeDraw ran before the HTTP request, with the binding the bundle carries
+    expect(anchored).toEqual([{ inputsHash: hashJson(sampleInputs), nonce: 'beef', callsSoFar: 0 }]);
+    expect(binding).toEqual({ inputsHash: hashJson(sampleInputs), nonce: 'beef' });
+    expect(bundleBinding(bundle)).toEqual(binding);
+    expect(draw.attestation.inputsHash).toBe(bundle.inputs.hash);
+    expect(draw.attestation.nonce).toBe('beef');
 
     expect(calls).toHaveLength(1);
     expect(calls[0]!.url).toBe(`${ANU_DEFAULT_ENDPOINT}?length=8&type=hex8&size=1`);
@@ -78,11 +95,84 @@ describe('AnuQuantumNumbersProvider with mocked transport', () => {
       'outcomeResolved',
     ]);
 
-    expect(verifyBundle(bundle, testResolver)).toEqual({ ok: true });
-    expect(verifyBundle(bundle, testResolver, { trustedWitnessKeys: [witness.publicKey] })).toEqual({ ok: true });
+    // fail closed by default; ok only under the published witness key
+    const untrusted = verifyBundle(bundle, testResolver);
+    expect(untrusted.ok).toBe(false);
+    if (!untrusted.ok) expect(untrusted.reason).toMatch(/no trusted witness keys/);
+    const trusted = { trustedWitnessKeys: [witness.publicKey], requireInputBinding: true };
+    expect(verifyBundle(bundle, testResolver, trusted)).toEqual({ ok: true });
     expect(
       verifyBundle(bundle, testResolver, { trustedWitnessKeys: [ephemeralEd25519Signer().publicKey] }).ok,
     ).toBe(false);
+  });
+
+  it('a bound draw rejects inputs substitution even when inputs.hash is recomputed and the outcome is unchanged', async () => {
+    const { f } = mockFetch(200, fixture.response.body);
+    const provider = new AnuQuantumNumbersProvider({ apiKey: SECRET, witness, fetch: f });
+    const client = createQrngClient({ provider });
+    const { bundle } = await client.measure(sampleInputs, testResolver, { nBytes: 8 });
+    const t = JSON.parse(JSON.stringify(bundle)) as typeof bundle;
+    t.inputs.value = { ...sampleInputs, coin: 'ANOTHER' }; // resolver ignores coin: outcome identical
+    t.inputs.hash = hashJson(t.inputs.value);
+    const r = verifyBundle(t, testResolver, { trustedWitnessKeys: [witness.publicKey] });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/requested for different inputs/);
+  });
+
+  it('the client rejects a provider that echoes a different binding than requested', async () => {
+    const { f } = mockFetch(200, fixture.response.body);
+    const inner = new AnuQuantumNumbersProvider({ apiKey: SECRET, witness, fetch: f });
+    const lying = {
+      id: inner.id,
+      attestationKind: inner.attestationKind,
+      draw: (n: number, o?: Parameters<typeof inner.draw>[1]) => inner.draw(n, o, { inputsHash: '00'.repeat(32), nonce: '00' }),
+    };
+    const client = createQrngClient({ provider: lying });
+    await expect(client.measure(sampleInputs, testResolver, { nBytes: 8 })).rejects.toThrow(QuantumConfigError);
+  });
+
+  it('a nonce that is not hex is refused before any draw', async () => {
+    const { f, calls } = mockFetch(200, fixture.response.body);
+    const client = createQrngClient({ provider: new AnuQuantumNumbersProvider({ apiKey: SECRET, witness, fetch: f }) });
+    await expect(client.measure(sampleInputs, testResolver, { nonce: 'xyz' })).rejects.toThrow(QuantumConfigError);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('JSON.stringify / inspect of the provider never reveal the key', async () => {
+    const { f } = mockFetch(200, fixture.response.body);
+    const provider = new AnuQuantumNumbersProvider({ apiKey: SECRET, witness, fetch: f });
+    const { inspect } = await import('node:util');
+    expect(JSON.stringify(provider)).not.toContain(SECRET);
+    expect(inspect(provider, { depth: 6, showHidden: true })).not.toContain(SECRET);
+    expect(Object.keys(provider)).not.toContain('apiKey');
+    expect(JSON.parse(JSON.stringify(provider))).toEqual({
+      id: 'anu-quantum-numbers',
+      attestationKind: 'witness-signed',
+      endpoint: ANU_DEFAULT_ENDPOINT,
+      witnessPublicKey: witness.publicKey,
+    });
+  });
+
+  it('a provider error message is sanitised in the UI message and kept raw in detail', async () => {
+    const raw = '<img src=x onerror=alert(1)> visit evil.example/"\\';
+    const { f } = mockFetch(200, { success: false, message: raw });
+    const provider = new AnuQuantumNumbersProvider({ apiKey: SECRET, witness, fetch: f });
+    const err = (await provider.draw(8).catch((e: unknown) => e)) as MeasurementUnavailableError;
+    expect(err).toBeInstanceOf(MeasurementUnavailableError);
+    expect(err.message).not.toMatch(/[<>"'\\/=()]/);
+    expect(err.message).toContain('evil.example');
+    expect(err.detail).toBe(raw);
+    expect(sanitizeExcerpt('a'.repeat(200)).length).toBeLessThanOrEqual(80);
+  });
+
+  it('a network error whose text contains the key is scrubbed from the cause', async () => {
+    const f = (async () => {
+      throw new TypeError(`fetch failed for ${SECRET}`);
+    }) as unknown as typeof fetch;
+    const provider = new AnuQuantumNumbersProvider({ apiKey: SECRET, witness, fetch: f });
+    const err = (await provider.draw(8).catch((e: unknown) => e)) as MeasurementUnavailableError;
+    expect(String((err.cause as Error).message)).not.toContain(SECRET);
+    expect((err.cause as Error).message).toContain('[redacted]');
   });
 
   it('403 -> MeasurementUnavailableError with a UI-safe message, key not leaked', async () => {

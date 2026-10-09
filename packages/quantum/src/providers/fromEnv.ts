@@ -1,6 +1,6 @@
 import { ed25519SignerFromSeed } from '../attestation.js';
 import { hexToBytes, isHex } from '../encoding.js';
-import { isProduction, ProductionGuardError, QuantumConfigError } from '../errors.js';
+import { ALLOW_UNSAFE_DEV_ENV, ProductionGuardError, QuantumConfigError, unsafeDevPermission } from '../errors.js';
 import type { QrngProvider } from '../types.js';
 import { ANU_PROVIDER_ID, AnuQuantumNumbersProvider } from './anu.js';
 import { UNSAFE_DEV_RANDOM_ID, UnsafeDevRandomProvider } from './unsafeDev.js';
@@ -15,6 +15,10 @@ export const ENV = {
   ENDPOINT: 'QSD_QRNG_ENDPOINT',
   /** 64-hex-char (32-byte) Ed25519 seed for the witness key. Never logged. */
   WITNESS_SECRET_KEY: 'QSD_WITNESS_SECRET_KEY',
+  /** Comma-separated published witness public keys for verifiers (see trustedWitnessKeysFromEnv). */
+  WITNESS_PUBLIC_KEYS: 'QSD_WITNESS_PUBLIC_KEYS',
+  /** Must be "1" (with NODE_ENV=development) to permit UNSAFE_DEV_RANDOM. */
+  ALLOW_UNSAFE_DEV: ALLOW_UNSAFE_DEV_ENV,
 } as const;
 
 export type EnvLike = Record<string, string | undefined>;
@@ -31,25 +35,27 @@ function readEnv(env?: EnvLike): EnvLike {
  *
  * - QSD_QRNG_PROVIDER unset or 'anu-quantum-numbers': requires QSD_QRNG_API_KEY
  *   and QSD_WITNESS_SECRET_KEY.
- * - QSD_QRNG_PROVIDER='UNSAFE_DEV_RANDOM': only when NODE_ENV !== 'production';
- *   otherwise throws ProductionGuardError. There is no other way to get the
- *   dev provider from the environment.
+ * - QSD_QRNG_PROVIDER='UNSAFE_DEV_RANDOM': only when the real process
+ *   positively permits it (NODE_ENV=test, or NODE_ENV=development with
+ *   QSD_ALLOW_UNSAFE_DEV=1); otherwise throws ProductionGuardError. There is
+ *   no other way to get the dev provider from the environment.
  *
- * `env` may be injected for tests; NODE_ENV is always read from the real
- * process so the production guard cannot be bypassed by injection.
+ * `env` may be injected for tests; NODE_ENV and QSD_ALLOW_UNSAFE_DEV are
+ * always read from the real process so the guard cannot be bypassed by
+ * injection.
  */
 export function createProviderFromEnv(env?: EnvLike): QrngProvider {
   const e = readEnv(env);
   const requested = (e[ENV.PROVIDER] ?? ANU_PROVIDER_ID).trim();
 
   if (requested === UNSAFE_DEV_RANDOM_ID) {
-    if (isProduction()) {
+    const perm = unsafeDevPermission();
+    if (!perm.allowed) {
       throw new ProductionGuardError(
-        `${ENV.PROVIDER}=${UNSAFE_DEV_RANDOM_ID} is not allowed when NODE_ENV=production. ` +
-          'Configure a real quantum provider.',
+        `${ENV.PROVIDER}=${UNSAFE_DEV_RANDOM_ID} is not permitted: ${perm.reason}. Configure a real quantum provider.`,
       );
     }
-    return new UnsafeDevRandomProvider();
+    return new UnsafeDevRandomProvider(); // re-checks the guard itself
   }
 
   if (requested === ANU_PROVIDER_ID) {

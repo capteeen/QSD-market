@@ -191,18 +191,38 @@ interface IdentityState {
 }
 ```
 
-* `sign(identity, state, message)` → `{ signature, index, state }`. The new
-  state has `index` marked used and is produced **before** the signature is
-  returned. The input state is never mutated. Signing with a state whose index
-  is marked throws `KeyReuseError`. Keep the returned state; a state object
-  you reuse is a key you reuse.
+Two layers of memory keep a leaf from being used twice:
+
+1. **The `IdentityState` you pass around** (serialisable, the thing a store
+   persists).
+2. **The `Identity` object's own private memory** of every index it has ever
+   signed with, through any path, in this process. It is held in a
+   module-private `WeakMap`, is not a property, and cannot be cleared.
+
+Every signing call ORs the supplied state with that memory, refuses any index
+set in the union, sets the bit **before** computing the signature, and returns
+a state that reflects the union. A stale, rolled-back or JSON-edited state
+therefore cannot reissue a key within a process; cross-process safety is the
+`StateStore`'s job (below).
+
+* `sign(identity, state, message)` → `{ signature, index, state }`. Uses the
+  lowest index unused in *both* `state` and the identity's memory (so a stale
+  state with cleared bits simply gets the next free key, never a used one).
+  Passing the **same state object** to `sign()` twice asks for the same key
+  twice and throws `KeyReuseError`. The input state is never mutated; always
+  continue from the returned state.
 * `signWithIndex(identity, state, index, message)` – explicit index; throws
-  `KeyReuseError` if used.
+  `KeyReuseError` if marked in `state` *or* remembered by the identity.
+* `identity.usedIndices()` / `identity.memoryState()` – read the memory.
 * `markUsed`, `isIndexUsed`, `mergeStates`, `remainingIndices`,
   `remainingCount`, `validateState` – pure helpers. `mergeStates` is a union:
-  an index used in either input is used in the result.
+  an index used in either input is used in the result; root **and** pubSeed
+  must match. `validateState` checks that `root`, `pubSeed` and `used` are
+  well-formed hex of the right length.
 * `KeysExhaustedError` once all 256 are gone. The identity is then finished;
   make a new one.
+* There is no method on `Identity` that produces a signature; the only
+  signing path is module-internal and always goes through the memory check.
 
 ### `StateStore` and `Signer` (the mandatory path for anything persistent)
 
@@ -226,6 +246,13 @@ in memory; **`/packages/solana` supplies the persistent implementation**
    state — rolling back a backup cannot resurrect an index the store knows),
 2. reserves the index with a compare-and-swap `put` (retries on conflict),
 3. only then computes and returns the signature.
+
+The store is the Signer's authority: indices it issues are recorded in the
+identity's memory (so the stateless API can never reissue them), but the
+Signer does not consult that memory when choosing an index. Consequently
+**one identity must be bound to exactly one store**; two Signers over two
+different stores for the same identity *will* reuse keys (§7). The app's
+identity reserve (`/packages/solana`) must guarantee the one-store rule.
 
 Tests cover: double sign, sign after restoring an old state, concurrent
 signers on one store, and rollback writes to the store.

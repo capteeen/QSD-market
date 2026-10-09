@@ -43,26 +43,46 @@ export const sampleInputs: TestInputs = {
   channels: [0.5, 0.3, 0.2],
 };
 
-export function withNodeEnv<T>(value: string | undefined, fn: () => T): T {
-  const prev = process.env.NODE_ENV;
-  if (value === undefined) delete process.env.NODE_ENV;
-  else process.env.NODE_ENV = value;
+type Vars = Record<string, string | undefined>;
+
+function applyVars(vars: Vars): () => void {
+  const prev: Vars = {};
+  for (const k of Object.keys(vars)) {
+    prev[k] = process.env[k];
+    if (vars[k] === undefined) delete process.env[k];
+    else process.env[k] = vars[k];
+  }
+  return () => {
+    for (const k of Object.keys(vars)) {
+      if (prev[k] === undefined) delete process.env[k];
+      else process.env[k] = prev[k];
+    }
+  };
+}
+
+/** Run with process.env overrides (undefined deletes), restoring afterwards. */
+export function withEnv<T>(vars: Vars, fn: () => T): T {
+  const restore = applyVars(vars);
   try {
     return fn();
   } finally {
-    if (prev === undefined) delete process.env.NODE_ENV;
-    else process.env.NODE_ENV = prev;
+    restore();
   }
 }
 
-export async function withNodeEnvAsync<T>(value: string | undefined, fn: () => Promise<T>): Promise<T> {
-  const prev = process.env.NODE_ENV;
-  if (value === undefined) delete process.env.NODE_ENV;
-  else process.env.NODE_ENV = value;
+export async function withEnvAsync<T>(vars: Vars, fn: () => Promise<T>): Promise<T> {
+  const restore = applyVars(vars);
   try {
     return await fn();
   } finally {
-    if (prev === undefined) delete process.env.NODE_ENV;
-    else process.env.NODE_ENV = prev;
+    restore();
   }
+}
+
+export function withNodeEnv<T>(value: string | undefined, fn: () => T): T {
+  return withEnv({ NODE_ENV: value }, fn);
+}
+
+export async function withNodeEnvAsync<T>(value: string | undefined, fn: () => Promise<T>): Promise<T> {
+  return withEnvAsync({ NODE_ENV: value }, fn);
 }

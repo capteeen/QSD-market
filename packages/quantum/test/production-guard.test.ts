@@ -8,10 +8,14 @@ import {
   UNSAFE_DEV_RANDOM_ID,
   ANU_PROVIDER_ID,
   AnuQuantumNumbersProvider,
+  unsafeDevPermission,
+  isProduction,
 } from '../src/index.js';
-import { withNodeEnv, withNodeEnvAsync } from './helpers.js';
+import { withEnv, withEnvAsync, withNodeEnv } from './helpers.js';
 
-describe('UNSAFE_DEV_RANDOM production guard', () => {
+const DEV_OK = { NODE_ENV: 'development', QSD_ALLOW_UNSAFE_DEV: '1' };
+
+describe('UNSAFE_DEV_RANDOM guard is fail-closed', () => {
   it('is named exactly UNSAFE_DEV_RANDOM', () => {
     expect(UNSAFE_DEV_RANDOM_ID).toBe('UNSAFE_DEV_RANDOM');
     withNodeEnv('test', () => {
@@ -25,20 +29,83 @@ describe('UNSAFE_DEV_RANDOM production guard', () => {
     });
   });
 
-  it('constructor works in development and test', () => {
-    withNodeEnv('development', () => expect(() => new UnsafeDevRandomProvider()).not.toThrow());
-    withNodeEnv('test', () => expect(() => new UnsafeDevRandomProvider()).not.toThrow());
-    withNodeEnv(undefined, () => expect(() => new UnsafeDevRandomProvider()).not.toThrow());
+  for (const v of ['Production', 'PRODUCTION', ' production', 'production ', 'prod', 'staging', 'dev', 'TEST ', '']) {
+    it(`treats NODE_ENV=${JSON.stringify(v)} as production`, () => {
+      withNodeEnv(v, () => {
+        // 'TEST ' normalises to 'test' and is allowed; everything else here is denied.
+        if (v.trim().toLowerCase() === 'test') {
+          expect(() => new UnsafeDevRandomProvider()).not.toThrow();
+        } else {
+          expect(() => new UnsafeDevRandomProvider()).toThrow(ProductionGuardError);
+        }
+      });
+    });
+  }
+
+  it('NODE_ENV unset is production', () => {
+    withNodeEnv(undefined, () => {
+      expect(isProduction()).toBe(true);
+      expect(unsafeDevPermission()).toEqual({ allowed: false, reason: expect.stringContaining('not set') });
+      expect(() => new UnsafeDevRandomProvider()).toThrow(ProductionGuardError);
+    });
   });
 
-  it('draw() refuses if NODE_ENV flips to production after construction', async () => {
-    const provider = withNodeEnv('development', () => new UnsafeDevRandomProvider());
-    await withNodeEnvAsync('development', async () => {
+  it('no `process` object at all (browser bundle) is production', () => {
+    const real = globalThis.process;
+    try {
+      // @ts-expect-error simulate a browser global scope
+      delete globalThis.process;
+      expect(isProduction()).toBe(true);
+      expect(() => new UnsafeDevRandomProvider()).toThrow(ProductionGuardError);
+    } finally {
+      globalThis.process = real;
+    }
+  });
+
+  it('NODE_ENV=test is allowed on its own; development needs QSD_ALLOW_UNSAFE_DEV=1', () => {
+    withEnv({ NODE_ENV: 'test', QSD_ALLOW_UNSAFE_DEV: undefined }, () => {
+      expect(() => new UnsafeDevRandomProvider()).not.toThrow();
+    });
+    withEnv({ NODE_ENV: 'development', QSD_ALLOW_UNSAFE_DEV: undefined }, () => {
+      expect(() => new UnsafeDevRandomProvider()).toThrow(/QSD_ALLOW_UNSAFE_DEV=1/);
+    });
+    withEnv({ NODE_ENV: 'development', QSD_ALLOW_UNSAFE_DEV: 'true' }, () => {
+      expect(() => new UnsafeDevRandomProvider()).toThrow(ProductionGuardError);
+    });
+    withEnv(DEV_OK, () => {
+      expect(() => new UnsafeDevRandomProvider()).not.toThrow();
+    });
+  });
+
+  it('draw() refuses if the environment flips to production after construction', async () => {
+    const provider = withEnv(DEV_OK, () => new UnsafeDevRandomProvider());
+    await withEnvAsync(DEV_OK, async () => {
       const d = await provider.draw(8);
       expect(d.bytes.length).toBe(8);
     });
-    await withNodeEnvAsync('production', async () => {
+    await withEnvAsync({ NODE_ENV: 'production' }, async () => {
       await expect(provider.draw(8)).rejects.toThrow(ProductionGuardError);
+    });
+    await withEnvAsync({ NODE_ENV: undefined }, async () => {
+      await expect(provider.draw(8)).rejects.toThrow(ProductionGuardError);
+    });
+    await withEnvAsync({ NODE_ENV: 'development', QSD_ALLOW_UNSAFE_DEV: undefined }, async () => {
+      await expect(provider.draw(8)).rejects.toThrow(ProductionGuardError);
+    });
+  });
+
+  it('the dev attestation carries no draw binding, even when one is requested', async () => {
+    await withEnvAsync({ NODE_ENV: 'test' }, async () => {
+      const d = await new UnsafeDevRandomProvider().draw(8, undefined, { inputsHash: 'ab'.repeat(32), nonce: 'cd' });
+      expect(d.attestation.inputsHash).toBeUndefined();
+      expect(d.attestation.nonce).toBeUndefined();
+    });
+  });
+
+  it('does not leak anything through JSON', () => {
+    withNodeEnv('test', () => {
+      const p = new UnsafeDevRandomProvider();
+      expect(JSON.parse(JSON.stringify(p))).toEqual({ id: 'UNSAFE_DEV_RANDOM', attestationKind: 'unsafe-dev', publicKey: p.publicKey });
     });
   });
 });
@@ -46,22 +113,27 @@ describe('UNSAFE_DEV_RANDOM production guard', () => {
 describe('createProviderFromEnv', () => {
   it('refuses UNSAFE_DEV_RANDOM in production even when explicitly requested', () => {
     withNodeEnv('production', () => {
-      expect(() => createProviderFromEnv({ [ENV.PROVIDER]: 'UNSAFE_DEV_RANDOM' })).toThrow(
-        ProductionGuardError,
-      );
+      expect(() => createProviderFromEnv({ [ENV.PROVIDER]: 'UNSAFE_DEV_RANDOM' })).toThrow(ProductionGuardError);
+    });
+    withNodeEnv(undefined, () => {
+      expect(() => createProviderFromEnv({ [ENV.PROVIDER]: 'UNSAFE_DEV_RANDOM' })).toThrow(ProductionGuardError);
     });
   });
 
-  it('returns the dev provider outside production when explicitly requested', () => {
+  it('returns the dev provider only when explicitly requested in a permitted env', () => {
     withNodeEnv('test', () => {
-      const p = createProviderFromEnv({ [ENV.PROVIDER]: 'UNSAFE_DEV_RANDOM' });
-      expect(p).toBeInstanceOf(UnsafeDevRandomProvider);
+      expect(createProviderFromEnv({ [ENV.PROVIDER]: 'UNSAFE_DEV_RANDOM' })).toBeInstanceOf(UnsafeDevRandomProvider);
+    });
+    withEnv(DEV_OK, () => {
+      expect(createProviderFromEnv({ [ENV.PROVIDER]: 'UNSAFE_DEV_RANDOM' })).toBeInstanceOf(UnsafeDevRandomProvider);
+    });
+    withEnv({ NODE_ENV: 'development', QSD_ALLOW_UNSAFE_DEV: undefined }, () => {
+      expect(() => createProviderFromEnv({ [ENV.PROVIDER]: 'UNSAFE_DEV_RANDOM' })).toThrow(ProductionGuardError);
     });
   });
 
-  it('never returns the dev provider unless explicitly requested, even outside production', () => {
-    withNodeEnv('development', () => {
-      // No provider set, no key: must fail with a config error, NOT fall back to dev.
+  it('never returns the dev provider unless explicitly requested, even in a permitted env', () => {
+    withNodeEnv('test', () => {
       expect(() => createProviderFromEnv({})).toThrow(QuantumConfigError);
       expect(() => createProviderFromEnv({})).not.toThrow(ProductionGuardError);
     });
@@ -71,13 +143,10 @@ describe('createProviderFromEnv', () => {
     withNodeEnv('production', () => {
       expect(() => createProviderFromEnv({})).toThrow(/QSD_QRNG_API_KEY/);
       expect(() => createProviderFromEnv({ [ENV.API_KEY]: 'k' })).toThrow(/QSD_WITNESS_SECRET_KEY/);
-      expect(() =>
-        createProviderFromEnv({ [ENV.API_KEY]: 'k', [ENV.WITNESS_SECRET_KEY]: 'zz' }),
-      ).toThrow(/QSD_WITNESS_SECRET_KEY/);
-      const p = createProviderFromEnv({
-        [ENV.API_KEY]: 'k',
-        [ENV.WITNESS_SECRET_KEY]: '11'.repeat(32),
-      });
+      expect(() => createProviderFromEnv({ [ENV.API_KEY]: 'k', [ENV.WITNESS_SECRET_KEY]: 'zz' })).toThrow(
+        /QSD_WITNESS_SECRET_KEY/,
+      );
+      const p = createProviderFromEnv({ [ENV.API_KEY]: 'k', [ENV.WITNESS_SECRET_KEY]: '11'.repeat(32) });
       expect(p).toBeInstanceOf(AnuQuantumNumbersProvider);
       expect(p.id).toBe(ANU_PROVIDER_ID);
       expect(p.attestationKind).toBe('witness-signed');
@@ -90,10 +159,15 @@ describe('createProviderFromEnv', () => {
     });
   });
 
-  it('reads NODE_ENV from the real process, not the injected env', () => {
+  it('reads NODE_ENV and QSD_ALLOW_UNSAFE_DEV from the real process, not the injected env', () => {
     withNodeEnv('production', () => {
       expect(() =>
-        createProviderFromEnv({ [ENV.PROVIDER]: 'UNSAFE_DEV_RANDOM', NODE_ENV: 'development' }),
+        createProviderFromEnv({ [ENV.PROVIDER]: 'UNSAFE_DEV_RANDOM', NODE_ENV: 'test', QSD_ALLOW_UNSAFE_DEV: '1' }),
+      ).toThrow(ProductionGuardError);
+    });
+    withEnv({ NODE_ENV: 'development', QSD_ALLOW_UNSAFE_DEV: undefined }, () => {
+      expect(() =>
+        createProviderFromEnv({ [ENV.PROVIDER]: 'UNSAFE_DEV_RANDOM', QSD_ALLOW_UNSAFE_DEV: '1' }),
       ).toThrow(ProductionGuardError);
     });
   });

@@ -2,7 +2,7 @@ import { signWitnessAttestation, type Ed25519Signer } from '../attestation.js';
 import { computeCommitment } from '../commitment.js';
 import { hexToBytes, nowIso, sha256Hex } from '../encoding.js';
 import { MeasurementUnavailableError, QuantumConfigError } from '../errors.js';
-import type { CapturedHttpResponse, Draw, DrawObserver, QrngProvider } from '../types.js';
+import type { CapturedHttpResponse, Draw, DrawBinding, DrawObserver, QrngProvider } from '../types.js';
 
 /**
  * ANU Quantum Numbers (Australian National University, operated commercially
@@ -24,7 +24,8 @@ import type { CapturedHttpResponse, Draw, DrawObserver, QrngProvider } from '../
  *
  * ANU does NOT sign responses. This provider produces a 'witness-signed'
  * attestation: the raw response is captured verbatim and the QSD witness key
- * signs a statement over it. See README "What the attestation proves".
+ * signs a statement over it, including the draw binding (inputsHash, nonce)
+ * when one is supplied. See README "What the attestation proves".
  */
 export const ANU_PROVIDER_ID = 'anu-quantum-numbers' as const;
 export const ANU_DEFAULT_ENDPOINT = 'https://api.quantumnumbers.com.au';
@@ -44,7 +45,7 @@ export const CAPTURED_RESPONSE_HEADERS = [
 ] as const;
 
 export interface AnuProviderOptions {
-  /** API key. Never logged, never included in errors or attestations. */
+  /** API key. Never logged, never included in errors, attestations, JSON or inspect output. */
   apiKey: string;
   /** Witness signer (QSD protocol key). */
   witness: Ed25519Signer;
@@ -65,6 +66,20 @@ export interface AnuSuccessResponse {
 }
 
 /**
+ * Reduce third-party text to something safe to place inside fixed UI copy:
+ * letters, digits, space and a few punctuation marks only; no HTML-significant
+ * characters (< > & " ' / \ = ( ) { }), no control characters; bounded length.
+ */
+export function sanitizeExcerpt(text: unknown, max = 80): string {
+  if (typeof text !== 'string') return '';
+  const cleaned = text
+    .replace(/[^A-Za-z0-9 .,:;!?_%+-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.length > max ? cleaned.slice(0, max - 1).trimEnd() + '…' : cleaned;
+}
+
+/**
  * Parse a documented ANU response body into bytes. Pure; throws
  * MeasurementUnavailableError('bad-response') with a UI-safe message on any
  * deviation from the documented shape or from the requested length.
@@ -79,10 +94,12 @@ export function parseAnuResponse(body: string, expectedBytes: number): Uint8Arra
   if (!json || typeof json !== 'object') throw badResponse('the quantum provider returned a non-object response');
   const r = json as Partial<AnuSuccessResponse> & { message?: unknown };
   if (r.success !== true) {
+    const excerpt = sanitizeExcerpt(r.message);
     throw badResponse(
-      typeof r.message === 'string'
-        ? `the quantum provider reported an error: ${r.message}`
+      excerpt
+        ? `the quantum provider reported an error: ${excerpt}`
         : 'the quantum provider did not report success',
+      typeof r.message === 'string' ? r.message : undefined,
     );
   }
   if (!Array.isArray(r.data)) throw badResponse('the quantum provider response had no data array');
@@ -111,21 +128,24 @@ export function parseAnuResponse(body: string, expectedBytes: number): Uint8Arra
     }
     return out;
   }
-  throw badResponse(`the quantum provider returned an unexpected data type: ${String(r.type)}`);
+  throw badResponse('the quantum provider returned an unexpected data type', String(r.type));
 }
 
-function badResponse(message: string): MeasurementUnavailableError {
-  return new MeasurementUnavailableError(ANU_PROVIDER_ID, 'bad-response', `Measurement unavailable: ${message}.`);
+function badResponse(message: string, detail?: string): MeasurementUnavailableError {
+  return new MeasurementUnavailableError(ANU_PROVIDER_ID, 'bad-response', `Measurement unavailable: ${message}.`, {
+    ...(detail !== undefined ? { detail } : {}),
+  });
 }
 
 export class AnuQuantumNumbersProvider implements QrngProvider {
   readonly id = ANU_PROVIDER_ID;
   readonly attestationKind = 'witness-signed' as const;
-  private readonly apiKey: string;
-  private readonly witness: Ed25519Signer;
-  private readonly endpoint: string;
-  private readonly fetchImpl: typeof globalThis.fetch;
-  private readonly timeoutMs: number;
+  readonly endpoint: string;
+  readonly timeoutMs: number;
+  // ES private fields: invisible to JSON.stringify, util.inspect, Object.keys and reflection.
+  readonly #apiKey: string;
+  readonly #witness: Ed25519Signer;
+  readonly #fetch: typeof globalThis.fetch;
 
   constructor(opts: AnuProviderOptions) {
     if (!opts.apiKey || typeof opts.apiKey !== 'string') {
@@ -134,23 +154,33 @@ export class AnuQuantumNumbersProvider implements QrngProvider {
     if (!opts.witness) {
       throw new QuantumConfigError('AnuQuantumNumbersProvider: a witness signer is required (env QSD_WITNESS_SECRET_KEY)');
     }
-    this.apiKey = opts.apiKey;
-    this.witness = opts.witness;
+    this.#apiKey = opts.apiKey;
+    this.#witness = opts.witness;
     this.endpoint = (opts.endpoint ?? ANU_DEFAULT_ENDPOINT).replace(/\/+$/, '');
     const f = opts.fetch ?? globalThis.fetch;
     if (typeof f !== 'function') {
       throw new QuantumConfigError('AnuQuantumNumbersProvider: no fetch implementation available');
     }
-    this.fetchImpl = f;
+    this.#fetch = f;
     this.timeoutMs = opts.timeoutMs ?? 10_000;
   }
 
   /** Witness public key, so the integrator can publish it. */
   get witnessPublicKey(): string {
-    return this.witness.publicKey;
+    return this.#witness.publicKey;
   }
 
-  async draw(nBytes: number, observer?: DrawObserver): Promise<Draw> {
+  /** What loggers see. Never the key. */
+  toJSON(): { id: string; attestationKind: string; endpoint: string; witnessPublicKey: string } {
+    return {
+      id: this.id,
+      attestationKind: this.attestationKind,
+      endpoint: this.endpoint,
+      witnessPublicKey: this.witnessPublicKey,
+    };
+  }
+
+  async draw(nBytes: number, observer?: DrawObserver, binding?: DrawBinding): Promise<Draw> {
     if (!Number.isInteger(nBytes) || nBytes <= 0 || nBytes > ANU_MAX_BYTES_PER_REQUEST) {
       throw new QuantumConfigError(
         `ANU provider: nBytes must be an integer in 1..${ANU_MAX_BYTES_PER_REQUEST}, got ${String(nBytes)}`,
@@ -164,9 +194,9 @@ export class AnuQuantumNumbersProvider implements QrngProvider {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     let res: Response;
     try {
-      res = await this.fetchImpl(url, {
+      res = await this.#fetch(url, {
         method: 'GET',
-        headers: { 'x-api-key': this.apiKey, accept: 'application/json' },
+        headers: { 'x-api-key': this.#apiKey, accept: 'application/json' },
         signal: controller.signal,
       });
     } catch (cause) {
@@ -178,7 +208,7 @@ export class AnuQuantumNumbersProvider implements QrngProvider {
         timedOut
           ? `Measurement unavailable: the quantum provider did not respond within ${this.timeoutMs / 1000}s.`
           : 'Measurement unavailable: the quantum provider could not be reached.',
-        { cause },
+        { cause: scrubCause(cause, this.#apiKey) },
       );
     }
     clearTimeout(timer);
@@ -191,7 +221,7 @@ export class AnuQuantumNumbersProvider implements QrngProvider {
         this.id,
         'network',
         'Measurement unavailable: the quantum provider response could not be read.',
-        { cause },
+        { cause: scrubCause(cause, this.#apiKey) },
       );
     }
     const receivedAt = nowIso();
@@ -205,6 +235,7 @@ export class AnuQuantumNumbersProvider implements QrngProvider {
           : res.status === 429
             ? 'Measurement unavailable: the quantum provider rate limit was reached. Try again shortly.'
             : `Measurement unavailable: the quantum provider returned HTTP ${res.status}.`,
+        { detail: body.slice(0, 2048) },
       );
     }
 
@@ -230,10 +261,11 @@ export class AnuQuantumNumbersProvider implements QrngProvider {
         requestedAt,
         receivedAt,
         bytesSha256: sha256Hex(bytes),
+        ...(binding ? { inputsHash: binding.inputsHash, nonce: binding.nonce } : {}),
         transport: 'https',
         response,
       },
-      this.witness,
+      this.#witness,
     );
     observer?.emit({ type: 'entropyArrived', bytes, attestation });
 
@@ -242,4 +274,16 @@ export class AnuQuantumNumbersProvider implements QrngProvider {
 
     return { bytes, providerId: this.id, requestedAt, receivedAt, attestation, commitment };
   }
+}
+
+/** A fetch implementation may put anything in its error; never let the key ride along as `cause`. */
+function scrubCause(cause: unknown, apiKey: string): unknown {
+  if (cause instanceof Error) {
+    const msg = cause.message.includes(apiKey) ? cause.message.split(apiKey).join('[redacted]') : cause.message;
+    const scrubbed = new Error(msg);
+    scrubbed.name = cause.name;
+    return scrubbed;
+  }
+  if (typeof cause === 'string') return cause.split(apiKey).join('[redacted]');
+  return undefined;
 }

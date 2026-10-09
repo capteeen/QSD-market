@@ -12,7 +12,9 @@ import {
   decodePublicKey,
   encodePublicKey,
   fromHex,
+  isIndexUsed,
   remainingCount,
+  remainingIndices,
   sign,
   signWithIndex,
   signatureIndex,
@@ -27,18 +29,21 @@ const message = new TextEncoder().encode("launch QSD/ALPHA generation 0");
 describe("round trip", () => {
   it("signs and verifies", () => {
     const state0 = identity.initialState();
+    const usedBefore = identity.usedIndices();
     const { signature, state, index } = sign(identity, state0, message);
-    expect(index).toBe(0);
+    expect(usedBefore).not.toContain(index);
+    expect(identity.usedIndices()).toContain(index);
     expect(signature.length).toBe(SIGNATURE_BYTES);
-    expect(signatureIndex(signature)).toBe(0);
+    expect(signatureIndex(signature)).toBe(index);
     expect(verify(identity.publicKey, message, signature)).toBe(true);
     // every accepted public-key shape works
     expect(verify(encodePublicKey(identity.publicKey), message, signature)).toBe(true);
     expect(verify(state, message, signature)).toBe(true);
-    // state advanced, input state untouched
-    expect(state.nextIndex).toBe(1);
+    // state advanced (union with memory), input state untouched
+    expect(isIndexUsed(state, index)).toBe(true);
+    expect(state.nextIndex).toBeGreaterThan(index);
     expect(state0.nextIndex).toBe(0);
-    expect(remainingCount(state)).toBe(LEAVES - 1);
+    expect(remainingCount(state)).toBe(LEAVES - identity.usedIndices().length);
   });
 
   it("signs with an explicit index and a second message", () => {
@@ -46,20 +51,28 @@ describe("round trip", () => {
     const { signature, state } = signWithIndex(identity, identity.initialState(), 200, msg2);
     expect(signatureIndex(signature)).toBe(200);
     expect(verify(identity.publicKey, msg2, signature)).toBe(true);
-    expect(state.nextIndex).toBe(0); // 0 is still free
-    expect(remainingCount(state)).toBe(LEAVES - 1);
+    expect(isIndexUsed(state, 200)).toBe(true);
+    // the returned state is the union with the identity's memory
+    const used = identity.usedIndices();
+    expect(used).toContain(200);
+    for (const u of used) expect(isIndexUsed(state, u)).toBe(true);
+    expect(state.nextIndex).toBe(Math.min(...remainingIndices(state)));
+    expect(remainingCount(state)).toBe(LEAVES - used.length);
   });
 
   it("every one of the 256 leaves produces a verifying signature", () => {
-    let state = identity.initialState();
+    const fresh = createIdentity(new Uint8Array(32).fill(0x5a));
+    let state = fresh.initialState();
     for (let i = 0; i < LEAVES; i++) {
-      const r = sign(identity, state, message);
+      const r = sign(fresh, state, message);
       expect(r.index).toBe(i);
-      expect(verify(identity.publicKey, message, r.signature)).toBe(true);
+      expect(verify(fresh.publicKey, message, r.signature)).toBe(true);
       state = r.state;
     }
     expect(remainingCount(state)).toBe(0);
-    expect(() => sign(identity, state, message)).toThrow(KeysExhaustedError);
+    expect(fresh.usedIndices()).toHaveLength(LEAVES);
+    expect(() => sign(fresh, state, message)).toThrow(KeysExhaustedError);
+    expect(() => sign(fresh, fresh.initialState(), message)).toThrow(KeysExhaustedError);
   });
 
   it("public key encodes to 64 bytes and round-trips", () => {
@@ -141,9 +154,10 @@ describe("tamper detection", () => {
 });
 
 describe("determinism and seed hygiene", () => {
+  const a = createIdentity(seed);
+  const b = createIdentity(new Uint8Array(seed));
+
   it("the same seed always produces the same root and signatures", () => {
-    const a = createIdentity(seed);
-    const b = createIdentity(new Uint8Array(seed));
     expect(a.rootHex).toBe(identity.rootHex);
     expect(b.rootHex).toBe(identity.rootHex);
     const sa = signWithIndex(a, a.initialState(), 3, message).signature;
@@ -158,7 +172,7 @@ describe("determinism and seed hygiene", () => {
     expect(zero.rootHex).toBe("ec0ecf45b11bbbefed56b0522f9cd6f6a21012a75b353d10ca5698ceb0d4cd69");
     expect(toHex(zero.publicKey.pubSeed)).toBe("924a9a7ae5d7e1ae272bebd73902f4440fc9eed61173faf9ab65bd5da19201f2");
     // a signature is fully deterministic too (index 0, fixed message)
-    const sig = sign(identity, identity.initialState(), message).signature;
+    const sig = signWithIndex(a, a.initialState(), 0, message).signature;
     expect(toHex(sig).slice(0, 72)).toBe("00000000079e9e141bb196901f8d23ff11decdf912dcc0287e3f8b368a8ba99984263593");
   });
 

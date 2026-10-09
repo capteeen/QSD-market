@@ -7,6 +7,7 @@ import {
   signUnsafeDevAttestation,
   signWitnessAttestation,
   verifyAttestation,
+  trustedWitnessKeysFromEnv,
   type ProviderSignedAttestation,
   type WitnessSignedAttestation,
 } from '../src/index.js';
@@ -36,8 +37,48 @@ function makeWitness(signer = ephemeralEd25519Signer()): WitnessSignedAttestatio
 }
 
 describe('witness-signed attestation', () => {
-  it('verifies when untouched', () => {
-    expect(verifyAttestation(makeWitness())).toEqual({ ok: true });
+  it('verifies when untouched, under its published key', () => {
+    const signer = ephemeralEd25519Signer();
+    expect(verifyAttestation(makeWitness(signer), { trustedWitnessKeys: [signer.publicKey] })).toEqual({ ok: true });
+  });
+
+  it('is REJECTED with default options: the embedded key is never trusted on its own (fail closed)', () => {
+    const r = verifyAttestation(makeWitness());
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/no trusted witness keys were supplied/);
+    const r2 = verifyAttestation(makeWitness(), { trustedWitnessKeys: [] });
+    expect(r2.ok).toBe(false);
+  });
+
+  it('trustAnyKey is diagnostic only and is labelled as such in the result', () => {
+    expect(verifyAttestation(makeWitness(), { trustAnyKey: true })).toEqual({ ok: true, trust: 'self-consistent-only' });
+    // a bad signature still fails even with trustAnyKey
+    const a = makeWitness();
+    expect(verifyAttestation({ ...a, signature: '00'.repeat(64) }, { trustAnyKey: true }).ok).toBe(false);
+  });
+
+  it('trustedWitnessKeysFromEnv parses a comma-separated list and ignores junk', () => {
+    const k1 = ephemeralEd25519Signer().publicKey;
+    const k2 = ephemeralEd25519Signer().publicKey;
+    expect(trustedWitnessKeysFromEnv({ QSD_WITNESS_PUBLIC_KEYS: ` ${k1}, ${k2.toUpperCase()} ,nope,` })).toEqual([k1, k2]);
+    expect(trustedWitnessKeysFromEnv({})).toEqual([]);
+  });
+
+  it('carries and signs the draw binding when present; altering it breaks the signature', () => {
+    const signer = ephemeralEd25519Signer();
+    const base = makeWitness(signer);
+    const bound = signWitnessAttestation(
+      { ...stripSig(base), inputsHash: 'ab'.repeat(32), nonce: '0102' },
+      signer,
+    );
+    const opts = { trustedWitnessKeys: [signer.publicKey] };
+    expect(verifyAttestation(bound, opts)).toEqual({ ok: true });
+    expect(verifyAttestation({ ...bound, inputsHash: 'cd'.repeat(32) }, opts).ok).toBe(false);
+    expect(verifyAttestation({ ...bound, nonce: '0103' }, opts).ok).toBe(false);
+    // inputsHash without nonce (or vice versa) is malformed
+    const r = verifyAttestation(signWitnessAttestation({ ...stripSig(base), inputsHash: 'ab'.repeat(32) } as never, signer), opts);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/present together/);
   });
 
   it('rejects a flipped signature byte', () => {
@@ -92,7 +133,7 @@ describe('witness-signed attestation', () => {
     expect(r).toEqual({ ok: false, reason: 'attestation.response.bodySha256 does not match body' });
   });
 
-  it('enforces the trusted witness key set when supplied', () => {
+  it('enforces the trusted witness key set', () => {
     const signer = ephemeralEd25519Signer();
     const a = makeWitness(signer);
     expect(verifyAttestation(a, { trustedWitnessKeys: [signer.publicKey] }).ok).toBe(true);
@@ -139,31 +180,65 @@ describe('provider-signed attestation', () => {
     };
   }
 
-  it('verifies a correct signature', () => {
-    expect(verifyAttestation(makeProviderSigned())).toEqual({ ok: true });
+  it('verifies a correct signature over the response body, under a trusted provider key', () => {
+    const a = makeProviderSigned();
+    expect(verifyAttestation(a, { trustedProviderKeys: [a.publicKey] })).toEqual({ ok: true });
+  });
+
+  it('is rejected with default options (no trusted provider keys)', () => {
+    const r = verifyAttestation(makeProviderSigned());
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/no trusted provider keys/);
+  });
+
+  it('rejects a valid signature over an UNRELATED message (signedMessage must be bound to the draw)', () => {
+    const providerKey = ephemeralEd25519Signer();
+    const unrelated = new TextEncoder().encode('hello world');
+    const a: ProviderSignedAttestation = {
+      ...makeProviderSigned(),
+      publicKey: providerKey.publicKey,
+      signedMessage: bytesToHex(unrelated),
+      signature: bytesToHex(providerKey.sign(unrelated)),
+    };
+    const r = verifyAttestation(a, { trustedProviderKeys: [providerKey.publicKey] });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/not bound to this draw/);
+  });
+
+  it('accepts a signed message that is not the body but contains bytesSha256', () => {
+    const providerKey = ephemeralEd25519Signer();
+    const base = makeProviderSigned();
+    const msg = new TextEncoder().encode(`{"digest":"${base.bytesSha256}","ts":1}`);
+    const a: ProviderSignedAttestation = {
+      ...base,
+      publicKey: providerKey.publicKey,
+      signedMessage: bytesToHex(msg),
+      signature: bytesToHex(providerKey.sign(msg)),
+    };
+    expect(verifyAttestation(a, { trustedProviderKeys: [providerKey.publicKey] })).toEqual({ ok: true });
   });
 
   it('rejects a bad signature', () => {
     const a = makeProviderSigned();
-    const r = verifyAttestation({ ...a, signature: 'ff' + a.signature.slice(2) });
+    const r = verifyAttestation({ ...a, signature: 'ff' + a.signature.slice(2) }, { trustedProviderKeys: [a.publicKey] });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toMatch(/provider signature does not verify/);
   });
 
   it('rejects an altered signed message', () => {
     const a = makeProviderSigned();
-    const r = verifyAttestation({ ...a, signedMessage: a.signedMessage.slice(0, -2) + '00' });
+    const r = verifyAttestation({ ...a, signedMessage: a.signedMessage.slice(0, -2) + '00' }, { trustedProviderKeys: [a.publicKey] });
     expect(r.ok).toBe(false);
   });
 
   it('rejects unsupported schemes', () => {
     const a = makeProviderSigned();
-    const r = verifyAttestation({ ...a, scheme: 'rsa-pss' as never });
+    const r = verifyAttestation({ ...a, scheme: 'rsa-pss' as never }, { trustedProviderKeys: [a.publicKey] });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toMatch(/unsupported provider signature scheme/);
   });
 
-  it('enforces the trusted provider key set when supplied', () => {
+  it('enforces the trusted provider key set', () => {
     const a = makeProviderSigned();
     expect(verifyAttestation(a, { trustedProviderKeys: [a.publicKey] }).ok).toBe(true);
     expect(verifyAttestation(a, { trustedProviderKeys: ['00'.repeat(32)] }).ok).toBe(false);
@@ -210,3 +285,9 @@ describe('verifyAttestation never throws', () => {
     }
   });
 });
+
+function stripSig(a: WitnessSignedAttestation): Omit<WitnessSignedAttestation, 'signature' | 'witnessPublicKey'> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { signature: _s, witnessPublicKey: _k, ...rest } = a;
+  return rest;
+}

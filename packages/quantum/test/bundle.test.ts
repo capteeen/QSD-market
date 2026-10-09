@@ -69,6 +69,19 @@ describe('proof bundle round trip', () => {
     expect(bundle.version).toBe(1);
   });
 
+  it('dev bundles are unbound and are rejected under requireInputBinding', () => {
+    expect(bundle.draw.attestation.inputsHash).toBeUndefined();
+    const r = verifyBundle(bundle, testResolver, { ...opts, requireInputBinding: true });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/no draw binding/);
+  });
+
+  it('accepts unknown top-level fields but bundleHash differs (documented decision H-Q7)', () => {
+    const t = { ...bundle, operatorNote: 'x' };
+    expect(verifyBundle(t, testResolver, opts)).toEqual({ ok: true });
+    expect(bundleHash(t as ProofBundle)).not.toBe(bundleHash(bundle));
+  });
+
   it('rejects unsafe-dev bundles unless explicitly allowed', () => {
     const r = verifyBundle(bundle, testResolver);
     expect(r.ok).toBe(false);

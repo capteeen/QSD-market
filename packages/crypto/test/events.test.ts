@@ -17,6 +17,7 @@ import {
   hashTreeAddress,
   sha256,
   sign,
+  signWithIndex,
   toHex,
   verify,
   type CryptoEvent,
@@ -228,9 +229,13 @@ describe("signing and verifying events", () => {
   it("an empty observer produces no events and does not change results", () => {
     const rec = recordEvents();
     rec.stop();
-    const a = sign(identity, identity.initialState(), message, { observer: rec.observer }).signature;
-    const b = sign(identity, identity.initialState(), message).signature;
+    const a = sign(identity, identity.initialState(), message, { observer: rec.observer });
     expect(rec.events).toHaveLength(0);
-    expect(toHex(a)).toBe(toHex(b));
+    // the same index on a twin identity (same seed), observed, gives the identical signature
+    const twin = createIdentity(seed);
+    const rec2 = recordEvents();
+    const b = signWithIndex(twin, twin.initialState(), a.index, message, { observer: rec2.observer });
+    expect(rec2.events.length).toBeGreaterThan(0);
+    expect(toHex(a.signature)).toBe(toHex(b.signature));
   });
 });
