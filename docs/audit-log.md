@@ -119,8 +119,130 @@ Live ANU endpoint (no key); protocol-level claims in physics.md/README (anchorin
 cache); scene/protocol/solana/app items of §10; Storybook visual output; derivation vs
 RFC 8391 §4.1.11 / SP 800-208 `PRF_keygen` (only BC-compatible derivation has a published KAT).
 
-## Wave 2 — pending
-Targets: scene event replay + empty stream + 67×16 link count, frame-time on the throttled
-profile, allocation property tests (sum = 100 %, bag-split never increases share, holding
-monotonicity), daughter mapping monotone/bounded, airdrop crash-and-resume, every user-facing
-string in `/apps/web` vs `physics.md`, re-run of every wave-1 `FINDING` test after fixes.
+## Integrator notes received before wave 2A (recorded 2026-10-09)
+
+1. `tests/crypto/key-reuse.test.ts` "FINDING H-C1 (variant)" asked `signWithIndex` to use index 3 on a
+   shared identity whose earlier test had consumed 0-4 via `sign()`. A correct H-C1 fix must refuse that,
+   so the integrator changed the test to index 40 and added an assertion that 3 is refused. Agent H
+   agrees: the original test was wrong once the fix landed; the new form is what wave 1 meant.
+2. H-C3 was fixed as redact-by-default in `recordEvents()`; the integrator updated
+   `tests/crypto/secret-hygiene.test.ts` accordingly (`FINDING H-C3 (fixed)`; the raw stream needs
+   `{ redact: false }`). Agent H re-read the test: it still proves the raw stream contains `sk_k[i]`
+   and that the default recording does not. One `type CryptoEvent` import had been dropped in that
+   edit (tsc error only; vitest does not typecheck) — restored by Agent H in 2A.
+3. H-Q0 decision: witness-signed attestation accepted as the shipping design since no commercial QRNG
+   signs responses; the UI must label the kind. Marked ACCEPTED in security.md §2.3.
+
+## Wave 2A — 2026-10-09
+
+Targets: `@qsd/protocol` (+ `docs/economics.md`), `@qsd/solana`. READMEs treated as claims. No package edited.
+
+### 08:50 Baselines (a green self-test is a claim, not evidence)
+```
+cd tests && npx vitest run                 → 10 files, 262 passed (262), 26.8 s   (every wave-1 FINDING test now passes)
+pnpm --filter @qsd/protocol test           → 6 files, 54 passed, 28.8 s
+pnpm --filter @qsd/solana test             → 10 files, 45 passed | 1 skipped (network, no RPC), 10.0 s
+```
+Read in full: `packages/protocol/src/*` (8 files), `packages/solana/src/*` (18 files), both READMEs,
+`docs/economics.md`, the relevant parts of `@qsd/quantum` (client `beforeDraw`/binding, `requireInputBinding`,
+dev-provider guard) and `@qsd/crypto` (`buildHashTree`, `rootFromAuthPath`, `Address`), and the packages'
+own test helpers only to learn the boundary shapes (not reused: `tests/solana/ledger.ts` is Agent H's own).
+
+### 08:52 Greps
+```
+grep -rn -E "Math\.random|getRandomValues|randomBytes|randomUUID|console\." packages/{protocol,solana}/src
+  → protocol: none.  solana: measure.ts nonce, keys.ts cipher nonce + tmp name, reserve.ts seed + lock jitter.  console: none
+grep -rn -E "TODO|FIXME|placeholder|stub|mock" packages/{protocol,solana}/src → none
+```
+
+### 08:53 `@qsd/tests` package
+Added workspace deps `@qsd/protocol`, `@qsd/solana` and dev deps `@solana/web3.js`, `@solana/spl-token`, `bs58`
+(for Agent H's ledger) to `tests/package.json`; `pnpm install` (3.3 s).
+
+### 08:55-09:40 Test authoring (all independent of the packages' own tests)
+| file | what it attacks | spec |
+|---|---|---|
+| `tests/protocol/allocation-properties.test.ts` | own generators: sum/dust/non-negativity, determinism, k-way sybil split, duration / measurement / quiet monotonicity, independent weight formula, adversarial inputs (zero, duplicate, late/early acquisition, bad times, 10^60, 1 and 10 000 holders), **own Merkle tree** (own canonical JSON, node:crypto SHA-256, reference `RAND_HASH` + hash-tree ADRS) vs `merkleRoot`, proof tamper matrix | §5 l.199-216, §10 l.409-410 |
+| `tests/protocol/decay-zeno.test.ts` | decay bounds / monotone / exact half-life points / e-folding identity / auto window; Zeno never increases decay, cap for any size, exact bps formula, doc examples; `FINDING H-E1` | §5 l.179-185, economics §1-3 |
+| `tests/protocol/resolver-independent.test.ts` | own implementation of the economics §3 byte rules vs `measurementResolver` on 10k random + edge bytes, exact threshold, bad inputs; dev-provider distributions; forged outcome / label / bytes; collapsed coin; foreign ca / index / moment; `FINDING H-E2` | §5 l.187-198, l.218-222 |
+| `tests/protocol/daughter-mapping.test.ts` | bounded + monotone properties with own generators, generation 1000 / 10 000 / 2^31, clamping, end points, names (U+00B7, suffix replaced) | §5 l.191-197 |
+| `tests/protocol/economics-doc.test.ts` | own parser of the parameter table vs `PROTOCOL_PARAMS` (both directions), prose percentages, presets, rewards, worked examples 1 / 2 / sybil / §5 to the unit | §5 l.188-205, §8 l.360 |
+| `tests/solana/ledger.ts` | Agent H's in-memory SPL ledger executing the real instructions; fault-injecting `TransactionSender`/`TransferSender`/`ChainReader`/`TokenAccountSource`; in-flight model (lands N queries later); `Crash` | — |
+| `tests/solana/airdrop-crash-resume.test.ts` | 13 scenarios incl. own journal, hooks, expiry, failure, foreign journal, random fault property; `FINDING H-S1a/b`, `FINDING H-S3` | §9 l.386-388, §10 l.416 |
+| `tests/solana/collapse-crash-resume.test.ts` | real dev-provider collapse; crash after each of 8 steps + inside the airdrop; foreign journals; `FINDING H-S2a/b/c` | §9 l.380-388 |
+| `tests/solana/keys-config-secrets.test.ts` | vault tamper matrix, relabel attack, inspect/JSON hygiene (`FINDING H-S4a/b`), config errors, mainnet flag matrix, memory store on mainnet, `FINDING H-S5`, redaction, webhook auth | §9 l.391-394 |
+| `tests/solana/measure-precommit.test.ts` | combined ChainObserver + quantum-bus timeline, memo contents vs own inputs hash, failed/dropped anchor ⇒ zero draws, rogue client, production verify options | §4 l.143-146, §9 l.389-390 |
+| `tests/solana/snapshot-honesty.test.ts` | NotImplemented without history, stale slot refused, source fallback, exclusions, invalid facts refused | §2 l.96-97, §9 l.382-384 |
+| `tests/solana/src-hygiene.test.ts` | console / randomness / clock / placeholder scans, param-name references, computed batch size | §1 l.66-68, §2 l.96-97, §9 l.393 |
+
+### 09:41 First runs — triage
+- protocol: 3 failures: `FINDING H-E1`, `FINDING H-E2` (by design) and one Agent H bug (a clamp
+  test used generation 2, which carries a 5 % penalty) — fixed.
+- solana: 16 failures. 7 by design (H-S2a/b/c, H-S3, H-S4b, H-S5). 9 harness bugs, fixed: a shared
+  submit counter; a `Crash` thrown from `submit()` that the package legitimately swallows by checking
+  the status (the "process crash after submit" is now modelled with the package's `afterSubmit` hook,
+  and the swallowed case kept as its own PASS test); the ledger landed in-flight transactions on the
+  first status query, which hid H-S1 — replaced by a "lands N queries later" model (what a cluster
+  does), after which `FINDING H-S1a/b` fail as predicted; an invalid base58 ca; `JSON.stringify` of a
+  circular `Connection` throws (inspect still leaks — H-S4a stands); two allow-list gaps in the
+  hygiene scan; the random-fault property treated the worker's retry-budget exhaustion
+  (`ChainUnavailableError` after four expired/rejected submits) as a failure — it is the documented
+  "operator re-runs later" path and now resumes.
+- `npx tsc -p tests/tsconfig.json --noEmit`: 7 errors, all in Agent H's files plus one dropped import in
+  the integrator-edited `secret-hygiene.test.ts` — fixed; exit 0.
+
+### 09:52 Final run
+```
+cd tests && npx vitest run
+ ✓ protocol/allocation-properties.test.ts   (19 tests)             2904ms
+ ✓ protocol/daughter-mapping.test.ts        (10 tests)              730ms
+ ✓ protocol/economics-doc.test.ts           (9 tests)                31ms
+ ❯ protocol/decay-zeno.test.ts              (10 tests | 1 failed)   424ms   H-E1
+ ❯ protocol/resolver-independent.test.ts    (9 tests  | 1 failed)  6277ms   H-E2
+ ❯ solana/airdrop-crash-resume.test.ts      (13 tests | 3 failed)   736ms   H-S1a, H-S1b, H-S3
+ ❯ solana/collapse-crash-resume.test.ts     (14 tests | 3 failed) 36050ms   H-S2a, H-S2b, H-S2c
+ ❯ solana/keys-config-secrets.test.ts       (11 tests | 3 failed)    43ms   H-S4a, H-S4b, H-S5
+ ✓ solana/measure-precommit.test.ts         (4 tests)               267ms
+ ✓ solana/snapshot-honesty.test.ts          (6 tests)               145ms
+ ✓ solana/src-hygiene.test.ts               (6 tests)               257ms
+ ✓ (wave 1: 10 files, 262 tests, all passing)
+ Test Files  5 failed | 16 passed (21)
+      Tests  11 failed | 362 passed (373)
+   Duration  38.20s
+npx tsc -p tests/tsconfig.json --noEmit → exit 0
+```
+All 11 failures are `FINDING` tests that fail by design while the finding is open.
+
+### Results by requirement (wave 2A)
+
+| Requirement | Method | Result |
+|---|---|---|
+| Allocation sums to 100 %, non-negative, deterministic (§5, §10) | own generators, 2 000+ runs | **PASS** |
+| Splitting a bag never increases total (§5 l.209-211, §10) | k-way split property, 500 runs | **PASS** (loses ≤ k−1 units) |
+| Longer holding never decreases share (§5, §10) | 1 200 runs across the three weight inputs | **PASS** |
+| Merkle root of the table (§5 l.214-216) | own tree + proof tamper matrix | **PASS** |
+| Decay bounds; half-life not timer; Zeno cap (§5) | 3 500 runs + exact points | **PASS**; LOW H-E1 (doc rounding sentence) |
+| Resolver byte rules; channel / tunnel distribution (§5) | own implementation, 10k cases, 14k draws | **PASS** |
+| Bundle must match coin / moment (README §4) | tamper + foreign bundles | PASS for ca / index / ppb / outcome / bytes; **MEDIUM H-E2** (`at` not bound) |
+| Daughter mapping monotone and bounded (§5 l.193-195) | 5 000 runs, extreme generations | **PASS** |
+| economics.md equals the exported constants; worked examples (§5) | own parser | **PASS** (26 constants, 4 examples to the unit) |
+| Airdrop crash-and-resume, no double payment (§9, §10) | own ledger + journal, 13 scenarios + property | PASS for process crashes at every point; **FAIL — BLOCKING H-S1** (in-flight tx + transient error ⇒ double pay); **HIGH H-S3** (concurrent workers) |
+| Daughter launch fully automatic, exactly once (§9) | crash after each of 8 steps | PASS between steps; **HIGH H-S2** (crash inside rewards / dust-burn / launch ⇒ double burn, double pay, stuck) |
+| Keys encrypted at rest; tamper rejected (§9) | 11 variants + relabel | **PASS** |
+| No secrets in logs (§9) | JSON / inspect of every key-holding object | vault PASS; **MEDIUM H-S4** (senders, config, chain) |
+| Mainnet behind an explicit flag (§9) | env matrix + hand-built config | `loadChainConfig` PASS; **MEDIUM H-S5** (`createChain` not guarded) |
+| Webhook auth constant-time, bad auth rejected (§9) | source + 8 cases | **PASS** |
+| Precommit before draw; failed anchor ⇒ zero draws (H-Q3 fix) | combined timeline, provider call count | **PASS** |
+| Snapshot honesty: NotImplemented without history, stale data refused (§2, §9) | 6 tests | **PASS**; LOW H-S6 (collapse slot = orchestration start) |
+| No invented chain data / placeholders / Math.random (§2, §9) | source scans | **PASS** |
+
+### Open at end of wave 2A
+BLOCKING: **H-S1**. HIGH: H-S2, H-S3. MEDIUM: H-S4, H-S5, H-E2. LOW: H-E1, H-S6, H-Q8, H-C4.
+INFO: H-E3, H-E4, H-S7, H-Q7, H-C5, H-U3, KAT typo.
+Fixed and re-verified since wave 1: H-C1, H-C2, H-C3, H-Q1, H-Q2, H-Q3 (design implemented), H-Q4, H-Q5, H-Q6, H-P1-5, H-U1, H-U2. Accepted: H-Q0.
+
+### Not verified (wave 2A)
+Live devnet/mainnet (egress denied: `api.devnet.solana.com`, pumpportal.fun, jup.ag, helius); real
+validator semantics behind the ledger (rent, compute, true signature-status / blockhash timing); Jupiter
+buy-and-burn and pump.fun launch beyond their pure builders; file journals / reserve lock on a real
+multi-process host; wave-1 LOW items H-Q8, H-C4 not re-examined; scene / app / `/how` — wave 2B.

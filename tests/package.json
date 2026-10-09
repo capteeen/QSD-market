@@ -12,7 +12,10 @@
   "dependencies": {
     "@qsd/crypto": "workspace:*",
     "@qsd/quantum": "workspace:*",
-    "@qsd/ui-tokens": "workspace:*"
+    "@qsd/scene": "workspace:*",
+    "@qsd/ui-tokens": "workspace:*",
+    "@qsd/protocol": "workspace:*",
+    "@qsd/solana": "workspace:*"
   },
   "devDependencies": {
     "@noble/curves": "^1.9.2",
@@ -24,6 +27,9 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1"
+    "@types/react-dom": "^18.3.1",
+    "@solana/web3.js": "^1.98.4",
+    "@solana/spl-token": "^0.4.13",
+    "bs58": "^6.0.0"
   }
 }

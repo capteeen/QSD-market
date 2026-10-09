@@ -1,170 +1,164 @@
 # QSD security review — Agent H (verify)
 
-Status: **WAVE 1** (packages `@qsd/crypto`, `@qsd/quantum`, `@qsd/ui-tokens`, `/docs/physics.md`).
-Protocol, scene, solana and the app are not yet reviewed; this file will be extended in wave 2.
+Status: **WAVE 2A** (adds `@qsd/protocol`, `@qsd/solana`, `/docs/economics.md` to the wave-1 scope of
+`@qsd/crypto`, `@qsd/quantum`, `@qsd/ui-tokens`, `/docs/physics.md`). Scene and the app are not yet reviewed (wave 2B).
 
-Everything here is reproducible: `pnpm --filter @qsd/tests test` (from the repo root). Tests whose
-name begins with `FINDING` fail **by design** while the finding is open; when the fix lands they
+Everything here is reproducible: `cd tests && npx vitest run` (wave 2A alone: `npx vitest run protocol solana`).
+Tests whose name begins with `FINDING` fail **by design** while the finding is open; when the fix lands they
 must pass unchanged. Chronological detail, including what passed, is in [`audit-log.md`](./audit-log.md).
 
-**Ship gate (spec §10, §11): nothing ships with an open BLOCKING finding. Two are open (H-C1, H-C2).**
+**Ship gate (spec §10 l.419-420, §11): nothing ships with an open BLOCKING finding.
+Wave 1's two BLOCKING findings (H-C1, H-C2) are fixed and re-verified. Wave 2A opens one: H-S1 (airdrop double payment).**
 
 ---
 
-## 1. Threat model (wave 1 scope)
+## 1. Threat model
 
 | Asset | Who attacks it | What they want |
 |---|---|---|
-| Launch identity (XMSS root, 256 one-time keys) | Anyone holding a stale `IdentityState`, a bug in a caller, a crashed-and-restored process, a second process | Make the identity sign twice with one leaf → forge further signatures for that leaf (WOTS+ breaks on reuse) |
-| Identity secret material (`SK_SEED`, `SK_PRF`, chain secrets) | Log scrapers, error reporters, a shared event recording | Read secrets out of JSON / console / events |
-| Measurement randomness | The QSD operator (the only party that holds the witness key and requests draws); an external forger of bundles | Choose the outcome: grind draws, fabricate bundles, substitute the dev PRNG in production |
-| Proof bundles shown on every collapse | Anyone editing JSON before a third party verifies it | Make a tampered bundle pass `verify()` |
-| Provider API key, witness seed | Logs, error messages, attestations, URLs, serialised objects | Exfiltrate credentials |
-| User-facing physics / trust copy (`/how` renders `physics.md` verbatim) | Over-eager copywriting | Claim more than the system can prove |
+| Launch identity (XMSS root, 256 one-time keys) | Stale state, crashed process, second process | Sign twice with one leaf |
+| Secret material (seeds, KEK, creator keypair, API keys) | Log scrapers, error reporters, `JSON.stringify`/`inspect` in a logger | Read secrets out of serialised objects |
+| Measurement randomness | The operator (holds the witness key, requests draws) | Grind draws, choose the outcome, choose *when* the measurement "happened" |
+| Proof bundles | Anyone editing JSON | Pass `verify()` with a different outcome |
+| **The daughter pool (wave 2A)** | A holder (sybil), the operator, a crashed/duplicated worker | Receive more than the table says; receive twice; burn twice |
+| **The treasury (wave 2A)** | A crashed worker | Re-run a step that already moved tokens |
+| Mainnet | A mis-set config object | Hit mainnet without the integrator's flag |
+| User-facing physics / economics copy | Copywriting | Claim more than the system does |
 
-Trust assumptions the code *currently* makes (these are what the HIGH findings are about):
-the QSD operator is honest about which draw it published and when; verifiers pass the published
-witness key; the deployment sets `NODE_ENV=production` exactly.
+Trust assumptions the code *currently* makes: the operator chooses the `at` of every measurement (H-E2); the
+holding history comes from the app's trade DB (the chain package refuses to guess it — PASS); one airdrop
+worker runs at a time (H-S3); the RPC never accepts a transaction and then reports a transient error (H-S1).
 
 ---
 
 ## 2. Findings
 
-Severity: BLOCKING > HIGH > MEDIUM > LOW > INFO. "Spec" cites `SPEC.md` line numbers.
+Severity: BLOCKING > HIGH > MEDIUM > LOW > INFO. "Spec" cites `SPEC.md` line numbers. Status: OPEN / FIXED (verified by the named test) / ACCEPTED (integrator decision recorded).
 
-### BLOCKING
+### 2.1 Wave 2A — `@qsd/solana`
 
-#### H-C1 — Stateless `sign()` / `signWithIndex()` reuse a one-time key with a stale state and do not throw
-- **Where:** `packages/crypto/src/identity.ts:211-238` (`signWithIndex`, `sign`).
-- **Spec:** §3 l.110-111 "a used leaf can NEVER be reused. Reuse attempts throw."; §10 l.405 "every public path. Must be impossible."
-- **Repro:** `tests/crypto/key-reuse.test.ts` — `FINDING H-C1`, `FINDING H-C1 (variant)`, `a JSON round-tripped state with a used bit cleared …`.
-- **Detail:** `sign(identity, s0, m1)` then `sign(identity, s0, m2)` returns two *valid* signatures with index 0. The pure function trusts whatever state it is handed; the `Identity` object, which is the only holder of the secret material, keeps no memory of what it has signed. A state file rolled back, a caller that forgets `state = r.state`, or a JSON copy with a cleared bit all reuse. The `Signer`+`StateStore` path is correct (see §3 PASSED), but it is optional.
-- **Fix (minimal, closes H-C2 too):** give `Identity` a private `#used` bitmap. Every signing entry point (`sign`, `signWithIndex`, `Signer`, and the internal signer) ORs the supplied state into `#used`, refuses any index set in `#used`, and sets the bit *before* computing the signature. The functional API keeps returning a new state; it just cannot be fooled by an old one within a process. Cross-process safety stays with `StateStore`.
+#### H-S1 — The airdrop pays a batch twice when the first transaction is in flight and the sender reports a transient error (BLOCKING)
+- **Where:** `packages/solana/src/airdrop.ts:333-347` (submit failed → `status()` says `pending` → entries reset to `pending`, `txSignature` deleted, error rethrown); `airdrop.ts:321-331, 377` (`withRetry` re-enters the closure with the **same** records and builds a **new** transaction with a new blockhash; `retryIf` matches transient errors and `/expired/`); `airdrop.ts:351` + `sender.ts:143-151` (`confirm()` throws `TransientChainError` on timeout while the batch is still in flight; the retry re-prepares the records that are journalled `sent`).
+- **Spec:** §9 l.386-388 "Idempotent: a crashed airdrop resumes without double-paying. Agent H tests this."; §10 l.416.
+- **Repro:** `tests/solana/airdrop-crash-resume.test.ts` — `FINDING H-S1a`, `FINDING H-S1b`.
+- **Detail:** The crash-resume path (journal `sent` before submit, reconcile by signature on resume) is correct and holds under every crash point Agent H tried (12 scenarios + a 40-run random fault property). The hole is the *in-process* retry: (a) `sendRawTransaction` times out or the connection resets **after** the RPC forwarded the transaction; `getSignatureStatuses` says `null` (not processed yet) → the code assumes "cannot have landed", resets the entries to `pending` and the retry sends a second transaction to the same wallets with a fresh blockhash. Both land. (b) `confirm()` gives up after `maxWaitMs` with a `TransientChainError`; the records are still `sent` but the retry closure overwrites them with a new signature and sends again. The journal ends consistent with itself (`confirmedUnits == allocatedUnits`) while the ledger shows every wallet in the batch credited twice; the first signature survives only in `doc.signatures`. Modelled with an in-flight transaction that lands two status queries later, which is what a real cluster does.
+- **Fix:** never reset a `sent` entry to `pending` while its status is `pending`: on any failure after the journal says `sent`, poll `status()` until `confirmed`/`failed`/`expired` (the blockhash bounds the wait at ~60-90 s) and only then decide; make the retry loop start from the journal (re-read entry statuses) instead of re-preparing captured records; treat a `confirm()` timeout as "still pending", not as a reason to rebuild. A defensive second line: before preparing any batch, reconcile every signature in `doc.signatures` that is not attached to a `confirmed` entry.
+- **Status:** OPEN — BLOCKING.
+
+#### H-S2 — `executeCollapse` steps that send more than one transaction are not idempotent inside the step: a crash after a send and before the step record re-runs the send (HIGH)
+- **Where:** `packages/solana/src/collapse.ts:184-209` (`rewards`: burn + measurer transfer journalled as one step, no per-signature journal); `:287-296` (`dust-burn`); `:230-244` + `launch.ts:545-565` (`daughter-launch`: a second run re-sends `initializeMint2` for the same mint, which fails on-chain forever); README §7 l.14-16 claims "a step that crashed mid-way is … re-checked by signature (burns, launch)" — it is not.
+- **Spec:** §9 l.380-381 (fully automatic daughter launch), l.386-388 (idempotency), §1 l.72-74 (README as a claim).
+- **Repro:** `tests/solana/collapse-crash-resume.test.ts` — `FINDING H-S2a` (mother burned 2 × `burnedUnits`, measurer paid twice), `FINDING H-S2b` (dust burned twice), `FINDING H-S2c` (collapse stuck: every resume throws "mint already initialized").
+- **Detail:** Crashes *between* steps are handled correctly for all 8 step boundaries (the step wrapper journals after `save()`), and a crash inside the airdrop step is handled by the airdrop journal. But `rewards`, `dust-burn` and `daughter-launch` each call `sender.send()` and only journal when the whole step returns. A process killed while `confirm()` is polling (the common case: deploys, OOM) re-runs the send. For `rewards` that is a second 1 % burn from the treasury and a second measurer payment; for `dust-burn` a second dust burn; for `daughter-launch` a permanently stuck collapse (the daughter *was* launched, the journal does not know).
+- **Fix:** journal every signature before submitting it (as the airdrop does): write `{ step, signature, lastValidBlockHeight }` sub-records, and on resume reconcile each by `status()` before deciding to resend. For the launch, derive idempotency from the mint: if `getTokenSupply(mint)` succeeds the launch happened. Fix the README claim or make it true.
 - **Status:** OPEN.
 
-#### H-C2 — `Identity._sign(index, message)` is a public method with no reuse check
-- **Where:** `packages/crypto/src/identity.ts:89-93`.
-- **Spec:** §3 l.110-111; §10 l.405.
-- **Repro:** `tests/crypto/key-reuse.test.ts` — `FINDING H-C2`.
-- **Detail:** `@internal` is a comment; at runtime `_sign` is an ordinary method on an exported class. `identity._sign(0, a); identity._sign(0, b)` yields two valid index-0 signatures. No seed, no state needed — just the object.
-- **Fix:** make it a `#private` method and expose it to `identity.ts`'s own functions via a module-scoped `WeakMap<Identity, signFn>` or a `Symbol` not exported from the package; or fold it into the H-C1 fix.
+#### H-S3 — Two workers resuming the same airdrop journal both pay the pending batches (HIGH)
+- **Where:** `packages/solana/src/airdrop.ts:251-265` (load → act; no lease, no version/CAS); `journal.ts:420-458` (`save()` is an unconditional replace); `chain.ts:229-232`.
+- **Spec:** §9 l.386-388; README §7 "Airdrop crash-resume guarantee".
+- **Repro:** `tests/solana/airdrop-crash-resume.test.ts` — `FINDING H-S3`.
+- **Detail:** Nothing prevents a second process (a cron overlap, a re-deployed worker next to a hung one, an operator's manual re-run) from loading the same journal with pending entries and sending them too. Both observe `pending`, both prepare distinct transactions, both land. The identity reserve got a lock file for exactly this reason (`reserve.ts:108-147`); the journals did not.
+- **Fix:** give `JournalStore.save()` compare-and-swap semantics (version counter, as `ReserveBackend.writeState` has) and take a lease (lock file with heartbeat) for the duration of a run; refuse to run when the lease is held.
 - **Status:** OPEN.
 
-### HIGH
-
-#### H-Q1 — `verify()` with default options accepts a bundle anyone can fabricate with any key
-- **Where:** `packages/quantum/src/attestation.ts:171-176` (`trustedWitnessKeys` is optional; when omitted the key *inside the attestation* is trusted); `bundle.ts:96-159` passes `opts` through unchanged; `index.ts:84` exports this as `verify`.
-- **Spec:** §4 l.143-146 "A verify() function that anyone can run on a bundle"; §0 l.23-24 "fair and verifiable".
-- **Repro:** `tests/quantum/attestation-honesty.test.ts` — `FINDING H-Q1`.
-- **Detail:** With no network and no QSD key, choose the bytes you want, sign a "witness" statement with a fresh Ed25519 key, and `verify(bundle, resolver)` returns `{ ok: true }`. The README documents passing `trustedWitnessKeys`, but the function the spec names, called the way the spec describes, is fail-open. The coin page ("each verifiable in-browser via Agent B's verify()") will inherit whatever default the app uses.
-- **Fix:** fail closed. Ship the published QSD witness public key(s) as a constant in the package and make it the default trusted set; reject `witness-signed`/`provider-signed` attestations whose key is not in the set unless the caller passes an explicit `{ trustAnyKey: true }` (and then return a distinct result, e.g. `{ ok: true, trust: 'self-consistent-only' }`, so a UI cannot show "verified").
+#### H-S4 — Secret material is reachable through `JSON.stringify` / `util.inspect` (MEDIUM)
+- **Where:** (a) `packages/solana/src/sender.ts:66` (`private readonly payerKeypair: Keypair` — TypeScript privacy only; `inspect` prints `secretKey: Uint8Array(64)`), transitively `airdrop.ts:97` (`Web3TransferSender` holds the sender); (b) `config.ts:32-52` (`ChainConfig.keyEncryptionKey`, `heliusApiKey`, `pinataJwt`, `jupiterApiKey`, `webhookSecret` are plain fields), `chain.ts:209` (`Chain.config`).
+- **Spec:** §9 l.393 "no secrets in logs".
+- **Repro:** `tests/solana/keys-config-secrets.test.ts` — `FINDING H-S4a`, `FINDING H-S4b`.
+- **Detail:** Same class as wave 1's H-Q6 (fixed in quantum with `#private`). `describeConfig()` exists and is clean, but any `logger.info({ chain })`, any error reporter that serialises context, or a `console.dir(sender)` prints the creator's 64-byte secret key or the KEK bytes. `JSON.stringify(sender)` happens to throw (the `Connection` is circular) — `inspect` does not. `KeyVault` is clean (`#kek`, `toJSON`).
+- **Fix:** `#payerKeypair` with a `toJSON()`/`[inspect.custom]` on the senders; keep secrets out of `ChainConfig` (hold them in a `#secrets` holder with accessor methods, or at least define `toJSON()` on the config object returned by `loadChainConfig` returning `describeConfig(this)`).
 - **Status:** OPEN.
 
-#### H-Q3 — Draw grinding / draw reuse is undetectable: nothing binds a draw to the inputs or proves it was the only draw
-- **Where:** `packages/quantum/src/commitment.ts:14-29` (commitment = providerId ‖ requestedAt ‖ bytes ‖ attestation — no inputs hash); `providers/anu.ts:226-237` (witness statement has no inputs hash, no nonce); `bundle.ts` (verify cannot know about other draws).
-- **Spec:** §0 l.23-26 "measurement uses a real quantum random number generator with on-chain proof"; §4 l.139-146; §10 l.408.
-- **Repro:** `tests/quantum/attestation-honesty.test.ts` — `H-Q3 (HIGH, design)`; `tests/quantum/tamper-matrix.test.ts` — `replay: the SAME draw reused …`.
-- **Detail:** The witness key holder *is* the operator. It can request N draws for one measurement, publish the favourable one, and every verifier says `ok`. It can also reuse one draw across coins. ANU gives no nonce and no signature, so nothing from outside QSD binds request ↔ inputs ↔ response. The README says the commitment is anchored "before the outcome is revealed to the UI", but grinding happens before anchoring. This is a protocol-level gap, not a bug in a line, and it is exactly the "fairness" the product sells.
-- **Fix (for Agents B/E/G, integrator decision):** (1) include `inputsHash` (and a per-measurement nonce / coin id / measurement id) in the witness statement and in the commitment; (2) anchor `H(inputsHash ‖ nonce)` on-chain **before** the draw is requested, and anchor the commitment immediately after, so a late-published draw is at least detectable by timestamps and anchor ordering; (3) long term, use a provider with per-request signed nonces or a public randomness beacon (e.g. a signed beacon pulse committed to before the pulse time) so the operator cannot resample unobserved; (4) say all of this in `physics.md` (see H-P2).
-- **Status:** OPEN (design).
-
-#### H-Q4 — The production guard is fail-open: `NODE_ENV` unset or `process` absent ⇒ `UNSAFE_DEV_RANDOM` works
-- **Where:** `packages/quantum/src/errors.ts:58-71` (`currentNodeEnv`, `isProduction`); `providers/unsafeDev.ts:32,42`; `providers/fromEnv.ts:45-53`.
-- **Spec:** §4 l.139-142 "Deterministic fallback is FORBIDDEN in production … impossible to enable when NODE_ENV=production".
-- **Repro:** `tests/quantum/production-guard.test.ts` — both `FINDING H-Q4` tests.
-- **Detail:** The guard is "deny if `NODE_ENV === 'production'`", not "allow only if development/test". A worker started as `node worker.js` in a container that forgot `NODE_ENV`, with `QSD_QRNG_PROVIDER=UNSAFE_DEV_RANDOM` left in a copied `.env`, measures real coins with `crypto.getRandomValues`. In a browser production bundle there is no `process` at all (bundlers replace the literal token `process.env.NODE_ENV`, not `globalThis.process?.env?.NODE_ENV`), so the guard is inert client-side. `verify()`'s `allowUnsafeDev: false` default limits the damage to the producing side, but the spec's guarantee is on construction.
-- **Fix:** require positive evidence: construct only when `NODE_ENV` is exactly `development` or `test` **and** `QSD_ALLOW_UNSAFE_DEV=1`; treat a missing `process` or missing `NODE_ENV` as production; keep the `draw()`-time re-check.
+#### H-S5 — `createChain` is not behind the mainnet flag; the config object does not carry it (MEDIUM)
+- **Where:** `packages/solana/src/chain.ts:187-202` (only `keystorePath` is checked on mainnet; `cluster`/`isMainnet` are trusted as given); `config.ts:32-52` (no `mainnetEnabled` field).
+- **Spec:** §9 l.394 "Mainnet behind an explicit flag the integrator sets."
+- **Repro:** `tests/solana/keys-config-secrets.test.ts` — `FINDING H-S5`.
+- **Detail:** `loadChainConfig` enforces the flag correctly for every non-exact value (PASS). But the guard lives only there: a `ChainConfig` built or edited in code (`{ ...devCfg, cluster: 'mainnet-beta', isMainnet: false }`, a test fixture promoted to prod, an app that assembles the config from its own settings) reaches `createChain` and a mainnet RPC with no flag anywhere. The task's requirement is "throws from every entry point".
+- **Fix:** record the flag in the config (`mainnetEnabled: true` only when the env said so) and have `createChain` throw unless `cluster !== 'mainnet-beta' || (isMainnet && mainnetEnabled)`; also reject `cluster`/`isMainnet` disagreement.
 - **Status:** OPEN.
 
-### MEDIUM
-
-#### H-Q0 — Spec deviation: no provider-signed attestation exists; a self-signed "witness" attestation is substituted
-- **Where:** `packages/quantum/src/providers/anu.ts:25-27, 226-237`; README "Provider chosen, and why".
-- **Spec:** §4 l.133-138 "commercial quantum random number API that returns signed attestations … No draw is accepted without an attestation"; §1 l.66-68 (NotImplemented + report).
-- **Detail:** Agent B's survey (README table) found no QRNG HTTP API that signs responses and chose ANU + a QSD-key witness signature. That is a reasonable engineering answer but it is not what §4 says, and it changes the trust model (H-Q1, H-Q3). The deviation is documented in the README and physics.md, which is the right behaviour; it still needs an explicit integrator decision and the UI must say "witness-signed", never "provider-signed" (H-U1, H-U2).
-- **Fix:** integrator sign-off recorded here; or adopt a signed source (see H-Q3 fix (3)).
-- **Status:** OPEN (decision).
-
-#### H-Q2 — `provider-signed` attestations never bind `signedMessage` to the response or the bytes
-- **Where:** `packages/quantum/src/attestation.ts:179-196`.
-- **Spec:** §4 l.157-158 "attestation rejection on bad signature".
-- **Repro:** `tests/quantum/attestation-honesty.test.ts` — `FINDING H-Q2`.
-- **Detail:** A valid provider signature over `"hello world"` passes with `trustedProviderKeys`, attached to any bytes and any body. Latent today (no provider-signed provider exists) but the variant is exported and "verifiable", so the first integration would inherit a hole.
-- **Fix:** require `signedMessage === hex(utf8(response.body))` (or that the decoded signed message contains `bytesSha256`), and document the binding rule per provider.
+#### H-S6 — The "collapse slot" is the orchestration start slot, not the slot of the collapse measurement (LOW)
+- **Where:** `packages/solana/src/collapse.ts:144` (`collapseSlot: await deps.reader.getSlot()` when `executeCollapse` first runs); `snapshot.ts:210-214` only refuses data *older* than that slot.
+- **Spec:** §5 l.200 "snapshot of mother holders at collapse block"; §9 l.382-383.
+- **Repro:** none (design observation; documented in README §9 as a limitation of DAS/gPA).
+- **Detail:** The pump.fun token keeps trading after the collapse measurement. Everyone who buys between the proof anchor and the worker's first run is in the snapshot; anyone who sells is out. With a prompt worker the window is seconds; with a backlog it is not. Since the proof anchor's slot is known (`measurement` journal), the honest value is that slot, and the snapshot should state how far after it the data was observed.
+- **Fix:** take `collapseSlot` from the proof-anchor transaction's slot and surface `observedSlot − collapseSlot` to the UI; longer term, use a slot-pinned source (Helius DAS does not offer one today).
 - **Status:** OPEN.
 
-#### H-Q6 — `AnuQuantumNumbersProvider` exposes the API key through `JSON.stringify` / `console.log`
-- **Where:** `packages/quantum/src/providers/anu.ts:124, 137` (`private readonly apiKey` — TypeScript-only privacy).
-- **Spec:** §4 l.136 "the integrator will supply the API key via env"; §9 l.393 "no secrets in logs".
-- **Repro:** `tests/quantum/secret-hygiene.test.ts` — `FINDING H-Q6`.
-- **Detail:** `JSON.stringify(provider)` and `util.inspect(provider)` (what any logger prints) contain the key verbatim. Contrast `@qsd/crypto`'s `Identity`, which uses `#private` fields and is clean.
-- **Fix:** `#apiKey` (ES private field) or hold the key in a closure; add `toJSON()` returning `{ id, endpoint, witnessPublicKey }`.
+### 2.2 Wave 2A — `@qsd/protocol` and `economics.md`
+
+#### H-E2 — Measurement inputs do not bind the measurement time (MEDIUM)
+- **Where:** `packages/protocol/src/measurement.ts:32-44` (`MeasurementInputs` = ca, ppb, channels, tunnel ppm, index — no `at`), `:97-102` (`applyMeasurement` accepts any `at` whose inputs match).
+- **Spec:** §5 l.187-189; §4 l.143-146 (verifiable); §0 l.23-26.
+- **Repro:** `tests/protocol/resolver-independent.test.ts` — `FINDING H-E2`.
+- **Detail:** `at` is operator-supplied and appears only in the `Measurement` record. Whenever two instants give the same `decayProgressPpb` (always once `2^(−t/T)` is below float resolution — ≈ 54 half-lives — and in adjacent seconds from ≈ 17.5 half-lives on, i.e. whenever the auto-measurer was down for a while) one bundle is valid for both, so the recorded `collapsedAt` — which sets the daughter's lifetime score and every holder's `fD` — is not something a verifier can check from the bundle. Same family as wave-1 H-Q3's "operator-asserted timestamps". Not exploitable to change *outcomes* (the ppb is bound), only *when*.
+- **Fix:** add `at` to `MeasurementInputs` (it is hashed into the bundle and anchored in the precommit for free) and have `applyMeasurement` require `bundle.inputs.value.at === opts.at`.
 - **Status:** OPEN.
 
-#### H-C3 — The default key-generation event stream contains every one-time secret key
-- **Where:** `packages/crypto/src/wots.ts:107-112` (emits depth 0..14 values); `events.ts:616-623` (`recordEvents` is unredacted unless `redact: true`).
-- **Spec:** §3 l.114 "seed is never logged"; §9 l.393 "no secrets in logs".
-- **Repro:** `tests/crypto/secret-hygiene.test.ts` — `FINDING H-C3 (documented)` (passes; demonstrates the content).
-- **Detail:** `chainStep{depth:0}` for leaf k chain i *is* `sk_k[i]`; depth d lets a holder forge any digit ≥ d. The README says so clearly ("as sensitive as the private key") and provides `redactEvents`, so this is a documented hazard rather than a bug — but the scene package (wave 2) will subscribe to exactly this stream and show hashes "on hover", and the app will be tempted to persist recordings for replay. Secure-by-default is cheap.
-- **Fix:** make `recordEvents()` redact by default (`{ includeSecrets: true }` to opt out); emit redacted values to observers unless `createIdentity(seed, { emitSecrets: true })`; wave 2 will check that no recording leaves the browser.
-- **Status:** OPEN (default), documented.
-
-#### H-P1 — `physics.md` says verification needs "no trust in us", then says you must trust QSD's witness statement
-- **Where:** `docs/physics.md:92-95` vs `:311-319`.
-- **Spec:** §2 l.86-90; §8 l.360-361 (`/how` renders the file verbatim, so this is user-facing copy).
-- **Repro:** `tests/docs/physics-claims.test.ts` — `FINDING H-P1`.
-- **Fix:** "… with no account, trusting only the published QSD witness key (see *where the trust actually sits* below)."
+#### H-E1 — `economics.md` §2 states the Zeno rounding the wrong way round (LOW)
+- **Where:** `docs/economics.md:87` ("quietTimeAfter = quietTimeBefore × (1 − fractionRemoved) (rounded down to whole seconds)") vs `packages/protocol/src/decay.ts:109-110` (the *removed* time is floored, so the remaining quiet time rounds **up**).
+- **Spec:** §5 l.183-185 (documented mechanic), §8 l.360 (`/how` renders the file verbatim).
+- **Repro:** `tests/protocol/decay-zeno.test.ts` — `FINDING H-E1` (7 s quiet, 50 % buy: doc says 3 s left, code leaves 4 s).
+- **Fix:** "(the removed time is rounded down to whole seconds)".
 - **Status:** OPEN.
 
-#### H-P2 — `physics.md`'s "what you cannot verify" list omits draw selection and operator-asserted timestamps
-- **Where:** `docs/physics.md:282-325`.
-- **Spec:** §4 l.153-154 "exactly what QSD does NOT claim"; §2 l.86-90.
-- **Repro:** `tests/docs/physics-claims.test.ts` — `FINDING H-P2`; evidence in `tests/quantum/attestation-honesty.test.ts` (`timestamps are operator-asserted …` passes, showing a 1999 timestamp verifies).
-- **Fix:** add two bullets: a bundle does not show that the published draw was the *only* draw requested for those inputs (and what QSD does about it, per H-Q3), and `requestedAt`/`receivedAt` are asserted by the witness, not by the provider.
-- **Status:** OPEN.
+| id | sev | Where | Spec | Repro | Detail / fix | Status |
+|---|---|---|---|---|---|---|
+| H-E3 | INFO | `protocol/src/allocation.ts:59-64, 108-122` | §5 l.200 | `allocation-properties.test.ts` `INFO H-E3` (passes, documents) | A `firstAcquiredAt` after `collapseAt` (impossible for a wallet in the collapse snapshot) is accepted with `fD = 0`; before `bornAt` is accepted with `fD = 1`. The chain package validates the former (`snapshot.ts:220`), so this is defence in depth: refuse both in `validateSnapshot`. | OPEN |
+| H-E4 | INFO | `protocol/src/daughter.ts:228-232` | §5 l.196 | `daughter-mapping.test.ts` `INFO H-E4` | `baseName` requires the dot at index > 0, so a name that is only `·5` becomes `·5·2`. Harmless; pump.fun names are non-empty. | OPEN |
+| H-S7 | INFO | `solana/src/measure.ts`, quantum `unsafeDev.ts` | §9 l.389 | `measure-precommit.test.ts` (documents) | Bundles from `UNSAFE_DEV_RANDOM` carry no `(inputsHash, nonce)` binding, so on devnet the bundle ↔ precommit link rests on the measurement journal; `productionVerifyOptions()` requires the binding and rejects such bundles (PASS). | noted |
 
-### LOW
+### 2.3 Wave 1 — status after the fixes (all `FINDING` tests re-run in wave 2A: 262/262 pass)
 
-| id | Where | Spec | Repro | Detail / fix | Status |
-|---|---|---|---|---|---|
-| H-Q5 | `quantum/src/errors.ts:70` | §4 l.141 | `production-guard.test.ts` `FINDING H-Q5` ×5 | `NODE_ENV` compared with `===`; `Production`, ` production`, `prod` are not production. Normalise (`trim().toLowerCase()`), and prefer the H-Q4 allow-list. | OPEN |
-| H-Q8 | `quantum/src/providers/anu.ts:82-85` | §4 l.140-141 (UI says so) | `secret-hygiene.test.ts` `LOW H-Q8` (passes, documents) | The provider's `message` is spliced verbatim into an error the README calls "safe to show in the UI". Third-party string injection; truncate/escape or map to fixed copy. | OPEN |
-| H-P3 | `docs/physics.md:259-266` | §2 l.86-90 | `physics-claims.test.ts` `FINDING H-P3` | "Nobody … could have predicted the bytes" / "There is no seed" is a device-independent claim. Real QRNGs mix quantum signal with classical detector noise and apply a deterministic extractor; unpredictability rests on the device's entropy model and calibration. Say so in one sentence. | OPEN |
-| H-P4 | `docs/physics.md:33-34, 70-72` vs `:69-70` | §2 l.86-90 | `physics-claims.test.ts` `FINDING H-P4` | "no fact of the matter … the superposition is the complete description" and "not determined by anything that existed before" are Copenhagen-flavoured; Bohmian mechanics (deterministic, non-local) survives Bell tests. The doc later "takes no position on interpretation". Prefix with "In the standard account". | OPEN |
-| H-P5 | `docs/physics.md:10-13` | §2 l.86-90 | `physics-claims.test.ts` `FINDING H-P5` | Headline bullet "every outcome ships with a proof bundle anyone can verify" lacks the qualifier the body gives ("our record of the provider's response — not the photons"). | OPEN |
-| H-U1 | `ui-tokens/src/stories/ProofBadge.stories.tsx:10,19` | §6; physics.md:322-324 | `placeholders-and-claims.test.tsx` `LOW H-U1` | Story copy "awaiting provider attestation" — the live attestation is witness-signed. Rename to "awaiting witness attestation". | OPEN |
-| H-U2 | `ui-tokens/src/components/ProofBadge.tsx` | physics.md:322 "The UI shows the attestation kind on every collapse" | `placeholders-and-claims.test.tsx` `LOW H-U2` | The kit has no component/prop for attestation kind, so the app cannot meet the promise with the kit alone. Add `attestationKind?: 'provider-signed' \| 'witness-signed' \| 'unsafe-dev'` to `ProofBadge` (rendered as a second word, e.g. "verified · witness-signed"). | OPEN |
-| H-C4 | `crypto/src/identity.ts:119-133, 171-182` | §3 l.110-112 | — (no test; low value) | `validateState` checks only the *length* of `root`/`pubSeed`; `mergeStates` ignores a `pubSeed` mismatch and keeps `a.pubSeed`. Validate hex and require equal `pubSeed`. | OPEN |
-
-### INFO
-
-| id | Note |
-|---|---|
-| H-Q7 | `verify()` accepts unknown **top-level** bundle fields (`bundle.ts`); `bundleHash` changes so the on-chain anchor still catches it (`tamper-matrix.test.ts` `INFO H-Q7`). Consider rejecting unknown keys for strictness. |
-| H-C5 | Two `Signer`s with two *different* stores for one identity reuse keys; README §7 documents "one identity ↔ one StateStore". Agent G must guarantee it (`key-reuse.test.ts` `INFO: two Signers …`). |
-| H-U3 | `quantumStateColor` adds `decaying` and `dead`, which are not in the spec §5 `Coin.state` union. Harmless if the app never maps a coin to them. |
-| KAT | Bouncy Castle's `XMSSTest.testSignSHA256CompleteEvenHeight2` has a typo (`case 0x0822` > 1023); the signature's own index field says `0x82`. Both implementations reproduce it at index 130. |
-| ENV | `createProviderFromEnv` reads `QSD_QRNG_PROVIDER` with `trim()`; whitespace variants of the provider name are handled, `NODE_ENV` is not (H-Q5). |
+| id | sev | Finding (short) | Status |
+|---|---|---|---|
+| H-C1 | BLOCKING | stateless `sign`/`signWithIndex` reused a leaf with a stale state | **FIXED** — `tests/crypto/key-reuse.test.ts`. Integrator note: the wave-1 "variant" test asked `signWithIndex` for index 3 on an identity whose earlier test had consumed 0-4 via `sign()`; a correct fix must refuse that, so the test now uses index 40 and asserts that 3 is refused. |
+| H-C2 | BLOCKING | `Identity._sign` public | **FIXED** — `key-reuse.test.ts` |
+| H-Q1 | HIGH | default `verify()` trusted any key | **FIXED** — `attestation-honesty.test.ts` |
+| H-Q3 | HIGH (design) | grinding / draw reuse undetectable | **FIXED (design implemented)** — quantum binds `(inputsHash, nonce)` into the witness statement and commitment; solana anchors `qsd:v1:precommit:<inputsHash>:<nonce>` inside `beforeDraw` so no anchor ⇒ no draw; verified on the combined ChainObserver + quantum-bus timeline in `tests/solana/measure-precommit.test.ts`. Residual: the operator still chooses `at` (H-E2) and can still *fail* to publish an unfavourable draw after precommitting — but that is now visible on-chain as a precommit without a proof. |
+| H-Q4 | HIGH | production guard fail-open | **FIXED** — `production-guard.test.ts` (allow-list: `NODE_ENV=test`, or `development` + `QSD_ALLOW_UNSAFE_DEV=1`) |
+| H-Q0 | MEDIUM | no provider-signed attestation exists | **ACCEPTED** — integrator decision: witness-signed attestation is the shipping design since no commercial QRNG signs responses; the UI must label the attestation kind (see H-U1/H-U2, fixed). |
+| H-Q2 | MEDIUM | provider-signed attestations unbound | **FIXED** — `attestation-honesty.test.ts` |
+| H-Q6 | MEDIUM | ANU API key via `JSON.stringify` | **FIXED** — `quantum/secret-hygiene.test.ts` |
+| H-C3 | MEDIUM | keygen event stream unredacted by default | **FIXED** — `recordEvents()` redacts by default; the raw stream is opt-in (`{ redact: false }`). Integrator note: the secret-hygiene test was updated accordingly (`FINDING H-C3 (fixed)`). |
+| H-P1, H-P2 | MEDIUM | physics.md trust claims | **FIXED** — `docs/physics-claims.test.ts` |
+| H-Q5, H-P3, H-P4, H-P5, H-U1, H-U2 | LOW | see wave-1 text in `audit-log.md` | **FIXED** — their `FINDING` tests pass |
+| H-Q8 | LOW | provider message spliced into UI error | OPEN (not re-verified in 2A) |
+| H-C4 | LOW | `validateState`/`mergeStates` laxity | OPEN (no test) |
+| H-Q7, H-C5, H-U3, KAT, ENV | INFO | — | as recorded in wave 1 |
 
 ---
 
-## 3. PASSED (what was attacked and held)
+## 3. PASSED in wave 2A (what was attacked and held)
 
-- **Crypto correctness (spec §2 l.84-86, §3 l.107-109, §10 l.403-404):** Agent H's independent RFC 8391 implementation (`tests/reference/xmss-ref.ts`, node:crypto SHA-256, recursive `chain`, stack-based `treeHash`, Algorithm 13 verifier) and `@qsd/crypto` both reproduce, bit-for-bit, all 16 height-4 signatures, the height-10 root `73c3fc6d…0de3`, the height-10 index-0 auth path, and 13 height-10 signatures from Bouncy Castle's published KAT (independently fetched and parsed). Both verifiers accept every published signature and reject one-byte message changes. A package signature from a fixed seed verifies under Agent H's verifier with only `(root, pubSeed)`; Agent H's keygen from the package's HKDF output reproduces the package root and a byte-identical signature. Sizes: signature 2436, public key 64. **No mismatch.**
-- **Tamper (crypto):** 13 signature/message/pubSeed variants, including walking a WOTS element one step forward, rejected by both verifiers.
-- **Key reuse via the `Signer`/`StateStore` path:** restoring an older serialised state, mutating the returned state, JSON round-trip with a cleared bit put back into the store (CAS conflicts; unconditional put merges), 12 concurrent signers, 6 concurrent requests for the same index (exactly one wins), state from another identity, index 256/−1/1.5/NaN, exhaustion after 256 — all impossible.
-- **Secret hygiene (crypto):** `JSON.stringify`, `util.inspect`, reflection and all error messages contain no seed / `SK_SEED` / `SK_PRF`; signing and verification event streams carry only public values.
-- **Production guard, exact `NODE_ENV=production`:** constructor, `draw()` after the env flips, `createProviderFromEnv` (also with whitespace in the provider name), injected env claiming `test`, misconfiguration never falls back to the dev provider; a hand-rolled provider claiming the dev id produces bundles `verify()` rejects without `allowUnsafeDev`; a provider returning no attestation is refused by the client.
-- **Proof-bundle tamper matrix:** 84 cases — every top-level, draw, attestation (unsafe-dev and witness-signed), inputs and outcome field changed, with and without recomputing dependent hashes/commitments, key substitution, signature swapped from a different statement, kind changes, extra/removed fields, replay into different inputs — all rejected; key reordering, whitespace, numeric edge cases (−0, 1e21, 2^53) and NFC/NFD strings behave correctly; `verify()` never throws on 14 kinds of garbage, a throwing Proxy, NaN/bigint/function inputs, or a throwing resolver.
-- **ANU provider hygiene:** key only in the `x-api-key` header; absent from URL, attestation, commitment input, events, bundle and all five error paths; witness seed not recoverable from provider or signer; captured headers are exactly the allow-list (echoed `x-api-key`/`authorization` response headers are dropped); event order `entropyRequested → entropyArrived → commitmentComputed → outcomeResolved` with payloads equal to the bundle.
-- **No local randomness** in `@qsd/quantum` outside `UnsafeDevRandomProvider` and the ephemeral signer it alone uses; no `console.*` in any of the three packages' `src`.
-- **ui-tokens:** 16 empty/unavailable renders contain no digit; a real `DataRow` value renders exactly that value; component JSX text has no hard-coded numbers; stories label every example; tokens, fonts, motion (700 ms viscous, 120 ms collapse) and shape match spec §6 exactly.
+**Allocation (spec §5 l.199-216, §10 l.409-410)** — with Agent H's own generators (balances 0 / 2^40 / 2^90, timings across the lifetime, random held-through sets, quiet flags): Σ units + dust == total exactly, every unit ≥ 0, dust < wallets, weights in [10000, 15000] (600 runs); deterministic under shuffled input and reversed id lists (300); k-way bag split with identical timing never increases the total and loses at most k−1 units while nobody else moves (500); longer holding, more survived measurements held through, and the quiet flag never decrease units (1200); non-survived / unknown / duplicate measurement ids count for nothing; the weight formula reproduced independently (500). Adversarial: zero balances kept at 0 units, all-zero refused, duplicates / negative / non-bigint refused, quiet-flag-after-quiet-start refused, bad times refused, 10^60 balances exact, one holder gets the whole pool, 10 000 holders in < 1 s with leafCount 16384. **Merkle:** `table.merkleRoot` equals Agent H's own tree (own canonical JSON, node:crypto SHA-256, RFC 8391 `RAND_HASH` from `tests/reference/xmss-ref.ts` with hash-tree ADRS type 2) over wallet-sorted leaves padded with the documented empty leaf (200 runs + 10k case); every proof verifies; modified units (±1, +random), modified wallet, flipped index, reversed or truncated path, out-of-range index, another wallet's row, garbage root — all rejected, never throws; the padding leaf has no claimable preimage.
+
+**Decay / Zeno (§5 l.179-185)** — `decayProgress` ∈ [0,1], 0 at or before `lastActivityAt`, monotone in quiet time, ppb = floor (2000 runs); exactly 0.5 / 0.75 / 0.875 at 1 / 2 / 3 half-lives for every preset, continuous through t = T, 1 only when collapsed; matches `1 − e^(−t ln2 / T)` to 1e-12; `nextAutoMeasureAt == lastActivityAt + 2T` for all three measurable states and `null` when collapsed; non-integer / negative times and half-lives refused. `applyBuy` never increases decay, never moves the origin past `now`, removes at most ⌊quiet/2⌋ for any buy size (cap exact at 12.5 % of market cap and beyond), monotone in buy size, pure (1500 runs); `zenoResetBps` equals the exact bigint formula (500); the `economics.md` §2 worked numbers (0.75 → 1 h 36 min, 0.67) reproduce.
+
+**Resolver (§5 l.187-198, l.218-221)** — Agent H's own implementation of the economics.md §3 byte rules agrees with `measurementResolver.resolve` on 10 000 random (bytes, inputs) including all-0x00 / all-0xFF words and ppb ∈ {0, 1, 1e9−1, 1e9}; exact strict-`<` threshold checked at `u0 = ppb·2^64/1e9`; short draws, tables not summing to 1e6, duplicate ids, out-of-range ppb/ppm/index refused. Dev provider, 8 000 draws at decayProgress 1: tunnel 2.5 % ± 0.8 %, channels 50/30/20 % ± 3 %; survive/collapse frequency at 0.25 and 0.9 ± 2.5 % over 6 000 OS-random draws. `applyMeasurement`: a flipped outcome, a wrong label, a flipped draw byte are rejected by quantum `verify()` and by the pure checks; a collapsed coin cannot be measured; bundles for another ca, another index, a different decay moment, a different resolver id, an empty `by` are refused; the input coin is never mutated.
+
+**Daughter (§5 l.191-197)** — longevity ∈ [0, 10000]; half-life clamped to [1 h, 7 d] and integer; band inside the channel's pool range; generation = mother + 1 (1500 runs); monotone: longer life / more survives / more supply ⇒ longevity, half-life non-decreasing and band non-widening (1500); later generation never longer (800); half-life non-decreasing and band non-increasing in longevity with the documented end points (channel min / full range; channel max / 20 % centred); generation 1000, 10 000 and 2^31: penalty capped at 50 %, no overflow; channel ranges outside the bounds clamped; the §5 example gives exactly 0.47. Names: U+00B7, existing suffix replaced not stacked (300 runs), generation 1 is the bare name.
+
+**economics.md vs `PROTOCOL_PARAMS`** — the parameter table parsed independently: all 26 constants present with equal values and nothing undocumented; every percentage in the prose equals its constant; preset table; collapse rewards exact for 6 supplies; worked example 1 (weights 1.5000 / 1.3000 / 1.0250, units 646 319 569 / 280 071 813 / 73 608 617, dust 1), example 2 (858 657 243 / 141 342 756), the sybil split example (430 879 712 + 215 439 856), pool resolution, resolver id and Merkle strings — all reproduce to the unit.
+
+**Airdrop crash/resume (§9 l.386-388)** — on Agent H's own ledger executing the package's real SPL instructions: no-fault run; re-run is a no-op; crash after journal-`sent` before submit (re-sent once after expiry; also with the block height already past); crash after submit before the confirmation is journalled (resume finds it confirmed, no re-send); mid-batch crash while confirming batch 2 of 3; dropped transactions expire and are re-sent; rejected submits retried; a submit that throws a *non-transient* error although it landed is reconciled by status, not re-sent; an on-chain failure is thrown, not blindly retried, and a later resume re-sends only that batch; a journal for another root / another mint / edited units is refused; 40 random sequences of recoverable faults (incl. retry-budget exhaustion and operator re-run) — in every case Σ transferred == `allocatedUnits`, every wallet credited exactly once, treasury debited exactly, root anchored exactly once.
+
+**Collapse crash/resume (§9 l.380-388)** — a real collapse (dev-provider bundle applied through `applyMeasurement`) executed end-to-end on the ledger; a crash after each of the 8 step records (snapshot … dust-burn) and inside the airdrop step: resume skips exactly the finished steps, the daughter mint is initialised once, `daughterLaunched` emitted once, reward burn and measurer transfer once, every holder paid its exact units, dust burned once, treasury balances exact, journals complete; journals for another mother / another collapse time and a non-collapsed coin refused; the treasury is excluded from the snapshot.
+
+**Keys, config, webhooks (§9 l.391-394)** — `KeyVault`: round trip; blob holds no plaintext; 9 tamper variants (ciphertext first/last nibble, truncation, nonce, nonce length, label/AAD, alg, version, non-hex) + wrong key + short key rejected with messages that leak nothing; a blob moved to another label in the store is refused; the vault's `#kek` invisible to `JSON.stringify`/`inspect`. `loadChainConfig`: malformed KEK names the variable, never the value; bad cluster / RPC URL named; mainnet-beta refused for `QSD_MAINNET_ENABLED` ∈ {unset, '', false, 1, yes, TRUE, True, …}; memory key store refused on mainnet; `describeConfig` and `redactSecrets` hide KEK, API keys, JWT, webhook secret, `api-key=` query, bearer tokens, base58 secret keys. Webhooks: `timingSafeEqual` in source, no `===` on the secret; unset secret, missing / empty / wrong / case-different / longer header rejected; error messages echo neither side.
+
+**Measurement composition (H-Q3 fix)** — on a combined ChainObserver + quantum-bus timeline: `anchorRequested(precommit) < anchored(precommit) < entropyRequested < entropyArrived < outcomeResolved < anchorRequested(proof) < anchored(proof)`; the bus's first event is `entropyRequested` (seq 0) and seqs are contiguous; the provider was called once; the precommit memo decodes to Agent H's independently computed `sha256(canonical(inputs))` and the injected nonce; the proof memo equals the bundle hash; precommit and proof are different transactions; the journal holds both signatures. A failed or dropped precommit anchor ⇒ provider never called, zero bus events, coin unchanged, no `precommitTx`/`bundleHash` journalled. A client that ignores `beforeDraw` is refused after the fact. `productionVerifyOptions()` requires the input binding; the dev provider cannot satisfy it.
+
+**Snapshot honesty (§2 l.96-97, §9 l.382-384)** — no `HoldingHistory` ⇒ `NotImplementedError` naming the missing facts; data observed before the collapse slot refused; no sources / all sources failing throw with every reason; a failing first source falls through; excluded owners and zero balances dropped; balances from the ledger, facts from the history; the quiet flag coerced false for late acquirers; impossible `firstAcquiredAt` (after collapse, NaN) refused; `mergeByOwner` sums per owner.
+
+**Source hygiene** — no `console.*` in either package; the protocol has no clock, randomness, I/O or `process`; the only randomness in solana is nonces, seeds, the cipher nonce, a tmp-file name, lock jitter and keypair generation; no placeholder / TODO / mock markers; every `PROTOCOL_PARAMS` constant is referenced by name and the protocol fractions never appear as bare literals in the rules; the airdrop batch size is computed by serialising a real v0 transaction against 1232 bytes (n fits, n+1 does not).
 
 ---
 
-## 4. Not verified in wave 1 (and why)
+## 4. Not verified in wave 2A (and why)
 
-- Live ANU API behaviour (no `QSD_QRNG_API_KEY` available; the provider was exercised through a mocked `fetch` against the documented shape only).
-- `physics.md` claims about the *protocol* ("anchored on-chain before the outcome is revealed", "never caches bytes") — protocol/chain packages do not exist yet (wave 2).
-- `@qsd/crypto`'s WOTS+ secret derivation against RFC 8391 §4.1.11 / NIST SP 800-208 `PRF_keygen` — only the Bouncy Castle / xmss-reference derivation was checked (that is what the only published KAT uses); interoperability of *verification* is derivation-independent and was checked.
-- Storybook visual output (static build present, not launched); frame-time, scene event replay, allocation properties, airdrop idempotency — wave 2 targets.
+- Live devnet / mainnet behaviour (`scripts/devnet-e2e.ts`, PumpPortal, Pinata, Jupiter, Helius DAS/webhooks): outbound CONNECT to those hosts is denied by the sandbox egress proxy (as the solana README also reports). Everything chain-side was exercised against Agent H's ledger, which executes the real instructions but is not a validator: compute budgets, rent, ATA edge cases, real signature-status semantics and real blockhash expiry timing are unverified.
+- `hourlyBuyAndBurn` (Jupiter path) and `launchOnPumpFun` beyond their pure request builders — mainnet-only, no network.
+- `FileJournalStore` / `FileReserveBackend` on a real multi-process host (lock-file staleness at 10 s, atomic rename on the target filesystem).
+- The quantum package's wave-1 open LOW items (H-Q8) and crypto H-C4 were not re-examined.
+- Scene, app, `/how` rendering, frame-time, physics-claim scan of `/apps/web` — wave 2B.

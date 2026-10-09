@@ -17,6 +17,7 @@ import {
   wotsSecretSeed,
   KeyReuseError,
   signWithIndex,
+  type CryptoEvent,
 } from '@qsd/crypto';
 
 const SEED = new Uint8Array(32).map((_, i) => (0xc0 + i) & 0xff);
