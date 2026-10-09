@@ -19,7 +19,7 @@ Survey of commercial QRNG HTTP APIs, October 2026:
 
 | Provider | Live HTTP API | Signs responses? | Notes |
 |---|---|---|---|
-| ANU Quantum Numbers (`api.quantumnumbers.com.au`) | yes, `x-api-key` | **no** | Documented JSON shape, self-serve keys, up to 1024 values/request, 100 req/s paid tier |
+| ANU Quantum Numbers (`api.quantumnumbers.anu.edu.au`) | yes, `x-api-key` | **no** | Documented JSON shape, self-serve keys, up to 1024 values/request, 100 req/s paid tier |
 | Qrypt Entropy-as-a-Service (`api-eus.qrypt.com/api/v1/quantum-entropy`) | yes, bearer token by request | **no** | Base64 1 KiB blocks; docs say only "HTTPS" for integrity |
 | Outshift / Cisco QRNG | yes, API key, evaluation-only | **no** | Pre-generated numbers stored in cloud; evaluation licence, 100 kbit/day |
 | Quantinuum Quantum Origin | **no HTTP API** | n/a | Offline SDK/CLI/HSM connector; "verifiable" refers to Bell-test entropy bounds, not per-response signatures |
@@ -40,7 +40,7 @@ format.
 ### ANU API, precisely
 
 ```
-GET https://api.quantumnumbers.com.au?length=<1..1024>&type=hex8&size=1
+GET https://api.quantumnumbers.anu.edu.au?length=<1..1024>&type=hex8&size=1
 x-api-key: <QSD_QRNG_API_KEY>
 accept: application/json
 
@@ -61,7 +61,7 @@ rejects everything else, any length mismatch, and any malformed value with a
 |---|---|---|
 | `QSD_QRNG_PROVIDER` | no | `anu-quantum-numbers` (default) or `UNSAFE_DEV_RANDOM` (refused when `NODE_ENV=production`) |
 | `QSD_QRNG_API_KEY` | for ANU | ANU Quantum Numbers API key. Never logged, never in errors, never in attestations |
-| `QSD_QRNG_ENDPOINT` | no | Endpoint override for ANU (e.g. a proxy). Default `https://api.quantumnumbers.com.au` |
+| `QSD_QRNG_ENDPOINT` | no | Endpoint override for ANU (e.g. a proxy). Default `https://api.quantumnumbers.anu.edu.au`, then `https://api.quantumnumbers.com.au` if that host cannot be reached. Setting it disables the fallback |
 | `QSD_WITNESS_SECRET_KEY` | for ANU (producer side) | 64 hex chars: a 32-byte Ed25519 seed for the QSD witness key. Never logged. Publish the corresponding public key (`provider.witnessPublicKey`) |
 | `QSD_WITNESS_PUBLIC_KEYS` | verifier side | Comma-separated published witness public keys (64 hex each). Read with `trustedWitnessKeysFromEnv()` and passed to `verify()`. The app must also ship this list to the browser (e.g. as a build-time constant) so in-browser verification is fail-closed |
 | `QSD_ALLOW_UNSAFE_DEV` | dev only | Must be exactly `1`, together with `NODE_ENV=development`, to permit `UNSAFE_DEV_RANDOM` |

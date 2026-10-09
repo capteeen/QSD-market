@@ -203,6 +203,43 @@ describe('AnuQuantumNumbersProvider with mocked transport', () => {
     expect(err.message).toMatch(/could not be reached/);
   });
 
+  it('tries the older ANU host when the current one cannot be reached, and records the host it used', async () => {
+    const urls: string[] = [];
+    const { f: ok } = mockFetch(200, fixture.response.body);
+    const f = (async (url: string, init?: RequestInit) => {
+      urls.push(url);
+      if (url.startsWith(ANU_DEFAULT_ENDPOINT)) throw new TypeError('fetch failed', { cause: { code: 'ENOTFOUND' } });
+      return ok(url, init);
+    }) as unknown as typeof fetch;
+    const provider = new AnuQuantumNumbersProvider({ apiKey: SECRET, witness, fetch: f });
+    const draw = await provider.draw(8);
+    expect(urls.map((u) => new URL(u).host)).toEqual(['api.quantumnumbers.anu.edu.au', 'api.quantumnumbers.com.au']);
+    expect(JSON.stringify(draw)).toContain('api.quantumnumbers.com.au');
+  });
+
+  it('names the hosts and the network reason when every host fails; an HTTP error never falls back', async () => {
+    const f = (async () => {
+      throw new TypeError('fetch failed', { cause: { code: 'ENOTFOUND' } });
+    }) as unknown as typeof fetch;
+    const err = (await new AnuQuantumNumbersProvider({ apiKey: SECRET, witness, fetch: f }).draw(8).catch((e: unknown) => e)) as Error;
+    expect(err.message).toContain('api.quantumnumbers.anu.edu.au, api.quantumnumbers.com.au: ENOTFOUND');
+    let calls = 0;
+    const { f: forbidden } = mockFetch(403, fixture.responseForbidden.body);
+    const counting = ((u: string, i?: RequestInit) => (calls++, forbidden(u, i))) as unknown as typeof fetch;
+    await expect(new AnuQuantumNumbersProvider({ apiKey: SECRET, witness, fetch: counting }).draw(8)).rejects.toThrow(/credentials/);
+    expect(calls).toBe(1);
+  });
+
+  it('a configured endpoint is the only one tried', async () => {
+    const urls: string[] = [];
+    const f = (async (url: string) => {
+      urls.push(url);
+      throw new TypeError('fetch failed');
+    }) as unknown as typeof fetch;
+    await new AnuQuantumNumbersProvider({ apiKey: SECRET, witness, fetch: f, endpoint: 'https://proxy.example' }).draw(8).catch(() => undefined);
+    expect(urls).toHaveLength(1);
+  });
+
   it('timeout -> MeasurementUnavailableError', async () => {
     const f = ((_url: string, init?: RequestInit) =>
       new Promise<Response>((_, reject) => {

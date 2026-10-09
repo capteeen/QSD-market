@@ -5,7 +5,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import { CryptoObserver, redactEvent, toHex, type CryptoEvent } from '@qsd/crypto';
 import { HALF_LIFE_PRESETS, initialImageLineage, maxWindowSec, type Coin } from '@qsd/protocol';
 import { QuantumEventBus, bundleHash, canonicalJson, type JsonValue, type OutcomeResolver, type ProofBundle, type QuantumEvent } from '@qsd/quantum';
-import { launchDevnetSplToken, launchOnPumpFun, redactSecrets, type ChainEvent as SolanaChainEvent } from '@qsd/solana';
+import { launchDevnetSplToken, launchOnPumpFun, redactSecrets, uploadTokenMetadata, type ChainEvent as SolanaChainEvent } from '@qsd/solana';
 import { encodeCryptoEvents } from '@qsd/scene/model';
 import type { ChainEvent as SceneChainEvent, LineageInput, SuperpositionInput } from '@qsd/scene/model';
 import { getChain } from './chain';
@@ -14,7 +14,7 @@ import { insertCoinWith } from './coins';
 import { logEvent } from './events';
 import { genesisConfig } from './genesis';
 import { syncIdentityMirror } from './identityMirror';
-import { qrngClient } from './qrng';
+import { qrngClient, qrngProbe } from './qrng';
 import { publish } from './redis';
 import { nowSeconds } from '@/lib/format';
 
@@ -188,6 +188,89 @@ function hexBytes(e: QuantumEvent): JsonValue {
 
 const CRYPTO_BATCH = 4096;
 
+/**
+ * Key generation emits ~292,000 events, 94% of them `chainStep` (one per hash
+ * in every WOTS+ chain): ~15 MB of SSE that the browser must download and
+ * replay before the launch can go on. The stream carries every other event
+ * and the chain steps of every KEYGEN_STEP_LEAF_STRIDE-th leaf only; each one
+ * sent is still a real, unaltered (redacted) event, and the scene draws the
+ * leaves it is shown.
+ */
+export const KEYGEN_STEP_LEAF_STRIDE = 64;
+export function streamedCryptoEvent(e: CryptoEvent): boolean {
+  return e.type !== 'chainStep' || e.leaf % KEYGEN_STEP_LEAF_STRIDE === 0;
+}
+
+/** Wall-clock milliseconds per launch step, reported at the end of every launch (and on failure). */
+function stepTimer(): { mark: (step: string) => void; summary: () => string; all: () => Record<string, number> } {
+  const t0 = Date.now();
+  let last = t0;
+  const steps: Record<string, number> = {};
+  return {
+    mark(step) {
+      const now = Date.now();
+      steps[step] = now - last;
+      last = now;
+    },
+    all: () => ({ ...steps, total: Date.now() - t0 }),
+    summary: () =>
+      Object.entries({ ...steps, total: Date.now() - t0 })
+        .map(([k, ms]) => `${k} ${(ms / 1000).toFixed(1)}s`)
+        .join(' · '),
+  };
+}
+
+/** What a launch needs, checked BEFORE the wallet is asked to pay. */
+export interface LaunchPreflight {
+  ok: boolean;
+  /** Why a launch would fail now; empty when ok. */
+  problems: string[];
+}
+
+/** The protocol wallet must hold at least this much to pay the launch's own network fees (anchors, mint vault). */
+export const PREFLIGHT_MIN_CREATOR_LAMPORTS = 10_000_000n;
+const PREFLIGHT_TTL_MS = 30_000;
+const pf = globalThis as unknown as { __qsdPreflight?: { at: number; result: LaunchPreflight } };
+
+/**
+ * Cheap checks that every service a launch touches answers: genesis config,
+ * cost config, the protocol key, the RPC, the protocol wallet's balance, the
+ * pump.fun metadata upload key and one byte from the quantum provider.
+ * A good result is cached for 30 s (a failure for 10 s) so callers do not spend QRNG quota.
+ */
+export async function launchPreflight(): Promise<LaunchPreflight> {
+  const cached = pf.__qsdPreflight;
+  // failures are cached briefly too, so a public endpoint cannot be used to hammer the quantum provider
+  if (cached && Date.now() - cached.at < (cached.result.ok ? PREFLIGHT_TTL_MS : 10_000)) return cached.result;
+  const problems: string[] = [];
+  const check = async (what: string, fn: () => unknown): Promise<void> => {
+    try {
+      await fn();
+    } catch (e) {
+      problems.push(`${what}: ${redactSecrets(e instanceof Error ? e.message : String(e))}`);
+    }
+  };
+  await check('genesis config', () => genesisConfig());
+  await check('launch costs', () => {
+    const c = launchCosts();
+    if (c.launchCostLamports === null || c.identityReserveLamports === null || c.devBuyLamports === null) throw new Error('a launch cost is not configured');
+  });
+  await Promise.all([
+    check('protocol wallet', async () => {
+      const chain = getChain();
+      const { creator } = await chain.withCreator();
+      const lamports = BigInt(await chain.connection.getBalance(creator.publicKey, 'confirmed'));
+      if (lamports < PREFLIGHT_MIN_CREATOR_LAMPORTS) throw new Error(`holds ${lamports} lamports, needs at least ${PREFLIGHT_MIN_CREATOR_LAMPORTS} for network fees`);
+      await chain.connection.getLatestBlockhash('confirmed');
+      if (chain.config.cluster === 'mainnet-beta' && !chain.config.pinataJwt) throw new Error('PINATA_JWT is not set (pump.fun metadata upload)');
+    }),
+    check('quantum provider', () => qrngProbe()),
+  ]);
+  const result: LaunchPreflight = { ok: problems.length === 0, problems };
+  pf.__qsdPreflight = { at: Date.now(), result };
+  return result;
+}
+
 /** Run the real launch, yielding SSE frames. Throws only before the first frame; later errors arrive as `error` frames. */
 export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> {
   const frames: LaunchFrame[] = [];
@@ -198,6 +281,7 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     while (frames.length) yield frames.shift()!;
   };
 
+  const timer = stepTimer();
   try {
     validateLaunchForm(form);
     const chain = getChain();
@@ -208,8 +292,15 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     push('status', { step: 'payment', message: 'verifying payment' });
     yield* drain();
     await verifyPayment(form, creator.publicKey);
+    timer.mark('payment check');
 
     // 1. mint keypair → the contract address, stored encrypted in the vault.
+    // pump.fun metadata upload (IPFS) does not depend on anything below: start it now, await it at step 7.
+    const uploaded =
+      chain.config.cluster === 'devnet'
+        ? undefined
+        : uploadTokenMetadata({ metadata: { name: form.name, symbol: form.ticker, description: form.description }, imageBytes: form.image.bytes, imageMime: form.image.mime, pinataJwt: chain.config.pinataJwt });
+    uploaded?.catch(() => undefined); // awaited later; never an unhandled rejection meanwhile
     const mint = Keypair.generate();
     const ca = mint.publicKey.toBase58();
     await chain.vault.storeKeypair(`qsd/mint/${ca}`, mint);
@@ -227,6 +318,7 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
       batch = [];
     };
     observer.subscribe((e) => {
+      if (!streamedCryptoEvent(e)) return;
       batch.push(redactEvent(e));
       if (batch.length >= CRYPTO_BATCH) flush();
     });
@@ -236,6 +328,7 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     flush();
     yield* drain();
     const identityRoot = identity.rootHex;
+    timer.mark('identity');
 
     // 3. superposition input (genesis band + channels) for the scene.
     const superposition: SuperpositionInput = {
@@ -264,12 +357,14 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
       },
     });
     yield* drain();
+    timer.mark('precommit anchor + quantum draw');
     const lineageId = (bundle.outcome.value as { lineageId: string }).lineageId;
     const launchBundleHash = bundleHash(bundle);
 
     // 5. sign the launch statement with the identity's first one-time key (through the reserve's Signer).
     const statement = canonicalJson({ ca, identityRoot, lineageId, launchBundleHash, imageHash, halfLifeSec: preset.halfLifeSec });
-    const signer = await chain.reserve.signerFor(ca);
+    // the identity just generated: rebuilding it from the vault would run key generation a second time
+    const signer = chain.reserve.signerForIdentity(identity);
     const signObserver = new CryptoObserver();
     signObserver.subscribe((e) => {
       batch.push(e);
@@ -283,6 +378,7 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     const proofAnchor = await anchor(launchBundleHash, 'proof');
     unsubChain();
     yield* drain();
+    timer.mark('signature + proof anchor');
 
     // 7. launch: devnet SPL mint or pump.fun on mainnet.
     push('status', { step: 'launch', message: chain.config.cluster === 'devnet' ? 'minting the devnet SPL token' : 'creating the coin on pump.fun' });
@@ -291,9 +387,10 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
       chain.config.cluster === 'devnet'
         ? await launchDevnetSplToken({ supplyUnits: genesis.supplyUnits, decimals: genesis.decimals, mint }, { cluster: 'devnet', sender, reader, getMintRentLamports })
         : await launchOnPumpFun(
-            { metadata: { name: form.name, symbol: form.ticker, description: form.description }, imageBytes: form.image.bytes, devBuySol: form.devBuySol, creator, mint },
+            { metadata: { name: form.name, symbol: form.ticker, description: form.description }, imageBytes: form.image.bytes, devBuySol: form.devBuySol, creator, mint, ...(uploaded ? { uploaded: await uploaded } : {}) },
             { cluster: 'mainnet-beta', sender, reader, pumpPortalApiUrl: chain.config.pumpPortalApiUrl, ...(chain.config.pinataJwt ? { pinataJwt: chain.config.pinataJwt } : {}) },
           );
+    timer.mark('pump.fun create');
     push('launch', { ca: launch.ca, txSignature: launch.txSignature, path: launch.path });
     yield* drain();
 
@@ -338,11 +435,15 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     });
     await publish({ type: 'coin', ca });
 
+    timer.mark('save');
+    console.info(`[launch] ${ca} timings: ${timer.summary()}`);
+    push('status', { step: 'timings', message: `timings: ${timer.summary()}`, timings: timer.all() });
     const lineage: LineageInput = { ca, generation: 1 };
     push('lineage', lineage);
     push('done', { ca });
     yield* drain();
   } catch (e) {
+    console.info(`[launch] failed after: ${timer.summary()}`);
     // Never forward a raw chain/RPC error: web3.js fetch errors can carry the RPC URL and its api-key.
     push('error', { message: redactSecrets(e instanceof Error ? e.message : String(e)) });
     yield* drain();

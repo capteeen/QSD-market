@@ -167,6 +167,8 @@ export interface PumpFunLaunchArgs {
   mint?: Keypair;
   slippagePercent?: number;
   priorityFeeSol?: number;
+  /** Metadata already uploaded (e.g. started in parallel with earlier steps); uploaded here when omitted. */
+  uploaded?: UploadedMetadata;
 }
 
 export interface LaunchDeps {
@@ -187,10 +189,8 @@ export async function launchOnPumpFun(args: PumpFunLaunchArgs, deps: LaunchDeps)
   if (!args.creator.publicKey.equals(deps.sender.payer)) throw new ChainConfigError('creator keypair must be the sender payer');
   const fetchImpl = deps.fetchImpl ?? fetch;
   const mint = args.mint ?? Keypair.generate();
-  const { imageUri, metadataUri } = await uploadTokenMetadata(
-    { metadata: args.metadata, imageBytes: args.imageBytes, pinataJwt: deps.pinataJwt },
-    fetchImpl,
-  );
+  const { imageUri, metadataUri } =
+    args.uploaded ?? (await uploadTokenMetadata({ metadata: args.metadata, imageBytes: args.imageBytes, pinataJwt: deps.pinataJwt }, fetchImpl));
   const body = buildPumpPortalCreateRequest({
     creator: args.creator.publicKey,
     mint: mint.publicKey,

@@ -30,3 +30,10 @@ export function qrngClient(bus?: QuantumEventBus): QrngClient {
   if (!s.provider) throw new Error(`the quantum random number provider is not configured: ${s.error ?? 'unknown'}`);
   return createQrngClient(bus ? { provider: s.provider, bus } : { provider: s.provider });
 }
+
+/** One byte from the provider, to prove it answers (launch preflight). Throws with the provider's reason. */
+export async function qrngProbe(): Promise<void> {
+  const s = init();
+  if (!s.provider) throw new Error(`not configured: ${s.error ?? 'unknown'}`);
+  await s.provider.draw(1);
+}

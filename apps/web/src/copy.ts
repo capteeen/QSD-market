@@ -450,6 +450,7 @@ export const LAUNCH = {
     halfLife: 'half-life preset',
     devBuy: 'dev buy (SOL)',
     submit: 'Pay and launch',
+    checking: 'checking the launch services',
     paying: 'confirm the payment in your wallet',
     launching: 'launching — every stage below is a real operation',
   },
@@ -473,6 +474,7 @@ export const LAUNCH = {
   done: 'Launched',
   viewCoin: 'View coin',
   errorEyebrow: 'LAUNCH FAILED',
+  notCharged: 'Nothing was charged. A launch service is down:',
   identityNote:
     'The launch identity is generated on the server, in the protocol’s identity reserve. The hash chain values at depths below the tip are one-time secret key material, so the stream you see carries their SHA-256 commitments; every other hash is the real value.',
 } as const;
