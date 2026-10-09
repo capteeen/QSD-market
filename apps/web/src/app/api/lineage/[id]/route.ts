@@ -3,7 +3,7 @@ import { db } from '@/server/db';
 import { activityFor, measurementToDto, summaryFromDb } from '@/server/coins';
 import { guarded, json } from '@/server/unavailable';
 import { nowSeconds } from '@/lib/format';
-import type { LineageCollapseDto, LineageResponse } from '@/lib/types';
+import type { AirdropProgressDto, LineageCollapseDto, LineageResponse } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -32,10 +32,22 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       const alloc = daughter?.allocation ?? null;
       let weightMinBps: number | null = null;
       let weightMaxBps: number | null = null;
+      let airdrop: AirdropProgressDto = { wallets: 0, pending: 0, sent: 0, confirmed: 0, firstConfirmedAt: null, lastConfirmedAt: null };
       if (alloc) {
         const agg = await db().allocationEntry.aggregate({ where: { tableId: alloc.id }, _min: { weightBps: true }, _max: { weightBps: true } });
         weightMinBps = agg._min.weightBps;
         weightMaxBps = agg._max.weightBps;
+        const byStatus = await db().airdropEntry.groupBy({ by: ['status'], where: { tableId: alloc.id }, _count: { _all: true } });
+        const confirmedAt = await db().airdropEntry.aggregate({ where: { tableId: alloc.id, status: 'confirmed' }, _min: { updatedAt: true }, _max: { updatedAt: true } });
+        const count = (s: string) => byStatus.find((b) => b.status === s)?._count._all ?? 0;
+        airdrop = {
+          wallets: byStatus.reduce((n, b) => n + b._count._all, 0),
+          pending: count('pending'),
+          sent: count('sent'),
+          confirmed: count('confirmed'),
+          firstConfirmedAt: confirmedAt._min.updatedAt ? Math.floor(confirmedAt._min.updatedAt.getTime() / 1000) : null,
+          lastConfirmedAt: confirmedAt._max.updatedAt ? Math.floor(confirmedAt._max.updatedAt.getTime() / 1000) : null,
+        };
       }
       const outcome = last.outcome as { kind: string; channelId?: string };
       const channel = outcome.channelId ? r.channels.find((c) => c.channelId === outcome.channelId) : undefined;
@@ -57,6 +69,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
               weightMinBps,
               weightMaxBps,
               collapseAt: alloc.collapseAt,
+              airdrop,
             }
           : null,
         measurementsSurvived: r.measurements.filter((m) => m.outcomeKind === 'survive').length,

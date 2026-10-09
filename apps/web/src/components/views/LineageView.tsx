@@ -1,12 +1,13 @@
 'use client';
 import Link from 'next/link';
 import { DataRow, HashDisplay, LineageBreadcrumb, Panel, ProofBadge, type AttestationKind } from '@qsd/ui-tokens';
-import { LINEAGE, PAGES, SHARED } from '@/copy';
+import { AIRDROP, LINEAGE, PAGES, SHARED } from '@/copy';
 import { isUnavailable } from '@/lib/api';
 import { formatBps, formatUnits, formatUnix, shortAddress } from '@/lib/format';
 import { routes } from '@/lib/links';
 import { useLineage } from '@/hooks/useApi';
 import { LineageTerminal } from '@/components/terminal/pages';
+import { AirdropFigure, daughterBornAt } from '@/components/AirdropFigure';
 import { ACCENT, PageHero, PageShell } from '@/components/page/PageHero';
 import { CoinLink, Empty, LoadingPanel, Page, ProofLink, TxLink, UnavailablePanel } from '@/components/common';
 
@@ -98,6 +99,9 @@ export function LineageView({ id }: { id: string }) {
               ) : (
                 <p className="text-sm text-muted">{LINEAGE.cohortsEmpty}</p>
               )}
+              <h3 className="mt-5 text-lg">{AIRDROP.title}</h3>
+              <p className="qsd-note mb-3">{AIRDROP.caption}</p>
+              <AirdropFigure collapse={c} daughterBornAt={daughterBornAt(data, c)} />
             </Panel>
           ))}
         </div>

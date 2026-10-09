@@ -74,6 +74,8 @@ export interface CoinSummaryDto {
   ticker: string;
   generation: number;
   lineageId: string;
+  /** The coin this one was born from on collapse; null for a generation-one coin. */
+  motherCa: string | null;
   state: CoinState;
   halfLifeSec: number;
   lastActivityAt: number;
@@ -111,6 +113,17 @@ export interface HoldersResponse {
   source: 'trade-log';
 }
 
+export interface AirdropProgressDto {
+  /** Cohort wallets with a journal entry (pending + sent + confirmed). */
+  wallets: number;
+  pending: number;
+  sent: number;
+  confirmed: number;
+  /** Unix seconds of the first and last confirmed transfer, null until one confirms. */
+  firstConfirmedAt: number | null;
+  lastConfirmedAt: number | null;
+}
+
 export interface LineageCollapseDto {
   motherCa: string;
   motherName: string;
@@ -128,6 +141,8 @@ export interface LineageCollapseDto {
     weightMinBps: number | null;
     weightMaxBps: number | null;
     collapseAt: number;
+    /** The airdrop journal mirror for this table: one entry per cohort wallet, by status. */
+    airdrop: AirdropProgressDto;
   } | null;
   measurementsSurvived: number;
   channelLabel: string | null;

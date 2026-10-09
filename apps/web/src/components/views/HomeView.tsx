@@ -11,6 +11,7 @@ import { liveMeasurements } from '@/store/live';
 import { FieldScene } from '@/components/scenes';
 import { Counters } from '@/components/Counters';
 import { LogList } from '@/components/LogList';
+import { LaunchedList } from '@/components/LaunchedList';
 import { Empty, UnavailablePanel } from '@/components/common';
 import { StackStory } from '@/components/home/StackStory';
 import { DaughterFigure, DotGridFigure, FeatureSection, HalfLifeFigure, RangesFigure } from '@/components/home/FeatureSection';
@@ -70,6 +71,11 @@ export function HomeView() {
               </div>
             ) : null}
           </div>
+          {coins.data && !isUnavailable(coins.data) && coins.data.coins.length > 0 ? (
+            <div className="qsd-live__launched">
+              <LaunchedList coins={coins.data.coins} />
+            </div>
+          ) : null}
           <div className="qsd-live__grid">
             <Counters />
             <LogList />
