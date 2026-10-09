@@ -17,8 +17,7 @@ cp apps/web/.env.example apps/web/.env            # fill in; see the comments
 pnpm install
 pnpm --filter web prisma:validate
 pnpm --filter web prisma:generate
-pnpm --filter web exec prisma migrate dev --name init   # first time (creates the migration)
-pnpm --filter web prisma:migrate                  # deploy migrations
+pnpm --filter web prisma:migrate                  # apply prisma/migrations (skips when DATABASE_URL is unset)
 pnpm --filter web worker                          # BullMQ workers (auto-measure, collapse, burn, ingest, snapshot)
 pnpm --filter web dev                             # http://localhost:3000
 
@@ -26,6 +25,19 @@ pnpm --filter web typecheck
 pnpm --filter web test
 pnpm --filter web build     # needs no database, Redis or chain: every page is force-dynamic
 ```
+
+### Database on Vercel
+
+`pnpm run build` runs `prisma generate`, then `scripts/migrate.mjs`, then `next build`.
+When `DATABASE_URL` is set, the migrate step applies `prisma/migrations` with
+`prisma migrate deploy` (using `DATABASE_URL_UNPOOLED` or `POSTGRES_URL_NON_POOLING`
+when the host provides a direct connection, as Neon on Vercel does). When it is unset,
+the step is skipped and the site builds with "not available" notes. Set
+`QSD_SKIP_MIGRATE=1` to skip it on purpose. A schema change ships as a new migration:
+`pnpm --filter web exec prisma migrate dev --name <change>` against a local database.
+
+Redis must be reachable over the plain Redis protocol (`redis://` or `rediss://` in
+`REDIS_URL`); the app uses ioredis and BullMQ, not a REST client.
 
 Register the Helius webhook for every coin mint at
 `POST https://<host>/api/webhooks/helius` with `authHeader = QSD_WEBHOOK_SECRET`

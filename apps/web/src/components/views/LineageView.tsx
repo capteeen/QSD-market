@@ -6,6 +6,7 @@ import { isUnavailable } from '@/lib/api';
 import { formatBps, formatUnits, formatUnix, shortAddress } from '@/lib/format';
 import { routes } from '@/lib/links';
 import { useLineage } from '@/hooks/useApi';
+import { LineageTerminal } from '@/components/terminal/pages';
 import { CoinLink, Empty, LoadingPanel, Page, PageHeader, ProofLink, TxLink, UnavailablePanel } from '@/components/common';
 
 export function LineageView({ id }: { id: string }) {
@@ -36,6 +37,8 @@ export function LineageView({ id }: { id: string }) {
           renderLink={(n, children) => <Link href={n.href!}>{children}</Link>}
         />
       </div>
+      <LineageTerminal data={data} />
+      <div className="mb-6" />
       {data.collapses.length === 0 ? (
         <Empty eyebrow="NO COLLAPSE YET" sentence="No coin in this lineage has collapsed; the lineage is its generation-one coin." />
       ) : (

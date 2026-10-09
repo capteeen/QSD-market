@@ -30,5 +30,8 @@ export function renderWithQuery(ui: ReactElement): RenderResult {
 export function textWithoutFooter(container: HTMLElement): string {
   const clone = container.cloneNode(true) as HTMLElement;
   clone.querySelector('[data-testid="footer"]')?.remove();
+  // Terminal chrome (title bars, typed commands) is static UI, and the /how XMSS terminal
+  // prints hashes it computes in the browser; neither is API data.
+  clone.querySelectorAll('[data-term-chrome], [data-testid="term-xmss"]').forEach((n) => n.remove());
   return clone.textContent ?? '';
 }

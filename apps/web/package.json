@@ -4,14 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && node scripts/migrate.mjs && next build",
     "start": "next start",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "worker": "tsx src/workers/index.ts",
     "prisma:validate": "sh -c 'DATABASE_URL=\"${DATABASE_URL:-postgresql://validate:validate@localhost:5432/validate}\" prisma validate'",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate deploy",
+    "prisma:migrate": "node scripts/migrate.mjs",
     "tailwind:preset": "tsx scripts/tailwind-preset.ts",
     "predev": "pnpm run tailwind:preset",
     "prebuild": "pnpm run tailwind:preset"

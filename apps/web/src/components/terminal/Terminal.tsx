@@ -157,6 +157,27 @@ export function Waiting({ cmd }: { cmd: string }) {
   );
 }
 
+/** Prompt identity, re-exported for pages that compose their own title bars. */
+export const TERM_USER = TERM.user;
+export const TERM_HOST = TERM.host;
+
+/** Prints a list of lines progressively; the cursor sits on the last line while printing. */
+export function Reveal({ lines, revealKey, stepMs }: { lines: ReactNode[]; revealKey: unknown; stepMs?: number }) {
+  const shown = useReveal(lines.length, revealKey, stepMs);
+  return (
+    <>
+      {lines.slice(0, shown).map((l, i) => (
+        <div key={i}>{l}</div>
+      ))}
+      {shown < lines.length ? <Cursor /> : null}
+    </>
+  );
+}
+
+export function trunc(s: string, head = 24): string {
+  return s.length > head ? `${s.slice(0, head)}…` : s;
+}
+
 export function hex(b: Uint8Array, chars?: number): string {
   let s = '';
   for (const x of b) s += x.toString(16).padStart(2, '0');
