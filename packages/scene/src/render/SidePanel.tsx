@@ -129,7 +129,7 @@ export function SidePanel({ onSkip, sections = ALL, sound, style }: SidePanelPro
             <HashDisplay hash={hex(s.keygen.lastHash)} unavailable={{ reason: 'no hash computed yet' }} />
           </div>
           {/* denominators come from keygenStart (leaves, chains, links); before it announces them they are 0 — never a constant of the construction */}
-          <DataRow label="links grown" value={`${s.keygen.chainSteps - s.keygen.duplicateSteps} / ${totals.links}`} />
+          <DataRow label="links shown" value={`${s.keygen.chainSteps - s.keygen.duplicateSteps} / ${totals.links}`} />
           <DataRow label="chains complete" value={`${s.keygen.chainsComplete} / ${totals.chains}`} />
           <DataRow label="leaves formed" value={`${s.keygen.leavesFormed} / ${totals.leaves}`} />
         </Panel>

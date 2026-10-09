@@ -94,12 +94,26 @@ export function LaunchView() {
   const preset = presets.some((p) => p.id === presetChoice) ? presetChoice : presets[0]!.id;
   const devBuyLamports = q && q.devBuyLamports !== null ? BigInt(q.devBuyLamports) : null;
   const total = q && q.launchCostLamports !== null && q.identityReserveLamports !== null && devBuyLamports !== null ? BigInt(q.launchCostLamports) + BigInt(q.identityReserveLamports) + devBuyLamports : null;
-  const canLaunch = !!q && !!q.payTo && total !== null && !!publicKey && !!image && name.trim().length > 0 && /^[A-Za-z0-9]{1,10}$/.test(ticker) && phase === 'form';
+  const canLaunch = !!q && !!q.payTo && total !== null && !!publicKey && !!image && name.trim().length > 0 && /^[A-Za-z0-9]{1,10}$/.test(ticker) && (phase === 'form' || phase === 'failed');
 
   const launch = async () => {
     if (!q || !q.payTo || total === null || !publicKey || !image) return;
     setError(null);
     setPhase('paying');
+    setStatus(LAUNCH.form.checking);
+    // Never ask for payment while a service the launch needs is down.
+    try {
+      const pre = (await (await fetch('/api/launch/preflight', { cache: 'no-store' })).json()) as { ok?: boolean; problems?: string[]; error?: string };
+      if (!pre.ok) {
+        setPhase('failed');
+        setError(`${LAUNCH.notCharged} ${pre.problems?.join('; ') ?? pre.error ?? 'preflight failed'}`);
+        return;
+      }
+    } catch (e) {
+      setPhase('failed');
+      setError(`${LAUNCH.notCharged} ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
     setStatus(LAUNCH.form.paying);
     let paymentSignature: string;
     try {
@@ -277,7 +291,7 @@ export function LaunchView() {
               {!publicKey ? <Empty eyebrow={LAUNCH.noWalletEyebrow} sentence={LAUNCH.noWalletSentence} /> : null}
               <div className="qsd-form__actions">
                 <button type="submit" className="qsd-btn" data-primary="true" disabled={!canLaunch}>
-                  {phase === 'paying' ? LAUNCH.form.paying : LAUNCH.form.submit}
+                  {phase === 'paying' ? status ?? LAUNCH.form.paying : LAUNCH.form.submit}
                 </button>
                 {error ? (
                   <p className="qsd-form__error">

@@ -260,7 +260,7 @@ describe('a successful devnet launch', () => {
   it('frame sequence: payment → mint → identity (crypto) → superposition → quantum → crypto (signing) → chain → launch → lineage → done; no error', () => {
     const ev = frames.map((f) => f.event);
     expect(ev).not.toContain('error');
-    const order = ['status', 'status', 'status', 'crypto', 'superposition', 'quantum', 'crypto', 'chain', 'chain', 'status', 'launch', 'lineage', 'done'];
+    const order = ['status', 'status', 'status', 'crypto', 'superposition', 'quantum', 'crypto', 'chain', 'chain', 'status', 'launch', 'status', 'lineage', 'done'];
     const compact = ev.filter((e, i) => e !== ev[i - 1] || e === 'status' || e === 'chain');
     expect(compact).toEqual(order);
     expect(json(frames[0]!)).toEqual({ step: 'payment', message: 'verifying payment' });
@@ -294,8 +294,12 @@ describe('a successful devnet launch', () => {
     const sent = cryptoEvents(frames);
     const KEYGEN = new Set<CryptoEvent['type']>(['keygenStart', 'chainStep', 'chainComplete', 'leafFormed', 'treeLevelFused', 'rootReady']);
     const keygenSent = sent.filter((e) => KEYGEN.has(e.type));
-    const rawKeygen = raw.filter((e) => KEYGEN.has(e.type));
+    // the stream carries every keygen event except chainSteps outside the sampled leaves
+    const { streamedCryptoEvent } = await import('@/server/launch');
+    const rawKeygen = raw.filter((e) => KEYGEN.has(e.type) && streamedCryptoEvent(e));
     expect(keygenSent.length).toBe(rawKeygen.length);
+    expect(keygenSent.filter((e) => e.type === 'chainComplete').length).toBe(raw.filter((e) => e.type === 'chainComplete').length);
+    expect(keygenSent.length).toBeLessThan(raw.filter((e) => KEYGEN.has(e.type)).length / 10);
     let secretSteps = 0;
     let publicSteps = 0;
     for (let i = 0; i < keygenSent.length; i++) {

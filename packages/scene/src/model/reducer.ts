@@ -579,11 +579,15 @@ export function authHash(state: SceneState, level: number): Uint8Array | null {
   return state.signature.authPath.subarray(level * HASH_BYTES, (level + 1) * HASH_BYTES);
 }
 
-/** Fraction of the whole key generation that has arrived, 0..1 (274 432 chainSteps = 1). */
+/**
+ * Fraction of the whole key generation that has arrived, 0..1, counted in
+ * completed chains (17 152 = 1). Every chainComplete is streamed; chainStep
+ * events are streamed for a sample of leaves only (apps/web launch stream).
+ */
 export function keygenProgress(state: SceneState): number {
   const k = state.keygen;
-  const total = (k.leaves || LEAVES) * (k.chains || CHAINS) * (k.links || LINKS);
-  return total === 0 ? 0 : Math.min(1, k.chainSteps / total);
+  const total = (k.leaves || LEAVES) * (k.chains || CHAINS);
+  return total === 0 ? 0 : Math.min(1, k.chainsComplete / total);
 }
 
 /** Fraction of the Merkle fuse that has arrived, 0..1. */
