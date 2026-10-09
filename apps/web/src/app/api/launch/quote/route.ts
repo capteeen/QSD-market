@@ -15,6 +15,7 @@ export async function GET(): Promise<NextResponse> {
     const reasons: LaunchQuoteResponse['reasons'] = {};
     if (costs.launchCostLamports === null) reasons.launchCost = 'QSD_LAUNCH_COST_LAMPORTS is unset';
     if (costs.identityReserveLamports === null) reasons.identityReserve = 'QSD_IDENTITY_RESERVE_LAMPORTS is unset';
+    if (costs.devBuyLamports === null) reasons.devBuy = 'QSD_LAUNCH_DEV_BUY_LAMPORTS is unset';
     let payTo: string | null = null;
     const cs = chainStatus();
     if (cs.configured) {
@@ -30,6 +31,7 @@ export async function GET(): Promise<NextResponse> {
       cluster: serverCluster(),
       launchCostLamports: costs.launchCostLamports?.toString() ?? null,
       identityReserveLamports: costs.identityReserveLamports?.toString() ?? null,
+      devBuyLamports: costs.devBuyLamports?.toString() ?? null,
       payTo: g.error ? null : payTo,
       reasons,
     };

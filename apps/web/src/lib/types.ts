@@ -209,8 +209,10 @@ export interface LaunchQuoteResponse {
   cluster: 'devnet' | 'mainnet-beta';
   launchCostLamports: string | null;
   identityReserveLamports: string | null;
+  /** Fixed dev buy every launch pays for. */
+  devBuyLamports: string | null;
   payTo: string | null;
-  reasons: { launchCost?: string; identityReserve?: string; payTo?: string };
+  reasons: { launchCost?: string; identityReserve?: string; devBuy?: string; payTo?: string };
 }
 
 export interface MeasureChallengeResponse {

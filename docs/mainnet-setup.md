@@ -36,19 +36,32 @@ Save `qsd-secrets.env` in a password manager, then delete the file.
 
 When the site is live, register the Helius webhook at `https://<your-domain>/api/webhooks/helius` (Helius dashboard → Webhooks, type *enhanced*), with **Auth Header** set to your `QSD_WEBHOOK_SECRET`.
 
-## 3. Make two choices
+## 3. Set the launch price
 
-| Variable | Meaning |
-|---|---|
-| `QSD_LAUNCH_COST_LAMPORTS` | What a user pays to launch a coin, in lamports (1 SOL = 1 000 000 000). |
-| `QSD_IDENTITY_RESERVE_LAMPORTS` | The part of that fee held back to pay for the coin's future on-chain anchors. |
-| `QSD_DAUGHTER_DEV_BUY_SOL` | SOL the protocol buys of each daughter at birth. Use `0` for none. |
+A user pays the sum of three amounts, in lamports (1 SOL = 1 000 000 000). The values below make a launch cost 0.15 SOL.
 
-Until the two lamport values are set, `/launch` says "not available" and refuses to launch.
+| Variable | Value | Meaning |
+|---|---|---|
+| `QSD_LAUNCH_COST_LAMPORTS` | `40000000` | Launch fee (0.04 SOL): pays for creating the coin and its proof transactions. |
+| `QSD_IDENTITY_RESERVE_LAMPORTS` | `10000000` | Identity reserve (0.01 SOL): pays for the coin's future on-chain signatures. |
+| `QSD_LAUNCH_DEV_BUY_LAMPORTS` | `100000000` | Fixed dev buy (0.10 SOL). Its tokens stay with the protocol and fund the coin's collapse reward, so it must be above 0 on mainnet. |
+
+Until all three are set, `/launch` says "not available" and refuses to launch.
+
+**Collapses are paid by the fee wallet, not by users.** Each daughter is launched with a dev buy just large enough to cover its airdrop pool (4–5 % of supply with `genesis.example.json`, about 1.2–1.5 SOL, estimated from pump.fun's starting price). If the mother coin's dev-buy tokens don't cover the collapse reward, the wallet buys the difference from the mother's curve. A collapse the wallet can't afford stops and resumes after you top it up. Two limits cap what one collapse can spend:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `QSD_DAUGHTER_DEV_BUY_MAX_SOL` | `2` | Largest daughter dev buy allowed. |
+| `QSD_REWARD_SHORTFALL_MAX_SOL` | `0.5` | Largest reward top-up buy allowed. |
+
+Launch fees leave only about 0.02 SOL each after costs (estimate), so expect to fund collapses yourself.
 
 ## 4. Launch the $QSD coin
 
 `QSD_TOKEN_MINT` is the address of the $QSD coin itself. Launch it on pump.fun from the fee wallet, then paste its mint address. Until it is set, there is no hourly burn and `/burns` says so. Everything else works without it.
+
+The burn only spends creator fees the fee wallet has collected from its pump.fun creator vault. Your top-ups and users' launch payments are never counted as fees, so funding the wallet is safe with the burn on.
 
 ## 5. Fixed values
 

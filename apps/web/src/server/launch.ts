@@ -102,6 +102,8 @@ export function validateLaunchForm(f: Partial<LaunchForm>): asserts f is LaunchF
 export interface LaunchCosts {
   launchCostLamports: bigint | null;
   identityReserveLamports: bigint | null;
+  /** The fixed dev buy every launch pays for (QSD_LAUNCH_DEV_BUY_LAMPORTS); it funds the coin's collapse reward. */
+  devBuyLamports: bigint | null;
 }
 
 export function launchCosts(): LaunchCosts {
@@ -110,18 +112,21 @@ export function launchCosts(): LaunchCosts {
     if (!v || !/^\d+$/.test(v.trim())) return null;
     return BigInt(v.trim());
   };
-  return { launchCostLamports: read('QSD_LAUNCH_COST_LAMPORTS'), identityReserveLamports: read('QSD_IDENTITY_RESERVE_LAMPORTS') };
+  return { launchCostLamports: read('QSD_LAUNCH_COST_LAMPORTS'), identityReserveLamports: read('QSD_IDENTITY_RESERVE_LAMPORTS'), devBuyLamports: read('QSD_LAUNCH_DEV_BUY_LAMPORTS') };
 }
 
 /** The wallet must have paid launch cost + identity reserve + dev buy to the protocol creator in `paymentSignature`. */
 async function verifyPayment(form: LaunchForm, payTo: PublicKey): Promise<bigint> {
   const costs = launchCosts();
-  if (costs.launchCostLamports === null || costs.identityReserveLamports === null) {
-    throw new LaunchValidationError('launch cost or identity reserve is not configured (QSD_LAUNCH_COST_LAMPORTS / QSD_IDENTITY_RESERVE_LAMPORTS)');
+  if (costs.launchCostLamports === null || costs.identityReserveLamports === null || costs.devBuyLamports === null) {
+    throw new LaunchValidationError('launch cost, identity reserve or dev buy is not configured (QSD_LAUNCH_COST_LAMPORTS / QSD_IDENTITY_RESERVE_LAMPORTS / QSD_LAUNCH_DEV_BUY_LAMPORTS)');
   }
-  const devBuyLamports = BigInt(Math.round(form.devBuySol * 1e9));
-  const total = costs.launchCostLamports + costs.identityReserveLamports + devBuyLamports;
   const chain = getChain();
+  // The dev buy is fixed: on mainnet the treasury's dev-buy tokens are what a collapse burns and pays the measurer with.
+  if (chain.config.cluster === 'mainnet-beta' && costs.devBuyLamports <= 0n) throw new LaunchValidationError('QSD_LAUNCH_DEV_BUY_LAMPORTS must be positive on mainnet, or the coin could never collapse');
+  const devBuyLamports = BigInt(Math.round(form.devBuySol * 1e9));
+  if (devBuyLamports !== costs.devBuyLamports) throw new LaunchValidationError(`dev buy must be exactly ${costs.devBuyLamports} lamports`);
+  const total = costs.launchCostLamports + costs.identityReserveLamports + devBuyLamports;
   const tx = await chain.connection.getTransaction(form.paymentSignature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
   if (!tx || !tx.meta) throw new LaunchValidationError('payment transaction not found or not confirmed');
   if (tx.meta.err) throw new LaunchValidationError('payment transaction failed on-chain');

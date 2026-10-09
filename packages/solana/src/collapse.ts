@@ -40,6 +40,7 @@ import { LeasedJournal, type JournalStore, type Leasable, type Sleep } from './j
 import type { KeyVault } from './keys.js';
 import { launchDaughter, type LaunchDeps, type LaunchResult } from './launch.js';
 import type { ChainObserver } from './observer.js';
+import { buyCostLamports, devBuySolForUnits, type BondingCurveState } from './pump.js';
 import type { IdentityReserve } from './reserve.js';
 import { holderSnapshotAtSlot, type SnapshotDeps, type SnapshotResult } from './snapshot.js';
 import { sendTracked, settle, type ChainReader, type SentTransaction, type TransactionSender } from './sender.js';
@@ -109,7 +110,22 @@ export interface CollapseDeps {
   airdropJournal: AirdropJournal;
   /** The mother's image bytes for the daughter's metadata (fetched by the app). */
   imageBytes: () => Promise<Uint8Array>;
-  devBuySol: number;
+  /**
+   * Mainnet: pump.fun access for the money steps. The daughter's dev buy is
+   * sized to its resolved airdrop pool, and a treasury short of the mother
+   * units a collapse reward removes buys the difference on the mother's curve.
+   */
+  pump?: {
+    /** The mother's bonding curve, or undefined if it has none. */
+    curve(mint: PublicKey): Promise<BondingCurveState | undefined>;
+    buy(p: { mint: PublicKey; units: bigint; decimals: number }, onSent: (sent: SentTransaction) => Promise<void>): Promise<string>;
+    /** Refuse a daughter launch whose dev buy would cost more than this (SOL). */
+    maxDaughterDevBuySol: number;
+    /** Refuse a reward shortfall buy that would cost more than this (SOL). */
+    maxShortfallSol: number;
+    /** Kept back for transaction costs when checking the wallet can pay (lamports). Default 0.03 SOL. */
+    overheadLamports?: bigint;
+  };
   /** Devnet only: daughter supply to mint. */
   devnetSupply?: { units: bigint; decimals: number };
   /**
@@ -235,6 +251,41 @@ async function executeCollapseLeased(mother: Coin, deps: CollapseDeps, d: Collap
     return result;
   };
 
+  /** Buy `units` mother units on its bonding curve; the signature is journalled under 'rewards.shortfall-buy' so a resume never buys twice. */
+  const buyRewardShortfall = async (units: bigint): Promise<void> => {
+    const pump = deps.pump!;
+    const key = 'rewards.shortfall-buy';
+    const rec = d.sends[key];
+    if (rec?.status === 'confirmed') return;
+    if (rec?.status === 'sent') {
+      const s = await settle(deps.sender, rec.signature, rec.lastValidBlockHeight);
+      rec.status = s === 'finalized' ? 'confirmed' : s;
+      await save();
+      if (rec.status === 'confirmed') return;
+    }
+    const curve = await pump.curve(motherMint);
+    if (!curve || curve.complete) {
+      throw new ChainUnavailableError(`treasury is ${units} mother units short of the collapse reward and ${mother.ca} has left its bonding curve; buy ${units} units into the fee wallet to resume`);
+    }
+    const cost = buyCostLamports(curve, units);
+    const max = BigInt(Math.round(pump.maxShortfallSol * 1e9));
+    if (cost > max) throw new ChainUnavailableError(`buying the ${units}-unit reward shortfall would cost ~${cost} lamports, above the ${max} limit; buy them into the fee wallet to resume`);
+    await assertAffordable(cost, 'the collapse reward shortfall');
+    const sig = await pump.buy({ mint: motherMint, units, decimals: mother.supply.decimals }, async (st) => {
+      d.sends[key] = { signature: st.signature, lastValidBlockHeight: st.lastValidBlockHeight, status: 'sent', at: new Date().toISOString() };
+      await save();
+    });
+    const cur = d.sends[key];
+    if (cur) cur.status = 'confirmed';
+    await save();
+    log(`collapse ${mother.ca}: bought ${units} mother units for the reward (~${cost} lamports) in ${sig}`);
+  };
+  const assertAffordable = async (lamports: bigint, what: string): Promise<void> => {
+    const need = lamports + (deps.pump?.overheadLamports ?? 30_000_000n);
+    const balance = await deps.reader.getBalanceLamports(treasury);
+    if (balance < need) throw new ChainUnavailableError(`fee wallet holds ${balance} lamports but ${what} needs ~${need}; top it up to resume this collapse`);
+  };
+
   // 1. snapshot at the collapse slot — before any reward moves mother tokens
   const snapshot = await step('snapshot', () =>
     holderSnapshotAtSlot(
@@ -256,7 +307,11 @@ async function executeCollapseLeased(mother: Coin, deps: CollapseDeps, d: Collap
   const rewards = await step('rewards', async () => {
     const r = collapseRewards(mother.supply.remainingUnits);
     if (!d.sends['rewards.burn']) {
-      const held = await deps.reader.getTokenBalance(treasury, motherMint);
+      let held = await deps.reader.getTokenBalance(treasury, motherMint);
+      if (held < r.removedUnits && deps.cluster === 'mainnet-beta' && deps.pump) {
+        await buyRewardShortfall(r.removedUnits - held);
+        held = await deps.reader.getTokenBalance(treasury, motherMint);
+      }
       if (held < r.removedUnits) {
         throw new ChainUnavailableError(`treasury holds ${held} mother units but the collapse reward removes ${r.removedUnits}; cannot execute rewards honestly`);
       }
@@ -297,8 +352,9 @@ async function executeCollapseLeased(mother: Coin, deps: CollapseDeps, d: Collap
     return { identityRoot: entry.identityRoot };
   });
 
-  // 5. launch
+  // 5. launch, with a dev buy that covers the airdrop pool (pump.fun sends the creator's dev buy to the treasury)
   const params = deriveDaughterParams(mother, collapseAt);
+  const poolUnits = resolvePoolUnits(mother.superposition, last.outcome.poolPointPpm);
   const launch = await step('daughter-launch', async () => {
     const mintKp = await deps.vault.loadKeypair(key.vaultLabel);
     const launchKey = 'daughter-launch.create';
@@ -334,12 +390,22 @@ async function executeCollapseLeased(mother: Coin, deps: CollapseDeps, d: Collap
         return res;
       }
     }
+    let devBuySol = 0;
+    if (deps.cluster === 'mainnet-beta') {
+      if (!deps.pump) throw new ChainConfigError('mainnet collapse needs pump deps to size the daughter dev buy');
+      devBuySol = devBuySolForUnits(poolUnits);
+      if (devBuySol > deps.pump.maxDaughterDevBuySol) {
+        throw new ChainUnavailableError(`the daughter's airdrop pool of ${poolUnits} units needs a ~${devBuySol} SOL dev buy, above the ${deps.pump.maxDaughterDevBuySol} SOL limit; launch refused`);
+      }
+      await assertAffordable(BigInt(Math.round(devBuySol * 1e9)), `the daughter's ${devBuySol} SOL dev buy`);
+      log(`collapse ${mother.ca}: daughter dev buy ${devBuySol} SOL for a pool of ${poolUnits} units`);
+    }
     const plan = {
       name: params.name,
       symbol: mother.ticker,
       description: `Daughter of ${mother.name} (${mother.ca}), generation ${params.generation}. qsd.market`,
       imageBytes: await deps.imageBytes(),
-      devBuySol: deps.devBuySol,
+      devBuySol,
       mint: mintKp,
       ...(deps.devnetSupply ? { devnetSupplyUnits: deps.devnetSupply.units, devnetDecimals: deps.devnetSupply.decimals } : {}),
     };
@@ -362,7 +428,6 @@ async function executeCollapseLeased(mother: Coin, deps: CollapseDeps, d: Collap
 
   // 6. allocation
   const alloc = await step('allocation', async () => {
-    const poolUnits = resolvePoolUnits(mother.superposition, last.outcome.poolPointPpm);
     const held = await deps.reader.getTokenBalance(treasury, new PublicKey(daughterCa));
     if (held < poolUnits) {
       throw new ChainUnavailableError(`treasury holds ${held} daughter units but the resolved pool is ${poolUnits}; the dev buy must cover the allocation pool`);
