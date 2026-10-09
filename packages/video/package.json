@@ -1,0 +1,34 @@
+{
+  "name": "@qsd/video",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The 20-second product video, rendered frame by frame from the site's own 3D stack scene and terminal panels.",
+  "scripts": {
+    "dev": "vite --config vite.config.ts",
+    "fonts": "sh scripts/fonts.sh",
+    "render": "tsx scripts/render.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@qsd/crypto": "workspace:*",
+    "@qsd/protocol": "workspace:*",
+    "@qsd/scene": "workspace:*",
+    "@qsd/ui-tokens": "workspace:*",
+    "@react-three/fiber": "8.18.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "0.170.0",
+    "zustand": "5.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "playwright-core": "1.56.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.11"
+  }
+}
