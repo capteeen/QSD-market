@@ -7,7 +7,9 @@ import { isUnavailable } from '@/lib/api';
 import { fieldCoin, liveDecay, uncertainty } from '@/lib/coin';
 import { formatHalfLife, formatPercent } from '@/lib/format';
 import { routes } from '@/lib/links';
-import { useCoins } from '@/hooks/useApi';
+import { useCoins, useStats } from '@/hooks/useApi';
+import { StatusTerminal } from '@/components/terminal/pages';
+import { LogList } from '@/components/LogList';
 import { useNow } from '@/hooks/useNow';
 import { liveMeasurements } from '@/store/live';
 import { FieldScene } from '@/components/scenes';
@@ -25,6 +27,7 @@ function matches(c: CoinSummaryDto, f: Filter): boolean {
 
 export function FieldView() {
   const q = useCoins();
+  const stats = useStats();
   const now = useNow();
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('decay');
@@ -61,6 +64,10 @@ export function FieldView() {
       </PageHeader>
       <div className="mb-6 h-[50vh] min-h-[360px] w-full border-card border-border">
         <FieldScene coins={list.map((c) => fieldCoin(c, now))} liveMeasurements={liveMeasurements} showEmptyState={false} />
+      </div>
+      <div className="mb-6 grid gap-6 lg:grid-cols-[1fr_2fr]">
+        <StatusTerminal q={stats} />
+        <LogList limit={20} />
       </div>
       {q.isPending ? (
         <LoadingPanel eyebrow={FIELD.eyebrow} />

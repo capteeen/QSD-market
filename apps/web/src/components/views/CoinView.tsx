@@ -26,6 +26,7 @@ import { useNow } from '@/hooks/useNow';
 import { MeasurementScene } from '@/components/scenes';
 import { CoinLink, Empty, LoadingPanel, Page, PageHeader, StateLabel, TxLink, UnavailablePanel } from '@/components/common';
 import { useQueryClient } from '@tanstack/react-query';
+import { CoinTerminal } from '@/components/terminal/pages';
 
 export function CoinView({ ca }: { ca: string }) {
   const q = useCoin(ca);
@@ -83,6 +84,8 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
         </Link>
       </div>
       {coin.state === 'tunnelled' ? <p className="mb-6 text-sm text-tunnel">{COIN.tunnelledNote}</p> : null}
+      <CoinTerminal coin={coin} />
+      <div className="mb-6" />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel eyebrow="IDENTITY">

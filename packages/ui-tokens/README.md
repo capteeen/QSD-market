@@ -21,18 +21,18 @@ Source of truth: `src/tokens.ts` (typed) mirrored by `src/tokens.css`
 
 | Token | CSS var | Value | Use |
 | --- | --- | --- | --- |
-| `colors.void` | `--qsd-void` | `#06080A` | Page background |
-| `colors.panel` | `--qsd-panel` | `#0D1117` | Raised surfaces |
-| `colors.border` | `--qsd-border` | `#1C2430` | 1px rules, 2px card borders |
-| `colors.probability` | `--qsd-probability` | `#4DD0E1` | Superposition, verified, alive |
-| `colors.collapse` | `--qsd-collapse` | `#E91E63` | Collapse, invalid |
-| `colors.decay` | `--qsd-decay` | `#FFB300` | Decay in progress, pending |
-| `colors.tunnel` | `--qsd-tunnel` | `#F0F4F8` | Tunnelled (came back as itself) |
-| `colors.dead` | `--qsd-dead` | `#3A4049` | Dead, unavailable, disabled |
-| `colors.text` | `--qsd-text` | `#D7DEE6` | Body text |
-| `colors.muted` | `--qsd-muted` | `#6B7684` | Labels, eyebrows, reasons |
+| `colors.void` | `--qsd-void` | `#252423` | Page background |
+| `colors.panel` | `--qsd-panel` | `#2E2D2C` | Raised surfaces |
+| `colors.border` | `--qsd-border` | `#3D3B39` | 1px rules, 1px card borders |
+| `colors.probability` | `--qsd-probability` | `#BFEF5A` | Superposition, verified, alive |
+| `colors.collapse` | `--qsd-collapse` | `#FF6B5E` | Collapse, invalid |
+| `colors.decay` | `--qsd-decay` | `#F5B04B` | Decay in progress, pending |
+| `colors.tunnel` | `--qsd-tunnel` | `#F5F2EC` | Tunnelled (came back as itself) |
+| `colors.dead` | `--qsd-dead` | `#57544F` | Dead, unavailable, disabled |
+| `colors.text` | `--qsd-text` | `#F2EFE9` | Body text |
+| `colors.muted` | `--qsd-muted` | `#9A958D` | Labels, eyebrows, reasons |
 | `glassEdge` | `--qsd-glass-edge` | `rgba(77,208,225,0.35)` | Refractive inner edge of panels |
-| `glow.compute` | `--glow-compute` | magenta `#FF5CD6` → white `#FFFFFF` box-shadow stack | Live computation |
+| `glow.compute` | `--glow-compute` | peach `#F6C9A6` → white `#FFFFFF` box-shadow stack | Live computation |
 | — | `--glow-compute-radial` | radial-gradient of the same | Quantum objects while computing |
 | `fonts.mono` | `--font-mono` | JetBrains Mono | **All** numbers, hashes, proofs, logs, labels |
 | `fonts.heading` | `--font-heading` | Space Grotesk 600 | Headings only |

@@ -116,13 +116,14 @@ describe('source scan: no hard-coded numeric copy in components; stories label e
   });
 });
 
-describe('tokens match spec §6 exactly', () => {
+describe('tokens match the 2026-10 redesign palette exactly (jafar replaced spec §6’s cold palette with the animejs.com-style warm one)', () => {
   it('colour hexes', () => {
     expect(colors).toEqual({
-      void: '#06080A', panel: '#0D1117', border: '#1C2430', probability: '#4DD0E1', collapse: '#E91E63',
-      decay: '#FFB300', tunnel: '#F0F4F8', dead: '#3A4049', text: '#D7DEE6', muted: '#6B7684',
+      void: '#252423', panel: '#2E2D2C', border: '#3D3B39', probability: '#BFEF5A', collapse: '#FF6B5E',
+      decay: '#F5B04B', tunnel: '#F5F2EC', dead: '#57544F', text: '#F2EFE9', muted: '#9A958D',
+      gold: '#F0A845', ice: '#6FA2FF', paper: '#D9D7D2', ink: '#262524', line: '#8A8781', rim: '#F6C9A6', teal: '#5CDFB4', violet: '#B18BFF',
     });
-    expect(glassEdge).toBe('rgba(77,208,225,0.35)');
+    expect(glassEdge).toBe('rgba(245,242,236,0.06)');
   });
   it('motion: cubic-bezier(0.4,0,0.2,1), ≥700ms, only collapse snaps', () => {
     expect(motion.easeViscous.replace(/\s/g, '')).toBe('cubic-bezier(0.4,0,0.2,1)');
@@ -134,8 +135,8 @@ describe('tokens match spec §6 exactly', () => {
     expect(fonts.mono).toMatch(/JetBrains Mono/);
     expect(fonts.heading).toMatch(/Space Grotesk/);
     expect(fonts.headingWeight).toBe(600);
-    expect(shape.cardBorderWidth).toBe('2px');
-    expect(shape.cardRadius).toBe('0px');
+    expect(shape.cardBorderWidth).toBe('1px');
+    expect(shape.cardRadius).toBe('8px');
     expect(shape.ruleWidth).toBe('1px');
   });
   it('INFO: quantumStateColor adds states ("decaying", "dead") that are not in the spec §5 Coin.state union', () => {
