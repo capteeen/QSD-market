@@ -20,8 +20,8 @@ import { LaunchPreflightTerminal, LaunchStreamTerminal, cryptoStreamLines, type 
 
 type Phase = 'form' | 'paying' | 'launching' | 'done' | 'failed';
 
-/** The server's refusal for a payment that already bought a coin (server/launch.ts). */
-const PAYMENT_USED = 'this payment was already used for a launch';
+/** Server refusals that mean the remembered payment can never buy a launch (server/launch.ts verifyPayment). */
+const BAD_PAYMENT = /this payment was already used|^payment |payment transaction|the wallet did not sign the payment/;
 
 /** Parses `event:`/`data:` frames from a fetch body. */
 async function* sseFrames(body: ReadableStream<Uint8Array>): AsyncGenerator<{ event: string; data: string }> {
@@ -128,8 +128,18 @@ export function LaunchView() {
   const canLaunch = !!q && !!q.payTo && total !== null && !!publicKey && !!image && name.trim().length > 0 && /^[A-Za-z0-9]{1,10}$/.test(ticker) && (phase === 'form' || phase === 'failed');
   const [pending, setPending] = useState<PendingPayment | null>(null);
   useEffect(() => {
-    setPending(publicKey ? readPendingPayment(publicKey.toBase58()) : null);
-  }, [publicKey, phase]);
+    if (!publicKey) {
+      setPending(null);
+      return;
+    }
+    // /launch?payment=<signature> recovers a payment made before this page remembered payments.
+    // The server still checks it: signed by this wallet, enough lamports, never used.
+    const fromUrl = new URLSearchParams(window.location.search).get('payment');
+    if (fromUrl && /^[1-9A-HJ-NP-Za-km-z]{64,100}$/.test(fromUrl) && total !== null && !readPendingPayment(publicKey.toBase58())) {
+      writePendingPayment(publicKey.toBase58(), { signature: fromUrl, lamports: total.toString() });
+    }
+    setPending(readPendingPayment(publicKey.toBase58()));
+  }, [publicKey, phase, total]);
   const reusable = pending && total !== null && pending.lamports === total.toString() ? pending : null;
 
   const launch = async () => {
@@ -180,7 +190,7 @@ export function LaunchView() {
     }
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
-      if (text.includes(PAYMENT_USED)) writePendingPayment(wallet, null);
+      if (BAD_PAYMENT.test(text)) writePendingPayment(wallet, null);
       setPhase('failed');
       setError(text || `HTTP ${res.status}`);
       return;
@@ -249,7 +259,7 @@ export function LaunchView() {
             print({ channel: 'done', text: LAUNCH.done, tone: 'ok' });
             break;
           case 'error':
-            if ((JSON.parse(f.data) as { message: string }).message.includes(PAYMENT_USED)) writePendingPayment(wallet, null);
+            if (BAD_PAYMENT.test((JSON.parse(f.data) as { message: string }).message)) writePendingPayment(wallet, null);
             setPhase('failed');
             setError((JSON.parse(f.data) as { message: string }).message);
             print({ channel: 'error', text: (JSON.parse(f.data) as { message: string }).message, tone: 'fail' });
