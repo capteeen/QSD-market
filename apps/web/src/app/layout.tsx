@@ -6,9 +6,14 @@ import { Providers } from '@/components/Providers';
 import { AppShell } from '@/components/AppShell';
 import { SITE_NAME, SITE_TAGLINE } from '@/copy';
 
+const DESCRIPTION = 'A pump.fun launchpad where a coin that stops trading decays into a daughter coin, resolved by attested quantum randomness.';
+
 export const metadata: Metadata = {
   title: `${SITE_NAME} — ${SITE_TAGLINE}`,
-  description: 'A pump.fun launchpad where a coin that stops trading decays into a daughter coin, resolved by attested quantum randomness.',
+  description: DESCRIPTION,
+  // icon.png, apple-icon.png, favicon.ico and opengraph-image.png beside this file are picked up by the app router's file conventions.
+  openGraph: { title: `${SITE_NAME} — ${SITE_TAGLINE}`, description: DESCRIPTION, siteName: SITE_NAME, type: 'website' },
+  twitter: { card: 'summary_large_image', title: `${SITE_NAME} — ${SITE_TAGLINE}`, description: DESCRIPTION },
 };
 
 export const dynamic = 'force-dynamic';
