@@ -28,7 +28,7 @@ Save `qsd-secrets.env` in a password manager, then delete the file.
 
 | Variable(s) | Where to get it |
 |---|---|
-| `HELIUS_API_KEY`, `SOLANA_RPC_URL`, `NEXT_PUBLIC_SOLANA_RPC_URL` | [helius.dev](https://www.helius.dev): create a project and copy the API key. The RPC URL is `https://mainnet.helius-rpc.com/?api-key=<key>`. Use the same URL for both RPC variables, or make a second key restricted to your domain for the public one, because the browser can see it. |
+| `HELIUS_API_KEY`, `SOLANA_RPC_URL` | [helius.dev](https://www.helius.dev): create a project and copy the API key. `SOLANA_RPC_URL` is `https://mainnet.helius-rpc.com/?api-key=<key>`. Leave `NEXT_PUBLIC_SOLANA_RPC_URL` empty: the browser's wallet then goes through the site's own `/api/rpc` relay, so the key stays on the server (the public mainnet endpoint refuses browsers). |
 | `PINATA_JWT` | [pinata.cloud](https://pinata.cloud): API Keys → New Key (admin or `pinFileToIPFS` + `pinJSONToIPFS`) → copy the **JWT**. pump.fun uses it to store coin images and metadata. |
 | `JUPITER_API_KEY` | [portal.jup.ag](https://portal.jup.ag): create a key. Only the hourly $QSD buy-and-burn uses it. |
 | `QSD_QRNG_API_KEY` | ANU Quantum Numbers on [AWS Marketplace](https://aws.amazon.com/marketplace) (search "ANU Quantum Numbers"): subscribe, then copy the API key from quantumnumbers.anu.edu.au. Without it, no coin can be measured. |
