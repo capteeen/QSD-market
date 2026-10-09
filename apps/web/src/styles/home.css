@@ -25,9 +25,8 @@
 @media (min-width: 900px) {
   .qsd-header__inner { padding: 1.1rem 2.5rem; }
 }
-.qsd-logo { display: inline-flex; align-items: baseline; gap: 0.2rem; text-decoration: none; }
-.qsd-logo__word { font-family: var(--font-heading); font-weight: 700; font-size: 1.45rem; letter-spacing: -0.03em; }
-.qsd-logo__dot { width: 0.4rem; height: 0.4rem; border-radius: 1px; background: var(--qsd-collapse); transform: translateY(-0.9em); }
+.qsd-logo { display: inline-flex; align-items: center; text-decoration: none; }
+.qsd-logo__mark { display: block; height: 2rem; width: auto; }
 .qsd-nav { display: none; gap: 1.6rem; margin-left: auto; font-size: var(--text-xs); letter-spacing: 0.14em; text-transform: uppercase; color: var(--qsd-muted); }
 .qsd-nav a { text-decoration: none; transition: color var(--dur-slow) var(--ease-viscous); }
 .qsd-nav a:hover { color: var(--qsd-text); }

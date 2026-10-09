@@ -13,8 +13,7 @@ export function Header() {
     <header className="qsd-header">
       <div className="qsd-header__inner">
         <Link href={routes.home} className="qsd-logo" aria-label={SITE_NAME}>
-          <span className="qsd-logo__word">{SITE_NAME}</span>
-          <span className="qsd-logo__dot" aria-hidden="true" />
+          <img className="qsd-logo__mark" src="/brand/qsd-wordmark-64.png" width={116} height={64} alt="" />
         </Link>
         <nav className="qsd-nav">
           <Link href={routes.field}>{NAV.field}</Link>
