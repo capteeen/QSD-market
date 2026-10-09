@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { EmptyState, Panel, quantumStateColor } from '@qsd/ui-tokens';
 import type { CoinState } from '@qsd/protocol';
 import { SHARED } from '@/copy';
@@ -8,20 +8,25 @@ import { publicCluster } from '@/lib/env';
 import { explorerTx, routes } from '@/lib/links';
 import { shortAddress } from '@/lib/format';
 
-export function PageHeader({ eyebrow, title, children }: { eyebrow: string; title?: string; children?: ReactNode }) {
+/** A plain page header (eyebrow + headline + controls) for pages whose state has no hero copy yet. */
+export function PageHeader({ eyebrow, title, children, accent }: { eyebrow: string; title?: string; children?: ReactNode; accent?: CSSProperties }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
+    <header className="qsd-phero" data-dial="false" style={accent}>
+      <div className="qsd-phero__copy">
         <span className="qsd-eyebrow">{eyebrow}</span>
-        {title ? <h1 className="mt-1 text-2xl">{title}</h1> : null}
+        {title ? <h1 className="qsd-phero__title">{title}</h1> : null}
+        {children ? <div className="qsd-phero__meta">{children}</div> : null}
       </div>
-      {children}
-    </div>
+    </header>
   );
 }
 
-export function Page({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
-  return <div className={`mx-auto w-full ${wide ? 'max-w-7xl' : 'max-w-6xl'} px-4 py-8 sm:px-8`}>{children}</div>;
+export function Page({ children, theme }: { children: ReactNode; wide?: boolean; theme?: 'brightfield' }) {
+  return (
+    <div className="qsd-page" data-theme={theme}>
+      <div className="qsd-page__inner">{children}</div>
+    </div>
+  );
 }
 
 /** The page-level honest state for a 503 payload. */
@@ -43,8 +48,8 @@ export function LoadingPanel({ eyebrow }: { eyebrow: string }) {
 
 export function StateLabel({ state }: { state: CoinState }) {
   return (
-    <span className="inline-flex items-center gap-2 text-sm" data-state={state}>
-      <span className="inline-block h-2.5 w-2.5 rounded-quantum" style={{ background: quantumStateColor[state] }} aria-hidden="true" />
+    <span className="qsd-state" data-state={state}>
+      <i style={{ background: quantumStateColor[state] }} aria-hidden="true" />
       {SHARED.stateLabels[state]}
     </span>
   );
