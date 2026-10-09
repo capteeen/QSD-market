@@ -278,6 +278,40 @@ export const FIELD = {
   },
 } as const;
 
+// ───────────────────────────── launched list ─────────────────────────────
+export const LAUNCHED = {
+  eyebrow: 'EVERY LAUNCH',
+  hint: 'Newest mother first. A daughter coin sits under the coin it was born from.',
+  generation: 'gen',
+  halfLife: 'half-life',
+  launched: 'launched',
+  bornFromCollapse: 'born on collapse',
+} as const;
+
+// ───────────────────────────── airdrop figure ─────────────────────────────
+export const AIRDROP = {
+  eyebrow: 'THE AIRDROP',
+  title: 'When the holders received the daughter',
+  caption: 'Each square is one wallet from the holder snapshot. It fills as its transfer of the daughter coin confirms on Solana.',
+  stepCollapse: 'collapse',
+  stepBorn: 'daughter born',
+  stepAirdrop: 'airdrop',
+  airdropPending: 'not started',
+  airdropRunning: 'in progress',
+  airdropDone: 'complete',
+  wallets: 'wallets',
+  confirmed: 'confirmed',
+  sent: 'sent',
+  pending: 'pending',
+  showing: 'showing',
+  of: 'of',
+  noWallets: 'No wallet was in the holder snapshot, so there was nothing to airdrop.',
+  stillExecuting: 'The collapse is still executing; the airdrop starts once the daughter coin exists.',
+  notCollapsed: 'No collapse has happened for this coin yet.',
+  unavailableEyebrow: 'AIRDROP NOT AVAILABLE',
+  walletsConfirmed: 'wallets confirmed',
+} as const;
+
 // ───────────────────────────── coin ─────────────────────────────
 export const COIN = {
   notFoundEyebrow: 'NO SUCH COIN',

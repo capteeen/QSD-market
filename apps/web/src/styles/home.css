@@ -287,6 +287,35 @@
 .qsd-live__state { position: absolute; left: 1rem; bottom: 1rem; right: 1rem; max-width: 30rem; }
 .qsd-live__grid { display: grid; gap: 1.5rem; margin-top: 1.5rem; }
 @media (min-width: 1024px) { .qsd-live__grid { grid-template-columns: 1fr 2fr; } }
+.qsd-live__launched { margin-top: 1.5rem; }
+
+/* ── launched coins, daughters nested under their mother ───────── */
+.qsd-launched { list-style: none; margin: 0.75rem 0 0; padding: 0; font-family: var(--font-mono); font-size: var(--text-sm); }
+.qsd-launched__hint { font-size: var(--text-xs); color: var(--qsd-muted); margin: 0; }
+.qsd-launched__row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.35rem 1rem; padding: 0.6rem 0; border-top: 1px solid var(--qsd-border); --tree: 0rem; margin-left: var(--tree); }
+.qsd-launched__row:first-child { border-top: 0; }
+.qsd-launched__row[data-depth='1'] { --tree: 1.5rem; }
+.qsd-launched__row[data-depth='2'] { --tree: 3rem; }
+.qsd-launched__row[data-depth='3'] { --tree: 4.5rem; }
+.qsd-launched__row[data-depth='4'] { --tree: 6rem; }
+.qsd-launched__tree { position: absolute; left: -1.1rem; top: 0; bottom: 50%; width: 0.75rem; border-left: 1px solid var(--qsd-line, var(--qsd-muted)); border-bottom: 1px solid var(--qsd-line, var(--qsd-muted)); border-bottom-left-radius: 4px; }
+.qsd-launched__row[data-last='false'] > .qsd-launched__tree::after { content: ''; position: absolute; left: -1px; top: 100%; height: 100%; border-left: 1px solid var(--qsd-line, var(--qsd-muted)); }
+.qsd-launched__coin { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; min-width: 0; }
+.qsd-launched__name { color: var(--qsd-muted); font-family: var(--font-sans); font-size: var(--text-xs); }
+.qsd-launched__meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 1rem; font-size: var(--text-xs); color: var(--qsd-muted); letter-spacing: 0.06em; }
+@media (min-width: 900px) {
+  .qsd-launched__row { grid-template-columns: minmax(0, 1.4fr) auto minmax(0, 2fr); }
+  .qsd-launched__meta { grid-column: auto; justify-content: flex-end; }
+}
+.qsd-table__tree { position: relative; }
+.qsd-table tr[data-depth='1'] .qsd-table__tree { padding-left: 2.25rem; }
+.qsd-table tr[data-depth='2'] .qsd-table__tree { padding-left: 3.75rem; }
+.qsd-table tr[data-depth='3'] .qsd-table__tree { padding-left: 5.25rem; }
+.qsd-table tr[data-depth='4'] .qsd-table__tree { padding-left: 6.75rem; }
+.qsd-table tr[data-depth='1'] .qsd-launched__tree { left: 1.15rem; }
+.qsd-table tr[data-depth='2'] .qsd-launched__tree { left: 2.65rem; }
+.qsd-table tr[data-depth='3'] .qsd-launched__tree { left: 4.15rem; }
+.qsd-table tr[data-depth='4'] .qsd-launched__tree { left: 5.65rem; }
 
 /* ── footer ──────────────────────────────────────────── */
 .qsd-footer { border-top: 1px solid var(--qsd-border); background: var(--qsd-void); }
@@ -344,3 +373,32 @@
   .qsd-chapter__inner { padding-top: 5rem; }
 }
 @media (max-width: 899px) { .qsd-partlist { font-size: var(--text-xs); gap: 0.2rem 1rem; } }
+
+/* ── airdrop figure: collapse → daughter → wallets ─────── */
+.qsd-airdrop { margin: 0; }
+.qsd-airdrop__steps { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; position: relative; }
+.qsd-airdrop__steps::before { content: ''; position: absolute; left: 0.45rem; right: 0.45rem; top: 0.4rem; height: 1px; background: var(--qsd-border); }
+.qsd-airdrop__steps::after { content: ''; position: absolute; left: 0.45rem; top: 0.4rem; height: 1px; width: calc((100% - 0.9rem) * (1 + var(--progress, 0)) / 3); background: var(--qsd-probability); transition: width var(--dur-slow, 600ms) var(--ease-viscous, ease); }
+.qsd-airdrop__step { position: relative; display: flex; flex-direction: column; gap: 0.25rem; padding-top: 1.1rem; font-family: var(--font-mono); font-size: var(--text-xs); }
+.qsd-airdrop__step i { position: absolute; left: 0; top: 0; width: 0.85rem; height: 0.85rem; border-radius: 2px; border: 1px solid var(--qsd-muted); background: var(--qsd-panel); z-index: 1; }
+.qsd-airdrop__step[data-state='done'] i { background: var(--qsd-probability); border-color: var(--qsd-probability); }
+.qsd-airdrop__step[data-state='running'] i { background: var(--qsd-decay); border-color: var(--qsd-decay); animation: qsd-airdrop-pulse 1.2s ease-in-out infinite; }
+.qsd-airdrop__steplabel { letter-spacing: 0.14em; text-transform: uppercase; color: var(--qsd-text); }
+.qsd-airdrop__time { color: var(--qsd-muted); }
+.qsd-airdrop__dots { display: flex; flex-wrap: wrap; gap: 3px; padding: 0.75rem; border: 1px solid var(--qsd-border); border-radius: var(--radius-card); background: color-mix(in srgb, var(--qsd-void) 60%, transparent); }
+.qsd-airdrop__dots i { width: 10px; height: 10px; border-radius: 2px; background: var(--qsd-border); opacity: 0; transform: translateX(-12px); }
+.qsd-airdrop__dots[data-shown='true'] i { animation: qsd-airdrop-land 420ms var(--ease-viscous, ease) forwards; animation-delay: calc(var(--i, 0) * 6ms); }
+.qsd-airdrop__dots i[data-status='confirmed'] { background: var(--qsd-probability); box-shadow: 0 0 6px color-mix(in srgb, var(--qsd-probability) 50%, transparent); }
+.qsd-airdrop__dots i[data-status='sent'] { background: var(--qsd-decay); }
+.qsd-airdrop__dots i[data-status='pending'] { background: transparent; border: 1px solid var(--qsd-muted); }
+.qsd-airdrop__legend { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.75rem; font-family: var(--font-mono); font-size: var(--text-xs); letter-spacing: 0.06em; color: var(--qsd-muted); }
+.qsd-airdrop__legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; vertical-align: middle; background: var(--qsd-border); }
+.qsd-airdrop__legend [data-status='confirmed'] i { background: var(--qsd-probability); }
+.qsd-airdrop__legend [data-status='sent'] i { background: var(--qsd-decay); }
+.qsd-airdrop__legend [data-status='pending'] i { background: transparent; border: 1px solid var(--qsd-muted); }
+@keyframes qsd-airdrop-land { to { opacity: 1; transform: none; } }
+@keyframes qsd-airdrop-pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) {
+  .qsd-airdrop__dots i { opacity: 1; transform: none; animation: none !important; }
+  .qsd-airdrop__step i { animation: none !important; }
+}

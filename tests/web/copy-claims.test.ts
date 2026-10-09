@@ -241,6 +241,9 @@ const REVIEWED: Record<string, Review> = {
   'above base (': { section: 'economics §6 weight ∈ [1.0, 1.5]', verdict: 'ok' },
   'resolver': { section: 'physics.md public deterministic resolver', verdict: 'ok' },
   // ── inner pages (2026-10 redesign: page heroes and the page terminals)
+  'The collapse is still executing; the airdrop starts once the daughter coin exists.': { section: 'economics §4 collapse execution: daughter launch precedes the airdrop (executeCollapse)', verdict: 'ok' },
+  'No collapse has happened for this coin yet.': { section: 'physics.md states: a coin collapses at most once (AirdropPanel on a coin without a collapse)', verdict: 'ok' },
+  'born on collapse': { section: 'physics.md collapse → daughter birth; economics §4 daughter coin created at collapse (LaunchedList row label)', verdict: 'ok' },
   'SUPERPOSED, COLLAPSED OR TUNNELLED': { section: 'physics.md states (superposed / collapsed / tunnelled); FIELD filters', verdict: 'ok' },
   'DECAY PROGRESS RECOMPUTED LIVE': { section: 'economics §1 decayProgress from lastActivityAt; liveDecay()', verdict: 'ok' },
   'Coins nearest to their auto-measurement, soonest first. Anyone can measure any of them before the protocol does.': { section: 'economics §3 auto-measurement window; MeasureQueueView sorts by nextAutoMeasureAt', verdict: 'ok' },

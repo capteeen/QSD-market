@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Countdown, Panel } from '@qsd/ui-tokens';
 import { FIELD, PAGES } from '@/copy';
 import { isUnavailable } from '@/lib/api';
-import { fieldCoin, liveDecay, uncertainty } from '@/lib/coin';
+import { coinTree, fieldCoin, liveDecay, uncertainty } from '@/lib/coin';
 import { formatHalfLife, formatPercent } from '@/lib/format';
 import { routes } from '@/lib/links';
 import { useCoins, useStats } from '@/hooks/useApi';
@@ -38,7 +38,8 @@ export function FieldView() {
     if (!data || isUnavailable(data)) return [];
     const rows = data.coins.filter((c) => matches(c, filter));
     const key = (c: CoinSummaryDto): number => (sort === 'uncertainty' ? uncertainty(c.superposition) : sort === 'halfLife' ? c.halfLifeSec : liveDecay(c, now));
-    return rows.sort((a, b) => key(b) - key(a));
+    // Mothers are ordered by the chosen key; each daughter follows the coin it was born from.
+    return coinTree(rows, (a, b) => key(b) - key(a));
   }, [data, filter, sort, now]);
 
   return (
@@ -65,7 +66,7 @@ export function FieldView() {
         </div>
       </PageHero>
       <div className="qsd-pscene">
-        <FieldScene coins={list.map((c) => fieldCoin(c, now))} liveMeasurements={liveMeasurements} showEmptyState={false} />
+        <FieldScene coins={list.map((r) => fieldCoin(r.coin, now))} liveMeasurements={liveMeasurements} showEmptyState={false} />
       </div>
       <div className="qsd-pgrid qsd-pgrid--12">
         <StatusTerminal q={stats} />
@@ -96,9 +97,10 @@ export function FieldView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {list.map((c) => (
-                    <tr key={c.ca}>
-                      <td>
+                  {list.map(({ coin: c, depth, last }) => (
+                    <tr key={c.ca} data-depth={Math.min(depth, 4)} data-last={last ? 'true' : 'false'}>
+                      <td className="qsd-table__tree">
+                        {depth > 0 ? <span className="qsd-launched__tree" aria-hidden="true" /> : null}
                         <Link className="qsd-link" href={routes.coin(c.ca)}>
                           {c.ticker}
                         </Link>{' '}

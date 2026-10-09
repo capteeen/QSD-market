@@ -93,6 +93,43 @@ export function liveNextAuto(c: Pick<CoinSummaryDto, 'lastActivityAt' | 'halfLif
   return nextAutoMeasureAt({ lastActivityAt: c.lastActivityAt, halfLifeSec: c.halfLifeSec, state: c.state });
 }
 
+/** A coin with its place in the launch tree: depth 0 is a mother with no mother in the list, each daughter sits one level under hers. */
+export interface CoinTreeRow<C extends Pick<CoinSummaryDto, 'ca' | 'motherCa' | 'bornAt'>> {
+  coin: C;
+  depth: number;
+  /** True when this is the last daughter under its mother (for the connector glyph). */
+  last: boolean;
+}
+
+/**
+ * Orders coins so every daughter follows its mother. Roots are the coins whose mother is
+ * absent from the list (generation one, or a mother the list does not carry); `sortRoots`
+ * orders them, daughters are in birth order.
+ */
+export function coinTree<C extends Pick<CoinSummaryDto, 'ca' | 'motherCa' | 'bornAt'>>(coins: readonly C[], sortRoots: (a: C, b: C) => number): CoinTreeRow<C>[] {
+  const present = new Set(coins.map((c) => c.ca));
+  const children = new Map<string, C[]>();
+  const roots: C[] = [];
+  for (const c of coins) {
+    if (c.motherCa && present.has(c.motherCa)) {
+      const list = children.get(c.motherCa) ?? [];
+      list.push(c);
+      children.set(c.motherCa, list);
+    } else roots.push(c);
+  }
+  const out: CoinTreeRow<C>[] = [];
+  const seen = new Set<string>();
+  const walk = (c: C, depth: number, last: boolean) => {
+    if (seen.has(c.ca)) return;
+    seen.add(c.ca);
+    out.push({ coin: c, depth, last });
+    const kids = (children.get(c.ca) ?? []).sort((a, b) => a.bornAt - b.bornAt);
+    kids.forEach((k, i) => walk(k, depth + 1, i === kids.length - 1));
+  };
+  roots.sort(sortRoots).forEach((r) => walk(r, 0, true));
+  return out;
+}
+
 export function fieldCoin(c: CoinSummaryDto, now: number): FieldCoin {
   return {
     ca: c.ca,

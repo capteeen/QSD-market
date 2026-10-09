@@ -30,6 +30,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         case 'log':
           void qc.invalidateQueries({ queryKey: ['log'] });
           void qc.invalidateQueries({ queryKey: ['stats'] });
+          if (ev.entry.type === 'airdrop' || ev.entry.type === 'daughter' || ev.entry.type === 'collapse') {
+            void qc.invalidateQueries({ queryKey: ['lineage'] });
+            void qc.invalidateQueries({ queryKey: ['coins'] });
+          }
           break;
         case 'measurement':
           void qc.invalidateQueries({ queryKey: ['coin', ev.ca] });
@@ -39,6 +43,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         case 'coin':
           void qc.invalidateQueries({ queryKey: ['coin', ev.ca] });
           void qc.invalidateQueries({ queryKey: ['coins'] });
+          void qc.invalidateQueries({ queryKey: ['lineage'] });
           void qc.invalidateQueries({ queryKey: ['me'] });
           break;
         case 'stats':

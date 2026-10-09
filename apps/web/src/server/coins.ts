@@ -98,6 +98,7 @@ export function summaryFromDb(row: DbCoin & { measurements?: { id: string }[]; _
     ticker: row.ticker,
     generation: row.generation,
     lineageId: row.lineageId,
+    motherCa: row.motherCa ?? null,
     state,
     halfLifeSec: row.halfLifeSec,
     lastActivityAt: row.lastActivityAt,

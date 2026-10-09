@@ -28,6 +28,7 @@ import { ACCENT, PageHero, PageShell } from '@/components/page/PageHero';
 import { CoinLink, Empty, LoadingPanel, Page, StateLabel, TxLink, UnavailablePanel } from '@/components/common';
 import { useQueryClient } from '@tanstack/react-query';
 import { CoinTerminal } from '@/components/terminal/pages';
+import { AirdropPanel } from '@/components/AirdropFigure';
 
 export function CoinView({ ca }: { ca: string }) {
   const q = useCoin(ca);
@@ -183,6 +184,12 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
           )}
         </Panel>
       </div>
+
+      {coin.state === 'collapsed' || coin.motherCa ? (
+        <div className="mt-6">
+          <AirdropPanel lineageId={coin.lineageId} motherCa={coin.motherCa ?? coin.ca} />
+        </div>
+      ) : null}
 
       <div className="mt-6">
         <HoldersPanel coin={coin} />
