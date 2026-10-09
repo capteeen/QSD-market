@@ -85,7 +85,7 @@ Presets (`HALF_LIFE_PRESETS`): 1h → 2h, 6h → 12h, 24h → 48h, 72h → 144h,
 
 ```
 fractionBps = min( ZENO_RESET_CAP_BPS (5000), ZENO_K (4) × buy × 10000 / marketCap )     bigint, floor
-lastActivityAt' = lastActivityAt + floor( quiet × fractionBps / 10000 )
+lastActivityAt' = lastActivityAt + floor( quiet × fractionBps / 10000 )      // the REMOVED time is floored: 7 s quiet, 50 % → 3 s removed, 4 s left
 ```
 
 `applyBuy(coin, buyLamports, marketCapLamports, now)` returns a new `Coin`
@@ -101,12 +101,19 @@ collapsed coin. `zenoResetBps` and `resetQuietTime` are exported separately.
 ```ts
 const at = nowSeconds();                                  // the chain package's clock
 const inputs = measurementInputs(coin, at);               // throws unless measurable
-// MeasurementInputs = { ca, decayProgressPpb, channels: [{id, probabilityPpm}], tunnelProbabilityPpm, measurementIndex }
+// MeasurementInputs = { ca, at, lastActivityAt, halfLifeSec, decayProgressPpb, channels: [{id, probabilityPpm}], tunnelProbabilityPpm, measurementIndex }
 const { bundle } = await client.measure(inputs, measurementResolver);   // @qsd/quantum, 32 bytes
 ```
 
-`measurementResolver.id === 'qsd/measurement/v1'` (`MEASUREMENT_RESOLVER_ID`).
-Byte usage, every comparison in bigint:
+`measurementResolver.id === 'qsd/measurement/v2'` (`MEASUREMENT_RESOLVER_ID`).
+`at`, `lastActivityAt` and `halfLifeSec` bind the **moment**: they are hashed
+into the bundle (and so into the pre-commit anchored before the draw), and
+`decayProgressPpb` must equal `decayProgressPpb({lastActivityAt, halfLifeSec}, at)`
+(`decayProgressPpbFromInputs(inputs)` recomputes it from the bundle alone).
+The outcome does not depend on them; the resolver only shape-checks them when
+present, `applyMeasurement` requires them (`hasTimeBinding`). The retired
+`qsd/measurement/v1` (`RETIRED_RESOLVER_IDS`) did not bind the moment and is
+refused by `applyMeasurement`. Byte usage, every comparison in bigint:
 
 | bytes | word `u` (big-endian u64) | rule |
 | --- | --- | --- |
@@ -131,11 +138,15 @@ const { coin: next, measurement, outcome } = applyMeasurement(coin, bundle, {
 });
 ```
 
-`applyMeasurement` checks, in order: `resolverId`; quantum `verify()` when
-`verify` is given; that `bundle.inputs.value` equals `measurementInputs(coin, at)`
-field for field (so a stale or foreign bundle is refused with
-`BundleMismatchError`); that re-running the resolver on the bundle's bytes
-reproduces the bundle's outcome value and label. Then:
+`applyMeasurement` checks, in order: `resolverId` (retired ids refused by
+name); quantum `verify()` when `verify` is given; that the inputs carry the
+time binding, that `inputs.at === opts.at` (a bundle built for one moment can
+never be applied at another, even when both moments have the same decay
+progress) and that `inputs.decayProgressPpb` recomputes from the inputs' own
+`(at, lastActivityAt, halfLifeSec)`; that `bundle.inputs.value` equals
+`measurementInputs(coin, at)` field for field (so a stale or foreign bundle is
+refused with `BundleMismatchError`); that re-running the resolver on the
+bundle's bytes reproduces the bundle's outcome value and label. Then:
 
 | outcome | new state | quiet clock | `decayAfter` |
 | --- | --- | --- | --- |
@@ -271,11 +282,11 @@ Decay: `MEASURABLE_STATES`, `isMeasurable`, `quietSeconds`,
 `decayProgressFor`, `decayProgress`, `decayProgressPpb`, `nextAutoMeasureAt`,
 `isAutoMeasureDue`, `zenoResetBps`, `resetQuietTime`, `applyBuy`, `assertHalfLife`.
 
-Resolver: `MEASUREMENT_RESOLVER_ID`, `RESOLVER_DRAW_BYTES`,
+Resolver: `MEASUREMENT_RESOLVER_ID`, `RETIRED_RESOLVER_IDS`, `RESOLVER_DRAW_BYTES`, `hasTimeBinding`,
 `measurementResolver`, `resolveMeasurement`, `outcomeLabel`, `parseOutcome`,
 `validateChannels`, `validateMeasurementInputs`, `readU64`.
 
-Measurement: `measurementInputs`, `applyMeasurement`, `collapseMeasurement`,
+Measurement: `measurementInputs`, `applyMeasurement`, `decayProgressPpbFromInputs`, `collapseMeasurement`,
 `survivedMeasurementIds`, `resolvePoolUnits`, `collapseRewards`, `surviveRebate`.
 
 Daughter: `deriveDaughterParams`, `daughterParamsFrom`, `motherFinalState`,
@@ -304,7 +315,8 @@ is 40 000 dev-provider draws for the distribution checks):
   at 0.3 and 0.75
 * measurement: a bundle from `@qsd/quantum`'s client passes `verify()` with
   `measurementResolver`; survive/collapse/tunnel transitions; rejection of
-  stale, foreign, re-indexed, wrong-resolver, tampered-outcome and
+  stale, foreign, re-indexed, wrong-resolver, retired-v1, unbound-time,
+  wrong-`at` (same decay progress), lying-ppb, tampered-outcome and
   tampered-bytes bundles; reward arithmetic
 * daughter: bounded and monotone mapping (properties), worked points, names,
   image lineage chain, derivation from a collapsed coin

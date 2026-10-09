@@ -20,6 +20,9 @@ const CH = [
 function inputs(over: Partial<MeasurementInputs> = {}): MeasurementInputs {
   return {
     ca: 'CoinA',
+    at: 1_003_600,
+    lastActivityAt: 1_000_000,
+    halfLifeSec: 3600,
     decayProgressPpb: 500_000_000,
     channels: CH,
     tunnelProbabilityPpm: PROTOCOL_PARAMS.TUNNEL_PROBABILITY_PPM,
@@ -30,8 +33,8 @@ function inputs(over: Partial<MeasurementInputs> = {}): MeasurementInputs {
 
 describe('measurementResolver', () => {
   it('has the stable id', () => {
-    expect(measurementResolver.id).toBe('qsd/measurement/v1');
-    expect(MEASUREMENT_RESOLVER_ID).toBe('qsd/measurement/v1');
+    expect(measurementResolver.id).toBe('qsd/measurement/v2');
+    expect(MEASUREMENT_RESOLVER_ID).toBe('qsd/measurement/v2');
   });
 
   it('is deterministic: same bytes and inputs give the same outcome, and only the first 32 bytes matter', () => {
@@ -104,6 +107,15 @@ describe('measurementResolver', () => {
     expect(() => validateChannels([{ id: 'a', probabilityPpm: 500_000 }, { id: 'a', probabilityPpm: 500_000 }])).toThrow(/duplicate/);
     expect(() => validateChannels([])).toThrow();
     expect(() => validateChannels([{ id: 'a', probabilityPpm: 1_000_000 }])).not.toThrow();
+    // time-binding fields: shape-checked when present, ignored by the outcome
+    expect(() => resolveMeasurement(new Uint8Array(32), inputs({ at: -1 }))).toThrow(/inputs.at/);
+    expect(() => resolveMeasurement(new Uint8Array(32), inputs({ lastActivityAt: 1_003_601 }))).toThrow(/lastActivityAt/);
+    expect(() => resolveMeasurement(new Uint8Array(32), inputs({ halfLifeSec: 0 }))).toThrow(/halfLifeSec/);
+    const a = inputs();
+    const b = { ...inputs(), at: a.at + 86_400, lastActivityAt: 5, halfLifeSec: 7 };
+    for (const f of [0.1, 0.49, 0.51, 0.9]) {
+      expect(resolveMeasurement(bytesFromFractions(f, 0.5, 0.5, 0.5), a)).toEqual(resolveMeasurement(bytesFromFractions(f, 0.5, 0.5, 0.5), b));
+    }
   });
 
   it('labels are survive | tunnel | collapse:<channelId>', () => {

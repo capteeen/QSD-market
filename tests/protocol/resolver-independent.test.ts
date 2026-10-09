@@ -268,7 +268,10 @@ describe('applyMeasurement: bundle must match the coin, the moment and its own b
     const c = coin({ lastActivityAt: 0, bornAt: 0 });
     const at1 = 400_000;
     const at2 = 400_000 + 86_400;
-    expect(measurementInputs(c, at1)).toEqual(measurementInputs(c, at2));
+    // Fixed (H-E2): decayProgressPpb is identical at both instants, but the inputs now carry `at`,
+    // so the two input sets differ and the bundle is bound to the moment it was built for.
+    expect(measurementInputs(c, at1).decayProgressPpb).toBe(measurementInputs(c, at2).decayProgressPpb);
+    expect(measurementInputs(c, at1)).not.toEqual(measurementInputs(c, at2));
     const { bundle } = await client.measure(measurementInputs(c, at1), measurementResolver);
     // A bundle produced for at1 must not be applicable with a different `at`, otherwise the
     // collapse time (and so the daughter's lifetime score and every holder's fD) is operator-chosen.

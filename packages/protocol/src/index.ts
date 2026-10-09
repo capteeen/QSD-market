@@ -65,7 +65,9 @@ export {
 // Resolver
 export {
   MEASUREMENT_RESOLVER_ID,
+  RETIRED_RESOLVER_IDS,
   RESOLVER_DRAW_BYTES,
+  hasTimeBinding,
   measurementResolver,
   resolveMeasurement,
   outcomeLabel,
@@ -79,6 +81,7 @@ export {
 export {
   measurementInputs,
   applyMeasurement,
+  decayProgressPpbFromInputs,
   collapseMeasurement,
   survivedMeasurementIds,
   resolvePoolUnits,

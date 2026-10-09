@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PROTOCOL_PARAMS,
   applyMeasurement,
+  decayProgressPpbFromInputs,
   collapseMeasurement,
   collapseRewards,
   decayProgress,
@@ -34,6 +35,9 @@ describe('measurementInputs', () => {
     const i = measurementInputs(c, 1_003_600);
     expect(i).toEqual({
       ca: c.ca,
+      at: 1_003_600,
+      lastActivityAt: 1_000_000,
+      halfLifeSec: 3600,
       decayProgressPpb: 500_000_000,
       channels: [
         { id: 'alpha', probabilityPpm: 500_000 },
@@ -45,6 +49,18 @@ describe('measurementInputs', () => {
     });
     expect(() => measurementInputs({ ...c, state: 'collapsed' }, 1_003_600)).toThrow(/cannot be measured/);
     expect(() => JSON.stringify(i)).not.toThrow();
+    expect(decayProgressPpbFromInputs(i)).toBe(i.decayProgressPpb);
+    expect(() => measurementInputs(c, -1)).toThrow();
+  });
+
+  it('binds the measurement moment: two instants with the same decayProgressPpb give different inputs', () => {
+    const c = coin({ lastActivityAt: 0, bornAt: 0, halfLifeSec: 3600 });
+    const a = measurementInputs(c, 400_000); // ~111 half-lives: ppb saturated at 1e9
+    const b = measurementInputs(c, 400_000 + 86_400);
+    expect(a.decayProgressPpb).toBe(b.decayProgressPpb);
+    expect(a).not.toEqual(b);
+    expect(a.at).toBe(400_000);
+    expect(b.at).toBe(486_400);
   });
 });
 
@@ -109,13 +125,28 @@ describe('applyMeasurement', () => {
     const at = 1_003_600;
     const bundle = await measureUntil(c, at, 'survive');
     // different time → different decayProgressPpb
-    expect(() => applyMeasurement(c, bundle, { at: at + 1, by: 'W' })).toThrow(/inputs do not match/);
+    expect(() => applyMeasurement(c, bundle, { at: at + 1, by: 'W' })).toThrow(/do not match: built for at=/);
     // different coin
     expect(() => applyMeasurement(coin({ ca: 'Other' }), bundle, { at, by: 'W' })).toThrow(/inputs do not match/);
     // measurement index advanced
     expect(() => applyMeasurement({ ...c, measurements: [{} as never] }, bundle, { at, by: 'W' })).toThrow(/inputs do not match/);
-    // wrong resolver id
+    // wrong resolver id; the retired v1 id is refused by name
     expect(() => applyMeasurement(c, { ...bundle, resolverId: 'other/v1' }, { at, by: 'W' })).toThrow(/resolverId/);
+    expect(() => applyMeasurement(c, { ...bundle, resolverId: 'qsd/measurement/v1' }, { at, by: 'W' })).toThrow(/retired/);
+    // inputs without the time binding (a v1-shaped bundle relabelled as v2) are refused
+    const { at: _a, lastActivityAt: _l, halfLifeSec: _h, ...unbound } = bundle.inputs.value;
+    expect(() => applyMeasurement(c, { ...bundle, inputs: { ...bundle.inputs, value: unbound as never } }, { at, by: 'W' })).toThrow(/time binding/);
+    // a bundle built for one `at` cannot be applied at another even when the decay progress is identical (saturated ppb)
+    const quiet = coin({ lastActivityAt: 0, bornAt: 0 });
+    const at1 = 400_000;
+    const at2 = 400_000 + 86_400;
+    expect(measurementInputs(quiet, at1).decayProgressPpb).toBe(measurementInputs(quiet, at2).decayProgressPpb);
+    const b1 = await measureUntil(quiet, at1, 'collapse');
+    expect(() => applyMeasurement(quiet, b1, { at: at2, by: 'W', verify: VERIFY })).toThrow(/do not match: built for at=400000/);
+    expect(applyMeasurement(quiet, b1, { at: at1, by: 'W', verify: VERIFY }).coin.collapsedAt).toBe(at1);
+    // a bundle whose stated ppb does not recompute from its own time binding is refused
+    const lying: MeasurementBundle = { ...bundle, inputs: { ...bundle.inputs, value: { ...bundle.inputs.value, decayProgressPpb: 1 } } };
+    expect(() => applyMeasurement(c, lying, { at, by: 'W' })).toThrow(/does not recompute/);
     // tampered outcome value
     const tampered: MeasurementBundle = { ...bundle, outcome: { value: { kind: 'tunnel' }, label: 'tunnel' } };
     expect(() => applyMeasurement(c, tampered, { at, by: 'W' })).toThrow(/does not match resolver/);

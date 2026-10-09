@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { HALF_LIFE_PRESETS, PROTOCOL_PARAMS, computeAllocation, type HolderSnapshot } from '../src/index.js';
+import { HALF_LIFE_PRESETS, MEASUREMENT_RESOLVER_ID, PROTOCOL_PARAMS, RETIRED_RESOLVER_IDS, applyBuy, computeAllocation, type HolderSnapshot } from '../src/index.js';
+import { coin } from './fixtures.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const DOC = resolve(here, '../../../docs/economics.md');
@@ -48,8 +49,19 @@ describe('docs/economics.md matches PROTOCOL_PARAMS', () => {
   });
 
   it('names the resolver id and the byte layout', () => {
-    expect(text).toContain('qsd/measurement/v1');
+    expect(text).toContain('`' + MEASUREMENT_RESOLVER_ID + '`');
+    for (const id of RETIRED_RESOLVER_IDS) expect(text).toContain('`' + id + '`');
+    for (const f of ['`at`', '`lastActivityAt`', '`halfLifeSec`']) expect(text).toContain(f);
     for (const range of ['0–7', '8–15', '16–23', '24–31']) expect(text).toContain(`| ${range} |`);
+  });
+});
+
+describe('economics.md §2 Zeno rounding matches the code', () => {
+  it('the removed time is floored (7 s quiet, 50 % buy leaves 4 s), as the document states', () => {
+    expect(text).toContain('quietTimeRemoved = floor( quietTimeBefore × fractionRemoved )');
+    expect(text).toContain('7 s quiet and a 50 % reset remove 3 s and leave 4 s');
+    const after = applyBuy(coin({ lastActivityAt: 100 }), 1n, 1n, 107);
+    expect(107 - after.lastActivityAt).toBe(4);
   });
 });
 

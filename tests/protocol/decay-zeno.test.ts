@@ -189,12 +189,15 @@ describe('Zeno mechanic (spec §5 l.183-185; economics.md §2)', () => {
   });
 
   it('FINDING H-E1 (LOW): economics.md says quietTimeAfter = quietTimeBefore × (1 − fraction) "rounded down", but the code rounds the REMOVED time down, so the remaining quiet time rounds up', () => {
-    expect(economics).toMatch(/quietTimeAfter {2}= quietTimeBefore × \(1 − fractionRemoved\) {7}\(rounded down to whole seconds\)/);
-    // quiet = 7 s, fraction = 50 %: the document's formula gives floor(3.5) = 3 s left; the code leaves 4 s.
+    // Fixed (H-E1): the doc now states the code's semantics: the REMOVED time is floored, so the
+    // remaining quiet time rounds in the coin's favour (consistent with the Zeno property above).
+    expect(economics).toMatch(/quietTimeRemoved = floor\( quietTimeBefore × fractionRemoved \)/);
+    expect(economics).toMatch(/quietTimeAfter {3}= quietTimeBefore − quietTimeRemoved/);
+    // quiet = 7 s, fraction = 50 %: floor(3.5) = 3 s removed, 4 s left.
     const c = coin({ lastActivityAt: 100 });
     const after = applyBuy(c, 1n, 1n, 107);
     const quietAfter = 107 - after.lastActivityAt;
-    expect(quietAfter).toBe(Math.floor(7 * (1 - 0.5))); // doc semantics; fails while the doc is wrong
+    expect(quietAfter).toBe(7 - Math.floor(7 * 0.5));
   });
 
   it('applyBuy on a collapsed coin throws; measured-alive and tunnelled settle to superposed; a buy before lastActivityAt changes nothing', () => {

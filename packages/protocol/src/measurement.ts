@@ -14,12 +14,14 @@
  * what this coin would produce at `at`, and (when `verify` options are
  * given) runs @qsd/quantum's full verify() first.
  */
-import { bundleHash, hexToBytes, verify, type VerifyBundleOptions } from '@qsd/quantum';
-import { decayProgress, decayProgressPpb, isMeasurable, resetQuietTime } from './decay.js';
+import { bundleHash, canonicalJson, hexToBytes, verify, type VerifyBundleOptions } from '@qsd/quantum';
+import { assertHalfLife, decayProgress, decayProgressPpb, isMeasurable, resetQuietTime } from './decay.js';
 import { BundleMismatchError, InvalidStateError, ProtocolError } from './errors.js';
 import { BPS_BIG, PPM_BIG, PROTOCOL_PARAMS } from './params.js';
 import {
   MEASUREMENT_RESOLVER_ID,
+  RETIRED_RESOLVER_IDS,
+  hasTimeBinding,
   measurementResolver,
   outcomeLabel,
   parseOutcome,
@@ -34,8 +36,13 @@ export function measurementInputs(coin: Coin, now: UnixSeconds): MeasurementInpu
     throw new InvalidStateError(`coin ${coin.ca} cannot be measured in state '${coin.state}'`, coin.state);
   }
   validateChannels(coin.decayChannels);
+  assertHalfLife(coin.halfLifeSec);
+  if (!Number.isInteger(now) || now < 0) throw new ProtocolError('now must be a non-negative integer (unix seconds)');
   return {
     ca: coin.ca,
+    at: now,
+    lastActivityAt: coin.lastActivityAt,
+    halfLifeSec: coin.halfLifeSec,
     decayProgressPpb: decayProgressPpb(coin, now),
     channels: coin.decayChannels.map((c) => ({ id: c.id, probabilityPpm: c.probabilityPpm })),
     tunnelProbabilityPpm: PROTOCOL_PARAMS.TUNNEL_PROBABILITY_PPM,
@@ -43,18 +50,19 @@ export function measurementInputs(coin: Coin, now: UnixSeconds): MeasurementInpu
   };
 }
 
+/** Field-for-field equality via canonical JSON (key order irrelevant, extra keys matter). */
 function sameInputs(a: MeasurementInputs, b: MeasurementInputs): boolean {
-  if (a.ca !== b.ca) return false;
-  if (a.decayProgressPpb !== b.decayProgressPpb) return false;
-  if (a.tunnelProbabilityPpm !== b.tunnelProbabilityPpm) return false;
-  if (a.measurementIndex !== b.measurementIndex) return false;
-  if (a.channels.length !== b.channels.length) return false;
-  for (let i = 0; i < a.channels.length; i++) {
-    const x = a.channels[i]!;
-    const y = b.channels[i]!;
-    if (x.id !== y.id || x.probabilityPpm !== y.probabilityPpm) return false;
-  }
-  return true;
+  return canonicalJson(a) === canonicalJson(b);
+}
+
+/**
+ * Recompute decayProgressPpb from the time binding inside a bundle's inputs,
+ * for verifiers that want to check the ppb without the coin record. Throws
+ * when the inputs carry no time binding.
+ */
+export function decayProgressPpbFromInputs(inputs: MeasurementInputs): number {
+  if (!hasTimeBinding(inputs)) throw new ProtocolError('inputs carry no time binding (at, lastActivityAt, halfLifeSec)');
+  return decayProgressPpb({ lastActivityAt: inputs.lastActivityAt, halfLifeSec: inputs.halfLifeSec, state: 'superposed' }, inputs.at);
 }
 
 export interface ApplyMeasurementOptions {
@@ -87,17 +95,31 @@ export interface ApplyMeasurementResult {
 export function applyMeasurement(coin: Coin, bundle: MeasurementBundle, opts: ApplyMeasurementOptions): ApplyMeasurementResult {
   const { at, by } = opts;
   if (typeof by !== 'string' || by.length === 0) throw new ProtocolError('measurer `by` must be a non-empty string');
+  if (!Number.isInteger(at) || at < 0) throw new ProtocolError('`at` must be a non-negative integer (unix seconds)');
+  if (RETIRED_RESOLVER_IDS.includes(bundle.resolverId)) {
+    throw new BundleMismatchError(`bundle resolverId '${bundle.resolverId}' is retired (it did not bind the measurement time); only '${MEASUREMENT_RESOLVER_ID}' is accepted`);
+  }
   if (bundle.resolverId !== MEASUREMENT_RESOLVER_ID) {
     throw new BundleMismatchError(`bundle resolverId '${bundle.resolverId}' is not '${MEASUREMENT_RESOLVER_ID}'`);
+  }
+  const given = bundle.inputs.value;
+  if (!given || typeof given !== 'object' || !hasTimeBinding(given)) {
+    throw new BundleMismatchError('bundle inputs carry no time binding (at, lastActivityAt, halfLifeSec); v2 bundles must bind the measurement moment');
+  }
+  if (given.at !== at) {
+    throw new BundleMismatchError(`bundle inputs do not match: built for at=${String(given.at)} but applied at ${at}; the measurement moment is fixed before the draw`);
+  }
+  if (given.decayProgressPpb !== decayProgressPpbFromInputs(given)) {
+    throw new BundleMismatchError('bundle decayProgressPpb does not recompute from its own (at, lastActivityAt, halfLifeSec)');
   }
   if (opts.verify) {
     const r = verify(bundle, measurementResolver, opts.verify);
     if (!r.ok) throw new BundleMismatchError(`bundle failed verification: ${r.reason}`);
   }
   const expected = measurementInputs(coin, at); // also asserts measurability
-  if (!sameInputs(expected, bundle.inputs.value)) {
+  if (!sameInputs(expected, given)) {
     throw new BundleMismatchError(
-      `bundle inputs do not match coin ${coin.ca} at ${at}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(bundle.inputs.value)}`,
+      `bundle inputs do not match coin ${coin.ca} at ${at}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(given)}`,
     );
   }
   const bytes = hexToBytes(bundle.draw.bytesHex);

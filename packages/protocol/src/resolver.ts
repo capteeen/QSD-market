@@ -1,6 +1,11 @@
 /**
  * The measurement resolver: the pure rule that turns 32 draw bytes plus the
- * coin's inputs into an outcome. Its id is embedded in every proof bundle and
+ * coin's inputs into an outcome.
+ *
+ * v2 (current): inputs carry `at`, `lastActivityAt` and `halfLifeSec` so the
+ * measurement moment is hashed into the bundle and `decayProgressPpb` is
+ * recomputable by any verifier. v1 inputs lacked them and are retired:
+ * `applyMeasurement` refuses any bundle whose resolverId is not v2. Its id is embedded in every proof bundle and
  * @qsd/quantum's verify() re-runs it, so this file must stay deterministic
  * and must never read anything but its arguments.
  *
@@ -23,7 +28,9 @@ import { ProtocolError } from './errors.js';
 import { PPB, PPM, PPM_BIG, PPB_BIG } from './params.js';
 import type { Channel, MeasurementInputs, MeasurementOutcome } from './types.js';
 
-export const MEASUREMENT_RESOLVER_ID = 'qsd/measurement/v1';
+export const MEASUREMENT_RESOLVER_ID = 'qsd/measurement/v2';
+/** Retired: did not bind the measurement moment. Never accepted by applyMeasurement. */
+export const RETIRED_RESOLVER_IDS: readonly string[] = ['qsd/measurement/v1'];
 export const RESOLVER_DRAW_BYTES = 32;
 
 const TWO_64 = 1n << 64n;
@@ -68,6 +75,25 @@ export function validateMeasurementInputs(inputs: unknown): asserts inputs is Me
     throw new ProtocolError('inputs.measurementIndex must be a non-negative integer');
   }
   validateChannels(i['channels'] as Channel[]);
+  // Time-binding fields. The outcome does not depend on them, so the resolver
+  // only checks their shape when present; applyMeasurement requires them
+  // (hasTimeBinding) and checks decayProgressPpb against them.
+  for (const k of ['at', 'lastActivityAt'] as const) {
+    if (i[k] !== undefined && (!Number.isInteger(i[k]) || (i[k] as number) < 0)) {
+      throw new ProtocolError(`inputs.${k} must be a non-negative integer (unix seconds)`);
+    }
+  }
+  if (i['halfLifeSec'] !== undefined && (!Number.isInteger(i['halfLifeSec']) || (i['halfLifeSec'] as number) <= 0)) {
+    throw new ProtocolError('inputs.halfLifeSec must be a positive integer');
+  }
+  if (i['at'] !== undefined && i['lastActivityAt'] !== undefined && (i['lastActivityAt'] as number) > (i['at'] as number)) {
+    throw new ProtocolError('inputs.lastActivityAt must not be after inputs.at');
+  }
+}
+
+/** True iff the inputs carry the v2 time binding (at, lastActivityAt, halfLifeSec). */
+export function hasTimeBinding(inputs: MeasurementInputs): boolean {
+  return Number.isInteger(inputs.at) && Number.isInteger(inputs.lastActivityAt) && Number.isInteger(inputs.halfLifeSec);
 }
 
 /** Pure decision from (bytes, inputs). Exported so tests can drive it with chosen bytes. */

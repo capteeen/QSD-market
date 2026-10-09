@@ -69,11 +69,26 @@ export type MeasurementOutcome =
       poolPointPpm: number;
     };
 
-/** The JSON the resolver is applied to. Hashed into the proof bundle; no floats. */
+/**
+ * The JSON the resolver is applied to. Hashed into the proof bundle (and
+ * anchored in the pre-commit before the draw); no floats.
+ *
+ * `at`, `lastActivityAt` and `halfLifeSec` bind the measurement *moment*:
+ * `decayProgressPpb` must equal `decayProgressPpb({lastActivityAt, halfLifeSec}, at)`,
+ * so a verifier can recompute it from the bundle alone, and `applyMeasurement`
+ * refuses a bundle whose `at` is not the `at` it is applied at. The resolver's
+ * outcome does not depend on these three fields.
+ */
 export interface MeasurementInputs {
   [key: string]: JsonValue;
   ca: Address;
-  /** decayProgress at the moment of measurement, parts per billion. */
+  /** The measurement moment, unix seconds. Fixed before the draw. */
+  at: UnixSeconds;
+  /** The coin's quiet-clock origin at `at`. */
+  lastActivityAt: UnixSeconds;
+  /** The coin's half-life, seconds. */
+  halfLifeSec: number;
+  /** decayProgress at `at`, parts per billion: decayProgressPpb({lastActivityAt, halfLifeSec}, at). */
   decayProgressPpb: number;
   channels: { id: string; probabilityPpm: number }[];
   tunnelProbabilityPpm: number;

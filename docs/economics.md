@@ -84,8 +84,12 @@ Each buy removes a fraction of the accumulated quiet time:
 ```
 fractionRemoved = min( ZENO_RESET_CAP, ZENO_K × buyValue / marketCap )
                 = min( 50 %, 4 × buyValue / marketCap )
-quietTimeAfter  = quietTimeBefore × (1 − fractionRemoved)       (rounded down to whole seconds)
+quietTimeRemoved = floor( quietTimeBefore × fractionRemoved )    (the removed time is rounded down to whole seconds)
+quietTimeAfter   = quietTimeBefore − quietTimeRemoved
 ```
+
+Rounding is on the *removed* time, in the coin's favour:
+7 s quiet and a 50 % reset remove 3 s and leave 4 s.
 
 A buy worth 1 % of market cap removes 4 % of the quiet time; a buy worth
 5 % removes 20 %; anything from 12.5 % of market cap upward hits the 50 %
@@ -117,7 +121,7 @@ delayed by trading; it can never be avoided.
 **What happens.** A measurement draws 32 bytes from a hardware quantum
 random number generator, with an attestation and a commitment hash that are
 published in a proof bundle anyone can verify. The bytes are fed through the
-public resolver `qsd/measurement/v1` together with the coin's state at that
+public resolver `qsd/measurement/v2` together with the coin's state at that
 moment:
 
 | Draw bytes | Decides | Rule |
@@ -127,10 +131,17 @@ moment:
 | 16–23 | decay channel (only on collapse, no tunnel) | weighted by each channel's published probability |
 | 24–31 | daughter pool size (only on collapse, no tunnel) | a point in the mother's published supply band |
 
-(`u` is the 8-byte big-endian unsigned integer.) The inputs — coin address,
-decay progress in parts per billion, the channel table, the tunnelling
-probability and the measurement index — are hashed into the bundle, so a
-verifier can see both what was drawn and what it was applied to.
+(`u` is the 8-byte big-endian unsigned integer.) The inputs — coin address
+(`ca`), the measurement moment `at`, the coin's quiet-clock origin
+`lastActivityAt` and `halfLifeSec`, the decay progress in parts per billion
+(`decayProgressPpb`, which must equal `1 − 2^(−(at − lastActivityAt)/halfLifeSec)`
+rounded down to a billionth), the channel table, the tunnelling probability
+and the measurement index — are hashed into the bundle and committed on-chain
+*before* the draw. So a verifier can see what was drawn, what it was applied
+to, and *when*: the moment of a measurement is fixed before anyone knows the
+bytes, and a bundle can only be applied at the `at` it carries. (The earlier
+resolver `qsd/measurement/v1` did not bind the moment; it is retired and
+bundles carrying it are refused.)
 
 **Survive.** The coin stays alive, 75 % (`SURVIVE_RESET_BPS`) of its quiet
 time is removed, and it enters `measured-alive`. The measurer gets 10 %
