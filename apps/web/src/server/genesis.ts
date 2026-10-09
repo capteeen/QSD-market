@@ -5,8 +5,8 @@ import { validateChannels, PROTOCOL_PARAMS, type Channel } from '@qsd/protocol';
 /**
  * Generation-1 launch parameters. @qsd/protocol defines how daughters inherit
  * a lineage's channel table but not what a genesis table is; that is an
- * operator configuration, read from the JSON file named by
- * `QSD_GENESIS_CONFIG`. Nothing is defaulted: without the file, /launch is
+ * operator configuration: `QSD_GENESIS_CONFIG` holds the JSON itself or the
+ * path of a JSON file. Nothing is defaulted: without the file, /launch is
  * unavailable and says so.
  *
  * File shape:
@@ -47,7 +47,9 @@ export function genesisStatus(): { config?: GenesisConfig; error?: string } {
   const file = process.env.QSD_GENESIS_CONFIG;
   if (!file) return (cached = { error: 'QSD_GENESIS_CONFIG is unset: no generation-1 channel table is configured' });
   try {
-    const raw = JSON.parse(readFileSync(file, 'utf8')) as {
+    // Either the JSON itself (handy on hosts like Vercel, where a file path is not bundled) or a path to a JSON file.
+    const text = file.trim().startsWith('{') ? file : readFileSync(file, 'utf8');
+    const raw = JSON.parse(text) as {
       supplyUnits: string;
       decimals: number;
       poolUnits: { min: string; max: string };
