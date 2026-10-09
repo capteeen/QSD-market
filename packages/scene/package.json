@@ -1,0 +1,52 @@
+{
+  "name": "@qsd/scene",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The QSD 3D launch sequence: every visual driven by a real crypto / quantum / chain event.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./model": "./src/model/index.ts"
+  },
+  "files": ["src", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "fixtures": "tsx scripts/record-fixture.ts",
+    "perf": "tsx scripts/perf.ts",
+    "perf:dev": "vite --config perf/vite.config.ts"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "dependencies": {
+    "@qsd/crypto": "workspace:*",
+    "@qsd/quantum": "workspace:*",
+    "@qsd/ui-tokens": "workspace:*",
+    "@react-three/drei": "9.122.0",
+    "@react-three/fiber": "8.18.0",
+    "@react-three/postprocessing": "2.16.3",
+    "postprocessing": "6.36.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "0.170.0",
+    "zustand": "5.0.3"
+  },
+  "devDependencies": {
+    "@react-three/test-renderer": "8.2.1",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/three": "0.170.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "playwright-core": "1.56.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.0"
+  }
+}

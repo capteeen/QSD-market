@@ -1,0 +1,92 @@
+{
+  "darkMode": [
+    "selector",
+    ":root:not([data-theme=\"brightfield\"])"
+  ],
+  "theme": {
+    "extend": {
+      "colors": {
+        "void": "var(--qsd-void)",
+        "panel": "var(--qsd-panel)",
+        "border": "var(--qsd-border)",
+        "probability": "var(--qsd-probability)",
+        "collapse": "var(--qsd-collapse)",
+        "decay": "var(--qsd-decay)",
+        "tunnel": "var(--qsd-tunnel)",
+        "dead": "var(--qsd-dead)",
+        "text": "var(--qsd-text)",
+        "muted": "var(--qsd-muted)",
+        "glass": "var(--qsd-glass)",
+        "glass-edge": "var(--qsd-glass-edge)",
+        "glow-inner": "#FF5CD6",
+        "glow-outer": "#FFFFFF",
+        "void-hex": "#06080A",
+        "panel-hex": "#0D1117",
+        "border-hex": "#1C2430",
+        "probability-hex": "#4DD0E1",
+        "collapse-hex": "#E91E63",
+        "decay-hex": "#FFB300",
+        "tunnel-hex": "#F0F4F8",
+        "dead-hex": "#3A4049",
+        "text-hex": "#D7DEE6",
+        "muted-hex": "#6B7684"
+      },
+      "fontFamily": {
+        "mono": [
+          "'JetBrains Mono'",
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "Consolas",
+          "monospace"
+        ],
+        "heading": [
+          "'Space Grotesk'",
+          "system-ui",
+          "-apple-system",
+          "'Segoe UI'",
+          "sans-serif"
+        ]
+      },
+      "fontSize": {
+        "xs": "0.6875rem",
+        "sm": "0.8125rem",
+        "base": "0.9375rem",
+        "lg": "1.125rem",
+        "xl": "1.5rem",
+        "2xl": "2.25rem",
+        "3xl": "3.5rem"
+      },
+      "fontWeight": {
+        "heading": "600"
+      },
+      "borderWidth": {
+        "rule": "1px",
+        "card": "2px"
+      },
+      "borderRadius": {
+        "card": "0px",
+        "quantum": "9999px"
+      },
+      "boxShadow": {
+        "glow-compute": "0 0 2px #FFFFFF, 0 0 8px rgba(255,92,214,0.9), 0 0 24px rgba(255,92,214,0.55), 0 0 64px rgba(255,92,214,0.25)",
+        "glass-edge": "inset 0 0 0 1px rgba(77,208,225,0.35)"
+      },
+      "backgroundImage": {
+        "glow-compute-radial": "var(--glow-compute-radial)"
+      },
+      "transitionTimingFunction": {
+        "viscous": "cubic-bezier(0.4, 0, 0.2, 1)"
+      },
+      "transitionDuration": {
+        "slow": "700ms",
+        "slower": "1400ms",
+        "collapse": "120ms"
+      },
+      "backdropBlur": {
+        "glass": "var(--qsd-glass-blur)"
+      }
+    }
+  },
+  "plugins": []
+}

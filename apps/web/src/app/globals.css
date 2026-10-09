@@ -1,0 +1,115 @@
+@import '@qsd/ui-tokens/tokens.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  background: var(--qsd-void);
+  color: var(--qsd-text);
+  min-height: 100%;
+}
+body {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+}
+a {
+  color: inherit;
+}
+.qsd-link {
+  text-decoration: underline;
+  text-decoration-color: var(--qsd-glass-edge);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--dur-slow) var(--ease-viscous);
+}
+.qsd-link:hover {
+  text-decoration-color: var(--qsd-probability);
+}
+.qsd-btn {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.75rem 1.25rem;
+  border: var(--border-card) solid var(--qsd-border);
+  border-radius: var(--radius-card);
+  background: var(--qsd-panel);
+  color: var(--qsd-text);
+  transition: border-color var(--dur-slow) var(--ease-viscous), box-shadow var(--dur-slow) var(--ease-viscous);
+}
+.qsd-btn:hover:not(:disabled) {
+  border-color: var(--qsd-probability);
+  box-shadow: inset 0 0 0 1px var(--qsd-glass-edge);
+}
+.qsd-btn[data-primary='true'] {
+  border-color: var(--qsd-probability);
+}
+.qsd-btn:disabled {
+  color: var(--qsd-muted);
+  border-color: var(--qsd-dead);
+  cursor: not-allowed;
+}
+.qsd-input {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  background: var(--qsd-void);
+  border: var(--border-rule) solid var(--qsd-border);
+  border-radius: var(--radius-card);
+  color: var(--qsd-text);
+}
+.qsd-input:focus {
+  outline: none;
+  border-color: var(--qsd-probability);
+}
+.qsd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.qsd-table th {
+  text-align: left;
+  color: var(--qsd-muted);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: var(--text-xs);
+  padding: 0.5rem 0.75rem;
+  border-bottom: var(--border-rule) solid var(--qsd-border);
+}
+.qsd-table td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: var(--border-rule) solid var(--qsd-border);
+  vertical-align: top;
+}
+.qsd-glass {
+  background: color-mix(in srgb, var(--qsd-panel) 72%, transparent);
+  backdrop-filter: blur(14px);
+  border: var(--border-card) solid var(--qsd-border);
+  box-shadow: inset 0 0 0 1px var(--qsd-glass-edge);
+}
+.qsd-markdown h1 { font-size: var(--text-2xl); margin: 2rem 0 1rem; }
+.qsd-markdown h2 { font-size: var(--text-xl); margin: 2.5rem 0 0.75rem; color: var(--qsd-probability); }
+.qsd-markdown h3 { font-size: var(--text-lg); margin: 1.5rem 0 0.5rem; }
+.qsd-markdown p, .qsd-markdown li { font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.7; }
+.qsd-markdown p { margin: 0.75rem 0; }
+.qsd-markdown ul, .qsd-markdown ol { padding-left: 1.5rem; margin: 0.75rem 0; }
+.qsd-markdown li { margin: 0.35rem 0; list-style: disc; }
+.qsd-markdown ol li { list-style: decimal; }
+.qsd-markdown code { font-size: 0.92em; color: var(--qsd-probability); }
+.qsd-markdown pre { padding: 1rem; border: var(--border-rule) solid var(--qsd-border); overflow-x: auto; margin: 1rem 0; font-size: var(--text-xs); }
+.qsd-markdown pre code { color: var(--qsd-text); }
+.qsd-markdown table { border-collapse: collapse; margin: 1rem 0; font-size: var(--text-xs); display: block; overflow-x: auto; }
+.qsd-markdown th, .qsd-markdown td { border: var(--border-rule) solid var(--qsd-border); padding: 0.4rem 0.6rem; text-align: left; }
+.qsd-markdown th { color: var(--qsd-muted); }
+.qsd-markdown hr { border: 0; border-top: var(--border-rule) solid var(--qsd-border); margin: 2.5rem 0; }
+.qsd-markdown a { text-decoration: underline; text-underline-offset: 3px; }
+.qsd-markdown strong { color: var(--qsd-tunnel); }
+.qsd-markdown blockquote { border-left: 2px solid var(--qsd-border); padding-left: 1rem; color: var(--qsd-muted); }

@@ -1,0 +1,29 @@
+{
+  "name": "@qsd/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "QSD game rules: decay, Zeno resets, measurement resolver, daughter derivation and the holder allocation table. Pure TypeScript, no I/O.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": ["src", "README.md"],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@qsd/crypto": "workspace:*",
+    "@qsd/quantum": "workspace:*",
+    "@noble/hashes": "^1.8.0"
+  },
+  "devDependencies": {
+    "fast-check": "^3.23.2",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "@types/node": "^22.0.0"
+  }
+}

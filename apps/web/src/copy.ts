@@ -1,0 +1,379 @@
+/**
+ * Every user-facing string in apps/web, as named constants.
+ *
+ * Agent H diffs this file against /docs/physics.md. Rules followed here:
+ * - physics words (superposed, measurement, collapse, Zeno, entangled,
+ *   tunnelling) name GAME STATES / MECHANICS inspired by the physics, never
+ *   properties of the coin itself; wording is quoted from physics.md where a
+ *   claim is made;
+ * - the randomness is "genuinely quantum" only in the sense physics.md allows:
+ *   bytes from a third-party hardware QRNG with an attestation, no fallback;
+ * - no string here contains a number that stands for live data. Numbers that
+ *   appear are protocol constants rendered from @qsd/protocol at runtime, or
+ *   structural copy ("four steps").
+ */
+
+export const SITE_NAME = 'QSD';
+export const SITE_TAGLINE = 'Quantum State Decay';
+
+export const FOOTER_DISCLAIMER =
+  'A daughter coin is a new coin and can fail. QSD guarantees a share of the next attempt, not a return. Coins launch on pump.fun (Solana). A meme, not an investment.';
+
+// ───────────────────────────── navigation ─────────────────────────────
+export const NAV = {
+  field: 'Field',
+  launch: 'Launch',
+  measure: 'Measure',
+  burns: 'Burns',
+  how: 'How it works',
+  me: 'Me',
+} as const;
+
+export const WALLET = {
+  connect: 'Connect wallet',
+  connected: 'Connected',
+  disconnect: 'Disconnect',
+} as const;
+
+// ───────────────────────────── home ─────────────────────────────
+export const HOME = {
+  eyebrow: 'Your coin dies. Your bag doesn’t.',
+  h1: 'QSD',
+  sentence:
+    'A coin that stops trading decays; when a measurement resolves to collapse, a daughter coin is born and every holder of the mother receives a share of it at birth.',
+  launch: 'Launch',
+  how: 'How it works',
+  nextBurnLabel: 'next $QSD burn',
+  nextBurnUnavailable: 'the burn schedule is not available',
+  stepsEyebrow: 'FOUR STEPS',
+  steps: [
+    {
+      title: 'Launch',
+      body: 'A coin launches on pump.fun in the game state “superposed”: some of its parameters are published as ranges rather than single numbers, and the decision that resolves them has not been made yet.',
+    },
+    {
+      title: 'Decay',
+      body: 'Its decay progress rises with time since its last trade, according to a half-life published at launch. Every buy partially resets it — the Zeno mechanic, named after the quantum Zeno effect; the resemblance is in the shape only.',
+    },
+    {
+      title: 'Measure',
+      body: 'Anyone can measure a superposed coin. A measurement draws bytes from a hardware quantum random number generator and feeds them through a public, deterministic resolver: survive, collapse, or tunnel. Every outcome ships with a proof bundle anyone can verify.',
+    },
+    {
+      title: 'Daughter',
+      body: 'On collapse a daughter is born. Each holder’s share is their bag fraction times an entanglement weight computed from how they held — a fixed public function of the holder snapshot, verifiable by recomputation.',
+    },
+  ],
+  countersEyebrow: 'LIVE',
+  counters: {
+    superposed: 'coins in superposition',
+    measurementsToday: 'measurements today',
+    collapses: 'collapses',
+    daughters: 'daughters born',
+    tunnels: 'tunnels',
+    burned: '$QSD burned',
+  },
+  logEyebrow: 'LOG',
+  logTitle: 'Every event, newest first',
+  logEmptyEyebrow: 'NO EVENTS YET',
+  logEmptySentence: 'Nothing has happened on this protocol yet. The first entry will be the first real launch.',
+  logUnavailableEyebrow: 'LOG NOT AVAILABLE',
+  fieldEmptyEyebrow: 'NO LIVE COINS',
+  fieldEmptySentence: 'No coin has launched yet. The first coin that exists will be the first real launch.',
+} as const;
+
+// ───────────────────────────── field ─────────────────────────────
+export const FIELD = {
+  title: 'The field',
+  eyebrow: 'EVERY COIN',
+  filterAll: 'all',
+  filterSuperposed: 'superposed',
+  filterCollapsed: 'collapsed',
+  filterTunnelled: 'tunnelled',
+  sortUncertainty: 'uncertainty',
+  sortHalfLife: 'half-life',
+  sortDecay: 'decay progress',
+  sortLabel: 'sort by',
+  filterLabel: 'show',
+  emptyEyebrow: 'NO LIVE COINS',
+  emptySentence: 'No coin has launched yet. The first coin that exists will be the first real launch.',
+  emptyFilteredEyebrow: 'NO COINS MATCH',
+  emptyFilteredSentence: 'No coin is in that state right now.',
+  unavailableEyebrow: 'FIELD NOT AVAILABLE',
+  columns: {
+    coin: 'coin',
+    state: 'state',
+    generation: 'gen',
+    halfLife: 'half-life',
+    decay: 'decay progress',
+    uncertainty: 'uncertainty',
+    nextAuto: 'auto-measure',
+  },
+} as const;
+
+// ───────────────────────────── coin ─────────────────────────────
+export const COIN = {
+  notFoundEyebrow: 'NO SUCH COIN',
+  notFoundSentence: 'No coin with that address exists on this protocol.',
+  unavailableEyebrow: 'COIN NOT AVAILABLE',
+  rows: {
+    name: 'name',
+    ticker: 'ticker',
+    ca: 'contract address',
+    generation: 'generation',
+    state: 'state',
+    mother: 'mother',
+    daughter: 'daughter',
+    lineage: 'lineage',
+    identityRoot: 'identity root',
+    halfLife: 'half-life',
+    decayProgress: 'decay progress',
+    quietSince: 'quiet since',
+    nextAutoMeasure: 'auto-measurement at',
+    supplyBand: 'supply band (daughter pool)',
+    supplyMin: 'band minimum',
+    supplyMax: 'band maximum',
+    totalSupply: 'total supply',
+    remainingSupply: 'remaining supply',
+    bornAt: 'born',
+    collapsedAt: 'collapsed',
+    launchTx: 'launch tx',
+    launchPath: 'launched via',
+    holders: 'holders',
+  },
+  bandEyebrow: 'PROBABILITY BAND',
+  bandTitle: 'Published ranges, outcome not yet drawn',
+  bandCaption:
+    'While the coin is superposed some of its parameters are published as ranges. The cloud is a visualisation of a probability distribution we wrote down, not a physical state.',
+  channelsEyebrow: 'DECAY CHANNELS',
+  channelsTitle: 'Which daughter would be born',
+  channelProbability: 'probability',
+  channelHalfLife: 'daughter half-life range',
+  channelPool: 'daughter pool range',
+  decayEyebrow: 'DECAY',
+  decayCaption: 'A half-life, not a timer. The number only becomes an event when someone measures the coin.',
+  measurementsEyebrow: 'MEASUREMENTS',
+  measurementsTitle: 'Measurement history with proof bundles',
+  measurementsEmptyEyebrow: 'NOT YET MEASURED',
+  measurementsEmptySentence: 'No measurement has been made on this coin.',
+  measurementRows: {
+    index: 'index',
+    at: 'at',
+    by: 'by',
+    outcome: 'outcome',
+    decayBefore: 'decay before',
+    decayAfter: 'decay after',
+    provider: 'provider',
+    attestation: 'attestation',
+    commitment: 'commitment',
+    inputsHash: 'inputs hash',
+    precommitTx: 'pre-commit tx',
+    proofTx: 'proof tx',
+    bundleHash: 'bundle hash',
+  },
+  verifyButton: 'Verify in browser',
+  verifying: 'verifying…',
+  verifyNoKeys: 'no witness public key is published to this build (NEXT_PUBLIC_QSD_WITNESS_PUBLIC_KEYS)',
+  verifyPending: 'not verified yet',
+  verifiedCaption:
+    'Verified means: these exact bytes were applied to these exact inputs and produced this exact outcome, and the bundle has not been altered since it was formed. It does not prove the photons.',
+  downloadBundle: 'Download bundle',
+  daughterEyebrow: 'THE FORMING DAUGHTER',
+  daughterTitle: 'Projected allocation',
+  daughterCaption:
+    'The daughter’s parameters are a deterministic function of the mother’s final state; your share is your bag fraction times an entanglement weight between 1.0 and 1.5.',
+  daughterNoWallet: 'wallet not connected',
+  daughterNoSnapshot: 'no holder snapshot or holding history exists for this coin yet',
+  daughterNotHolder: 'the connected wallet holds none of this coin',
+  daughterCollapsed: 'this coin has collapsed; the allocation is final',
+  projectedShare: 'projected share of the daughter pool',
+  projectedUnits: 'projected daughter units',
+  projectedWeight: 'entanglement weight',
+  measureEyebrow: 'MEASURE',
+  measureTitle: 'Measure this coin',
+  measureCaption:
+    'Measuring draws bytes from a hardware QRNG and applies them to the coin through a public resolver. Measuring a coin does not perform a quantum measurement on the coin.',
+  measureNoWallet: 'connect a wallet to measure',
+  measureNotMeasurable: 'this coin is collapsed and cannot be measured',
+  measureQrngUnavailable: 'the quantum random number provider is not reachable; there is no fallback',
+  measureChainUnavailable: 'the chain is not reachable',
+  measureStatsUnavailable: 'protocol health is not available',
+  measureSigning: 'sign the challenge in your wallet',
+  measureRunning: 'measuring — waiting for the draw',
+  measureDone: 'measurement recorded',
+  measureFailed: 'measurement failed',
+  daughterScheduled: 'the daughter launch has been handed to the collapse worker',
+  daughterNotScheduled: 'the daughter launch could NOT be scheduled; the mother is recorded as collapsed and the reconciliation job will retry',
+  holdersEyebrow: 'HOLDERS',
+  holdersTitle: 'Holders at the latest snapshot',
+  holdersEmptyEyebrow: 'NO HOLDER DATA',
+  holdersEmptySentence: 'No holder snapshot has been taken for this coin.',
+  holdersCols: { wallet: 'wallet', balance: 'balance', since: 'held since', weight: 'weight' },
+  trade: 'Trade on pump.fun',
+  tradeDevnet: 'devnet coin — pump.fun is mainnet-only',
+  explorer: 'explorer',
+  tunnelledNote:
+    'This coin tunnelled: on collapse the same draw decided it re-emerges as itself, with every holder’s position intact. Nothing physically tunnelled; it is one branch of the resolver.',
+} as const;
+
+// ───────────────────────────── lineage ─────────────────────────────
+export const LINEAGE = {
+  eyebrow: 'LINEAGE',
+  title: 'Generation one to now',
+  unavailableEyebrow: 'LINEAGE NOT AVAILABLE',
+  notFoundEyebrow: 'NO SUCH LINEAGE',
+  notFoundSentence: 'No lineage with that id exists on this protocol.',
+  collapseEyebrow: 'COLLAPSE',
+  proofLabel: 'proof bundle',
+  allocationRoot: 'allocation Merkle root',
+  rootAnchorTx: 'root anchor tx',
+  cohortsTitle: 'Holder cohorts carried forward',
+  cohortsEmpty: 'no allocation table exists for this collapse',
+  cohortWallets: 'wallets',
+  cohortUnits: 'units allocated',
+  cohortDust: 'dust burned',
+  cohortWeightRange: 'weight range',
+  measurementsSurvived: 'measurements survived',
+  channel: 'channel',
+} as const;
+
+// ───────────────────────────── launch ─────────────────────────────
+export const LAUNCH = {
+  eyebrow: 'LAUNCH',
+  title: 'Launch a coin',
+  form: {
+    name: 'name',
+    ticker: 'ticker',
+    image: 'image',
+    description: 'description',
+    halfLife: 'half-life preset',
+    devBuy: 'dev buy (SOL)',
+    submit: 'Pay and launch',
+    paying: 'confirm the payment in your wallet',
+    launching: 'launching — every stage below is a real operation',
+  },
+  costEyebrow: 'COST',
+  cost: {
+    launch: 'launch cost',
+    identity: 'identity reserve',
+    devBuy: 'dev buy',
+    total: 'you pay',
+    unavailableReason: 'the operator has not configured this amount',
+    payTo: 'paid to',
+  },
+  noWalletEyebrow: 'WALLET REQUIRED',
+  noWalletSentence: 'Connect a wallet to pay for a launch.',
+  quoteUnavailableEyebrow: 'LAUNCH NOT AVAILABLE',
+  devnetNotice: 'This deployment is on Solana devnet: the coin is minted as a plain SPL token. pump.fun is mainnet-only.',
+  mainnetNotice: 'This deployment launches on pump.fun (Solana mainnet).',
+  stageNote:
+    'Every visual in the sequence is driven by a real event from the key generation, the quantum draw, the signature and the chain. If no event arrives, no stage advances and no value changes; the only motion without an event is the chamber’s ambient drift.',
+  streamLost: 'the launch stream was interrupted; the server may still complete the launch — check the log',
+  done: 'Launched',
+  viewCoin: 'View coin',
+  errorEyebrow: 'LAUNCH FAILED',
+  identityNote:
+    'The launch identity is generated on the server, in the protocol’s identity reserve. The hash chain values at depths below the tip are one-time secret key material, so the stream you see carries their SHA-256 commitments; every other hash is the real value.',
+} as const;
+
+// ───────────────────────────── measure queue ─────────────────────────────
+export const MEASURE = {
+  eyebrow: 'MEASUREMENT QUEUE',
+  title: 'Nearest to auto-measurement',
+  caption:
+    'If nobody measures a coin within its window, the protocol does. Collapse can be delayed by trading; it can never be avoided.',
+  emptyEyebrow: 'NOTHING TO MEASURE',
+  emptySentence: 'No coin is in a measurable state.',
+  unavailableEyebrow: 'QUEUE NOT AVAILABLE',
+  cols: { coin: 'coin', autoAt: 'auto-measurement in', decay: 'collapse probability now', rewardCollapse: 'if it collapses you receive', rewardSurvive: 'if it survives' },
+  /** What a survive pays the measurer today: nothing. No measurement fee is charged, so there is nothing to rebate; the coin's quiet time is partly removed. */
+  surviveCell: (resetPct: string): string => `nothing — the coin stays alive and ${resetPct} of its quiet time is removed`,
+  measureLink: 'open',
+} as const;
+
+// ───────────────────────────── burns ─────────────────────────────
+export const BURNS = {
+  eyebrow: 'BURNS',
+  title: 'Every hourly burn',
+  caption: 'Each hour the protocol tallies its fees, buys $QSD and burns all of it.',
+  total: 'total $QSD burned',
+  qsdCa: '$QSD contract address',
+  qsdCaUnavailable: 'no $QSD mint is configured for this deployment',
+  emptyEyebrow: 'NO BURNS YET',
+  emptySentence: 'No hourly burn has executed yet.',
+  unavailableEyebrow: 'BURNS NOT AVAILABLE',
+  cols: { at: 'at', lamportsIn: 'SOL in', qsdBurned: '$QSD burned', tx: 'tx' },
+} as const;
+
+// ───────────────────────────── how ─────────────────────────────
+export const HOW = {
+  eyebrow: 'HOW IT WORKS',
+  physicsTab: 'physics',
+  economicsTab: 'economics',
+  unavailableEyebrow: 'DOCUMENTS NOT AVAILABLE',
+  sourceNote: 'Rendered verbatim from the repository documents.',
+} as const;
+
+// ───────────────────────────── me ─────────────────────────────
+export const ME = {
+  eyebrow: 'ME',
+  title: 'Your positions',
+  connectEyebrow: 'CONNECT A WALLET',
+  connectSentence: 'Connect a wallet to see your positions.',
+  unavailableEyebrow: 'POSITIONS NOT AVAILABLE',
+  coinsCreated: 'Coins you launched',
+  coinsHeld: 'Coins you hold',
+  noneCreated: 'You have not launched a coin.',
+  noneHeld: 'No trades from this wallet have been seen by the protocol.',
+  allocations: 'Your projected daughter allocations',
+  noAllocations: 'No projected allocation exists for this wallet.',
+  received: 'Daughter allocations you received',
+  noReceived: 'No daughter has been allocated to this wallet.',
+  lineages: 'Your lineage positions',
+  noLineages: 'This wallet holds no position in any lineage.',
+  identity: 'Launch identities',
+  identityRoot: 'identity root',
+  remainingKeys: 'remaining one-time keys',
+  nextIndex: 'next key index',
+} as const;
+
+// ───────────────────────────── shared ─────────────────────────────
+export const SHARED = {
+  unavailableDb: 'the database is not reachable',
+  unavailableRedis: 'the live event stream is not reachable',
+  unavailableChain: 'the chain is not reachable',
+  unavailableQrng: 'the quantum random number provider is not reachable',
+  liveDot: 'live',
+  reconnecting: 'reconnecting',
+  loading: 'loading',
+  seconds: 's',
+  stateLabels: {
+    superposed: 'superposed',
+    'measured-alive': 'measured · alive',
+    collapsed: 'collapsed',
+    tunnelled: 'tunnelled',
+  },
+  outcomeLabels: { survive: 'survive', collapse: 'collapse', tunnel: 'tunnel' },
+  explorerTx: 'tx',
+  proof: 'proof',
+  coin: 'coin',
+} as const;
+
+/** Reward / risk sentences for the MeasureButton. All numbers are computed by the caller. */
+export const MEASURE_TEXT = {
+  reward: (units: string, ticker: string, pct: string, resetPct: string): string =>
+    `if it collapses you receive ${units} ${ticker} (${pct} of remaining supply); if it survives you receive nothing — no measurement fee is charged — and ${resetPct} of the coin’s quiet time is removed`,
+  risk: (pct: string): string => `current collapse probability: ${pct}`,
+} as const;
+
+// ───────────────────────────── error pages ─────────────────────────────
+export const ERRORS = {
+  notFoundEyebrow: 'NO SUCH PAGE',
+  notFoundSentence: 'Nothing exists at this address.',
+  notFoundLink: 'Back to the field',
+  errorEyebrow: 'PAGE FAILED',
+  errorSentence: 'This page failed to render. Opening it changed nothing on the protocol.',
+  retry: 'Try again',
+  globalEyebrow: 'SITE FAILED',
+  globalSentence: 'The site shell failed to render. Opening it changed nothing on the protocol.',
+} as const;

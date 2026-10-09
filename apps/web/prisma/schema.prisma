@@ -1,0 +1,293 @@
+// QSD — Prisma schema mirroring @qsd/protocol types.
+// LIVE DATA ONLY: there is no seed script. The first row in `Coin` is the first real launch.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CoinState {
+  superposed
+  measured_alive
+  collapsed
+  tunnelled
+}
+
+enum MeasurementOutcomeKind {
+  survive
+  tunnel
+  collapse
+}
+
+/// Mirror of @qsd/protocol `Coin`. bigint columns are BigInt; ranges are stored as their endpoints.
+model Coin {
+  ca             String    @id
+  name           String
+  ticker         String
+  imageUri       String
+  imageHash      String
+  imageLineage   String
+  lineageId      String
+  generation     Int
+  motherCa       String?
+  daughterCa     String?
+  identityRoot   String
+  halfLifeSec    Int
+  /// Snapshot of decayProgress as of the last state write (live value computed from lastActivityAt).
+  decayProgress  Float
+  supplyMin      BigInt
+  supplyMax      BigInt
+  totalUnits     BigInt
+  remainingUnits BigInt
+  decimals       Int
+  state          CoinState
+  lastActivityAt Int
+  bornAt         Int
+  collapsedAt    Int?
+  /// pump.fun | devnet-spl
+  launchPath     String
+  launchTx       String
+  /// The launch proof bundle (QRNG draw for the initial parameters), JSON.
+  launchBundle   Json?
+  /// Wallet that paid for / requested the launch.
+  createdBy      String?
+  /// The SOL payment transaction this launch consumed. Unique: one payment buys one launch (H-W1).
+  paymentTx      String?   @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  lineage      Lineage       @relation(fields: [lineageId], references: [id])
+  channels     Channel[]
+  measurements Measurement[]
+  identity     Identity?
+  trades       Trade[]
+  allocation   AllocationTable? @relation("daughterAllocation")
+
+  @@index([state])
+  @@index([lineageId])
+  @@index([createdBy])
+}
+
+/// Mirror of @qsd/protocol `Channel` (one row per coin per channel, ordered by `position`).
+model Channel {
+  id              String @id @default(cuid())
+  coinCa          String
+  channelId       String
+  position        Int
+  probabilityPpm  Int
+  label           String
+  halfLifeMinSec  Int
+  halfLifeMaxSec  Int
+  poolUnitsMin    BigInt
+  poolUnitsMax    BigInt
+
+  coin Coin @relation(fields: [coinCa], references: [ca], onDelete: Cascade)
+
+  @@unique([coinCa, channelId])
+  @@index([coinCa, position])
+}
+
+/// Mirror of @qsd/protocol `Measurement` plus the two anchor signatures from @qsd/solana `measureCoin`.
+model Measurement {
+  /// bundleHash(proofBundle)
+  id               String                 @id
+  coinCa           String
+  index            Int
+  at               Int
+  /// Wallet or 'protocol'
+  by               String
+  proofBundle      Json
+  outcomeKind      MeasurementOutcomeKind
+  outcome          Json
+  decayBefore      Float
+  decayAfter       Float
+  precommitTx      String?
+  proofTx          String?
+  /// Slot of the proof anchor transaction: the collapse snapshot slot (H-W13).
+  proofSlot        Int?
+  attestationKind  String
+  createdAt        DateTime               @default(now())
+
+  coin Coin @relation(fields: [coinCa], references: [ca], onDelete: Cascade)
+
+  @@unique([coinCa, index])
+  @@index([at])
+}
+
+model Lineage {
+  id        String   @id
+  /// Generation-1 coin address.
+  genesisCa String
+  createdAt DateTime @default(now())
+
+  coins Coin[]
+}
+
+/// Mirror of @qsd/protocol `AllocationTable` for one collapse (mother → daughter).
+model AllocationTable {
+  id             String   @id @default(cuid())
+  motherCa       String
+  daughterCa     String   @unique
+  version        String
+  totalUnits     BigInt
+  allocatedUnits BigInt
+  dustUnits      BigInt
+  merkleRoot     String
+  leafCount      Int
+  rootAnchorTx   String?
+  collapseAt     Int
+  createdAt      DateTime @default(now())
+
+  daughter Coin              @relation("daughterAllocation", fields: [daughterCa], references: [ca])
+  entries  AllocationEntry[]
+  airdrops AirdropEntry[]
+
+  @@index([motherCa])
+}
+
+model AllocationEntry {
+  id             String @id @default(cuid())
+  tableId        String
+  wallet         String
+  bagUnits       BigInt
+  bagFractionPpb Int
+  weightBps      Int
+  sharePpb       Int
+  units          BigInt
+  leaf           String
+
+  table AllocationTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@unique([tableId, wallet])
+  @@index([wallet])
+}
+
+/// Read-only display mirror of the @qsd/solana airdrop journal (status per wallet).
+model AirdropEntry {
+  id          String   @id @default(cuid())
+  tableId     String
+  wallet      String
+  units       BigInt
+  /// pending | sent | confirmed
+  status      String
+  txSignature String?
+  updatedAt   DateTime @updatedAt
+
+  table AllocationTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@unique([tableId, wallet])
+}
+
+/// One hourly buy-and-burn run that actually burned (from @qsd/solana `hourlyBuyAndBurn`).
+model Burn {
+  id          String   @id @default(cuid())
+  /// The burn transaction signature.
+  tx          String   @unique
+  swapTx      String?
+  lamportsIn  BigInt
+  qsdBurned   BigInt
+  at          DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([at])
+}
+
+/// A buy of a QSD coin seen through the Helius webhook. Feeds the Zeno reset and the HoldingHistory.
+model Trade {
+  id         String   @id @default(cuid())
+  signature  String
+  mint       String
+  buyer      String
+  lamports   BigInt
+  /// Token units received when the webhook reports them exactly.
+  tokenUnits BigInt?
+  tokenUiAmount Float
+  slot       Int
+  /// Unix seconds from the transaction.
+  at         Int
+  source     String?
+  createdAt  DateTime @default(now())
+
+  coin Coin @relation(fields: [mint], references: [ca], onDelete: Cascade)
+
+  @@unique([signature, mint, buyer])
+  @@index([mint, buyer, at])
+  @@index([mint, at])
+}
+
+/// Balance changes per wallet per mint (buys from webhooks, airdrop credits, and observed sells),
+/// used to compute the start of the current unbroken holding period.
+model BalanceChange {
+  id        String   @id @default(cuid())
+  mint      String
+  wallet    String
+  /// Signed delta in base units (null when only a UI amount is known).
+  deltaUnits BigInt?
+  deltaUi   Float
+  /// buy | sell | airdrop | transfer
+  kind      String
+  signature String
+  slot      Int
+  at        Int
+  createdAt DateTime @default(now())
+
+  @@unique([signature, mint, wallet, kind])
+  @@index([mint, wallet, at])
+}
+
+/// Display mirror of the @qsd/solana identity reserve. The reserve (encrypted seed + used bitmap)
+/// is authoritative; this is what /me and /coin show.
+model Identity {
+  coinCa     String   @id
+  root       String   @unique
+  pubSeed    String
+  nextIndex  Int
+  /// Hex bitmap, 256 bits.
+  usedBitmap String
+  /// 256 − popcount(usedBitmap)
+  remaining  Int
+  updatedAt  DateTime @updatedAt
+
+  coin Coin @relation(fields: [coinCa], references: [ca], onDelete: Cascade)
+}
+
+/// Every event, newest first on the home page. Counters are derived from these and from Coin/Measurement/Burn.
+model EventLog {
+  id        String   @id @default(cuid())
+  /// launch | measurement | collapse | tunnel | daughter | airdrop | burn | trade
+  type      String
+  at        DateTime
+  coinCa    String?
+  /// Measurement id for the proof link (/coin/[ca]#m-<id>).
+  refId     String?
+  tx        String?
+  summary   String
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([at])
+  @@index([type, at])
+}
+
+/// Message-signing challenges for wallet-authenticated actions (measure).
+model AuthChallenge {
+  nonce     String   @id
+  wallet    String
+  purpose   String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([wallet, purpose])
+}
+
+/// Launch image bytes for devnet coins (no IPFS upload on devnet); served at /api/coin/[ca]/image.
+model CoinImage {
+  coinCa String @id
+  mime   String
+  bytes  Bytes
+}
