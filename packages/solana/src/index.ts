@@ -19,3 +19,4 @@ export * from './webhooks.js';
 export * from './measure.js';
 export * from './collapse.js';
 export * from './chain.js';
+export * from './storage.js';

@@ -291,3 +291,13 @@ model CoinImage {
   mime   String
   bytes  Bytes
 }
+
+/// Durable chain-layer storage when the host has no persistent disk (Vercel): encrypted keys
+/// (`key/…`, ciphertext only), identity one-time-key state (`reserve/…`) and crash-resume journals
+/// (`journal/…`). `version` is the compare-and-swap counter. See @qsd/solana storage.ts.
+model ChainKv {
+  key       String   @id
+  value     String
+  version   Int
+  updatedAt DateTime @updatedAt
+}

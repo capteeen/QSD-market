@@ -8,7 +8,7 @@ import { Connection, Keypair } from '@solana/web3.js';
 import { MINT_SIZE } from '@solana/spl-token';
 import path from 'node:path';
 import { anchorWith, type AnchorFn } from './anchor.js';
-import { web3TransferSender, type TransferSender, FileAirdropJournal } from './airdrop.js';
+import { web3TransferSender, type TransferSender, FileAirdropJournal, type AirdropJournalDoc } from './airdrop.js';
 import { Web3FeeLedger, type FeeLedger } from './burn.js';
 import { assertClusterAllowed, describeConfig, heliusRpcUrl, type ChainConfig } from './config.js';
 import { inspect } from 'node:util';
@@ -17,6 +17,7 @@ import { FileJournalStore, MemoryJournalStore, type JournalStore } from './journ
 import { FileKeyStore, KeyVault, MemoryKeyStore, loadCreatorKeypair } from './keys.js';
 import { ChainObserver } from './observer.js';
 import { FileReserveBackend, IdentityReserve, MemoryReserveBackend } from './reserve.js';
+import type { ChainStorage } from './storage.js';
 import { Web3ChainReader, Web3TransactionSender, createConnection, type ChainReader, type TransactionSender } from './sender.js';
 import { HeliusDasSource, ProgramAccountsSource, type TokenAccountSource } from './snapshot.js';
 
@@ -33,18 +34,22 @@ export interface Chain {
   /** Sender + reader + transfer sender + anchor bound to the creator. */
   withCreator(): Promise<{ creator: Keypair; sender: TransactionSender; reader: ChainReader; transferSender: TransferSender; anchor: AnchorFn; getMintRentLamports: () => Promise<number> }>;
   journal<T>(name: string): JournalStore<T>;
-  airdropJournal(daughterCa: string): FileAirdropJournal | MemoryJournalStore<never>;
+  airdropJournal(daughterCa: string): JournalStore<AirdropJournalDoc>;
 }
 
-export function createChain(config: ChainConfig): Chain {
+/**
+ * `storage` replaces the file-backed key store, identity reserve and journals
+ * (QSD_KEYSTORE_PATH / QSD_JOURNAL_DIR) — for hosts without a persistent disk.
+ */
+export function createChain(config: ChainConfig, storage?: ChainStorage): Chain {
   assertClusterAllowed(config); // the flag is enforced here too, not only in loadChainConfig
   if (!(config.keyEncryptionKey instanceof Uint8Array) || config.keyEncryptionKey.length !== 32) {
     throw new ChainConfigError('ChainConfig has no 32-byte keyEncryptionKey (secrets are non-enumerable: do not spread a ChainConfig; pass the object loadChainConfig returned)');
   }
   const connection = createConnection(config.rpcUrl);
-  const keyStore = config.keystorePath ? new FileKeyStore(config.keystorePath) : new MemoryKeyStore();
+  const keyStore = storage?.keyStore ?? (config.keystorePath ? new FileKeyStore(config.keystorePath) : new MemoryKeyStore());
   const vault = new KeyVault(config.keyEncryptionKey, keyStore);
-  const backend = config.keystorePath ? new FileReserveBackend(`${config.keystorePath}.reserve.json`) : new MemoryReserveBackend();
+  const backend = storage?.reserveBackend ?? (config.keystorePath ? new FileReserveBackend(`${config.keystorePath}.reserve.json`) : new MemoryReserveBackend());
   const reserve = new IdentityReserve(vault, backend);
   const observer = new ChainObserver();
   const das = heliusRpcUrl(config);
@@ -52,9 +57,9 @@ export function createChain(config: ChainConfig): Chain {
   if (das) snapshotSources.push(new HeliusDasSource(das));
   snapshotSources.push(new ProgramAccountsSource(connection));
   const feeLedger = new Web3FeeLedger(connection);
-  if (!config.keystorePath) {
+  if (!storage && !config.keystorePath) {
     // Memory-only stores are fine for tests; a worker must persist.
-    if (config.isMainnet) throw new ChainConfigError('QSD_KEYSTORE_PATH is required on mainnet (keys and identity state must persist)');
+    if (config.isMainnet) throw new ChainConfigError('mainnet needs durable key storage: pass a ChainStorage (the web app uses Postgres) or set QSD_KEYSTORE_PATH (keys and identity state must persist)');
   }
   const journalDir = config.journalDir;
 
@@ -79,11 +84,13 @@ export function createChain(config: ChainConfig): Chain {
       return { creator: kp, sender, reader, transferSender, anchor, getMintRentLamports: () => connection.getMinimumBalanceForRentExemption(MINT_SIZE) };
     },
     journal<T>(name: string): JournalStore<T> {
+      if (storage) return storage.journal<T>(name);
       if (!journalDir) return new MemoryJournalStore<T>();
       return new FileJournalStore<T>(path.join(journalDir, `${name}.json`));
     },
-    airdropJournal(daughterCa: string) {
-      if (!journalDir) return new MemoryJournalStore<never>();
+    airdropJournal(daughterCa: string): JournalStore<AirdropJournalDoc> {
+      if (storage) return storage.journal<AirdropJournalDoc>(`airdrop-${daughterCa}`);
+      if (!journalDir) return new MemoryJournalStore<AirdropJournalDoc>();
       return new FileAirdropJournal(path.join(journalDir, `airdrop-${daughterCa}.json`));
     },
   };

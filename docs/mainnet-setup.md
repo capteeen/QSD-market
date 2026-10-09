@@ -62,11 +62,13 @@ NODE_ENV=production
 
 Leave `PUMPPORTAL_API_URL`, `JUPITER_API_URL` and `QSD_QRNG_ENDPOINT` at their defaults.
 
-## 6. Keys and journals need a disk that survives restarts
+## 6. Keys live in the database
 
-`QSD_KEYSTORE_PATH` and `QSD_JOURNAL_DIR` are files. Each coin's mint key and identity seed are written to the key store at launch, and the airdrop and collapse journals that make a crash resumable live in the journal directory. Losing them means the protocol can no longer sign for that coin.
+Each coin's mint key and identity seed, the identity's one-time-key state, and the crash-resume journals for airdrops and collapses are stored in Postgres (table `ChainKv`), with keys encrypted under `QSD_KEY_ENCRYPTION_KEY`. Losing them means the protocol can no longer sign for that coin, so:
 
-Two consequences:
+- After deploying this version, sync the schema once: `DATABASE_URL=<your Neon URL> pnpm --filter web exec prisma db push`.
+- Turn on backups for the database (Neon keeps point-in-time history on paid plans).
+- Leave `QSD_KEYSTORE_PATH` and `QSD_JOURNAL_DIR` unset. Setting them switches back to files, which only makes sense on a host with a persistent disk.
+- Only then set `QSD_MAINNET_ENABLED=true`.
 
-- **The worker** (`pnpm --filter web worker`, which runs measurements, collapses and burns) can't run on Vercel. Run it on an always-on host with a persistent volume (Railway, Fly.io or a small VPS), give it the same environment, and point both paths at that volume. Back the volume up.
-- **Launches currently run inside the Vercel app** (`/api/launch`), and Vercel's disk is temporary. On Vercel today a launch would write its keys somewhere that disappears. Before taking real launches, either serve the whole app from the same persistent host as the worker, or move the key store and journals into Postgres (a code change, not a setting).
+**The worker** (`pnpm --filter web worker`, which runs measurements, collapses and burns) still can't run on Vercel, because it is a long-running process. Run it on any always-on host (Railway, Fly.io or a small VPS) with the same environment. It no longer needs a disk.
