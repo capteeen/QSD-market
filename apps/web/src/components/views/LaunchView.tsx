@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { DataRow, Panel } from '@qsd/ui-tokens';
@@ -74,15 +74,13 @@ export function LaunchView() {
   const [name, setName] = useState('');
   const [ticker, setTicker] = useState('');
   const [description, setDescription] = useState('');
-  const [preset, setPreset] = useState<string>(HALF_LIFE_PRESETS[2]!.id);
-  const [devBuy, setDevBuy] = useState('0');
+  const [presetChoice, setPreset] = useState<string>(HALF_LIFE_PRESETS[2]!.id);
   const [image, setImage] = useState<File | null>(null);
 
   const q = quote.data && !isUnavailable(quote.data) ? quote.data : null;
-  const devBuyLamports = useMemo(() => {
-    const n = Number(devBuy);
-    return Number.isFinite(n) && n >= 0 ? BigInt(Math.round(n * 1e9)) : null;
-  }, [devBuy]);
+  const presets = q?.presets?.length ? q.presets : HALF_LIFE_PRESETS;
+  const preset = presets.some((p) => p.id === presetChoice) ? presetChoice : presets[0]!.id;
+  const devBuyLamports = q && q.devBuyLamports !== null ? BigInt(q.devBuyLamports) : null;
   const total = q && q.launchCostLamports !== null && q.identityReserveLamports !== null && devBuyLamports !== null ? BigInt(q.launchCostLamports) + BigInt(q.identityReserveLamports) + devBuyLamports : null;
   const canLaunch = !!q && !!q.payTo && total !== null && !!publicKey && !!image && name.trim().length > 0 && /^[A-Za-z0-9]{1,10}$/.test(ticker) && phase === 'form';
 
@@ -109,7 +107,7 @@ export function LaunchView() {
     fd.set('ticker', ticker.toUpperCase());
     fd.set('description', description);
     fd.set('halfLifePreset', preset);
-    fd.set('devBuySol', devBuy);
+    fd.set('devBuySol', String(Number(devBuyLamports ?? 0n) / 1e9));
     fd.set('image', image);
     fd.set('wallet', publicKey.toBase58());
     fd.set('paymentSignature', paymentSignature);
@@ -258,16 +256,12 @@ export function LaunchView() {
               <label>
                 {LAUNCH.form.halfLife}
                 <select className="qsd-input" value={preset} onChange={(e) => setPreset(e.target.value)}>
-                  {HALF_LIFE_PRESETS.map((p) => (
+                  {presets.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.label} (auto-measurement after {p.maxWindowSec / 3600} h)
+                      {p.label} (auto-measurement after {p.maxWindowSec >= 3600 ? `${p.maxWindowSec / 3600} h` : p.maxWindowSec >= 120 ? `${p.maxWindowSec / 60} min` : `${p.maxWindowSec} s`})
                     </option>
                   ))}
                 </select>
-              </label>
-              <label>
-                {LAUNCH.form.devBuy}
-                <input className="qsd-input" type="number" min="0" step="0.01" value={devBuy} onChange={(e) => setDevBuy(e.target.value)} />
               </label>
               {!publicKey ? <Empty eyebrow={LAUNCH.noWalletEyebrow} sentence={LAUNCH.noWalletSentence} /> : null}
               <div className="qsd-form__actions">
@@ -286,7 +280,7 @@ export function LaunchView() {
             <Panel eyebrow={LAUNCH.costEyebrow}>
               {lam(q!.launchCostLamports, q!.reasons.launchCost, LAUNCH.cost.launch)}
               {lam(q!.identityReserveLamports, q!.reasons.identityReserve, LAUNCH.cost.identity)}
-              {devBuyLamports !== null ? <DataRow label={LAUNCH.cost.devBuy} value={formatLamports(devBuyLamports)} /> : <DataRow label={LAUNCH.cost.devBuy} unavailable={{ reason: 'enter a number of SOL' }} />}
+              {lam(q!.devBuyLamports, q!.reasons.devBuy, LAUNCH.cost.devBuy)}
               {total !== null ? <DataRow label={LAUNCH.cost.total} value={formatLamports(total)} /> : <DataRow label={LAUNCH.cost.total} unavailable={{ reason: LAUNCH.cost.unavailableReason }} />}
               {q!.payTo ? <DataRow label={LAUNCH.cost.payTo} value={q!.payTo} /> : <DataRow label={LAUNCH.cost.payTo} unavailable={{ reason: q!.reasons.payTo ?? LAUNCH.cost.unavailableReason }} />}
             </Panel>

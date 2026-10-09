@@ -438,7 +438,6 @@ describe('user-facing copy vs docs/physics.md (SPEC §2 l.86-90, §10 l.413-414)
         'components/views/CoinView.tsx: the inputs are not in the current format',
         'components/views/CoinView.tsx: the protocol (auto-measurement)',
         'components/views/LaunchView.tsx: (auto-measurement after',
-        'components/views/LaunchView.tsx: enter a number of SOL',
         'components/views/LineageView.tsx: NO COLLAPSE YET',
         'components/views/LineageView.tsx: collapsed at',
         'components/views/LineageView.tsx: No coin in this lineage has collapsed; the lineage is its generation-one coin.',

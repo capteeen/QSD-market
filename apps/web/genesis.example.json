@@ -2,21 +2,36 @@
   "_note": "Operator configuration for generation-1 launches (QSD_GENESIS_CONFIG). Not data: no coin exists until a real launch. Channel probabilities sum to 1 000 000 ppm; half-life ranges lie inside PROTOCOL_PARAMS bounds.",
   "supplyUnits": "1000000000000000",
   "decimals": 6,
-  "poolUnits": { "min": "100000000000000", "max": "300000000000000" },
+  "poolUnits": {
+    "min": "3000000000000",
+    "max": "3400000000000"
+  },
   "channels": [
     {
       "id": "fast",
       "probabilityPpm": 500000,
       "label": "fast decay",
-      "halfLifeSec": { "min": 3600, "max": 86400 },
-      "poolUnits": { "min": "100000000000000", "max": "200000000000000" }
+      "halfLifeSec": {
+        "min": 3600,
+        "max": 86400
+      },
+      "poolUnits": {
+        "min": "3000000000000",
+        "max": "3200000000000"
+      }
     },
     {
       "id": "slow",
       "probabilityPpm": 500000,
       "label": "slow decay",
-      "halfLifeSec": { "min": 86400, "max": 604800 },
-      "poolUnits": { "min": "150000000000000", "max": "300000000000000" }
+      "halfLifeSec": {
+        "min": 86400,
+        "max": 604800
+      },
+      "poolUnits": {
+        "min": "3200000000000",
+        "max": "3400000000000"
+      }
     }
   ]
 }

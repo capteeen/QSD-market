@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { CryptoObserver, redactEvent, toHex, type CryptoEvent } from '@qsd/crypto';
-import { HALF_LIFE_PRESETS, initialImageLineage, type Coin } from '@qsd/protocol';
+import { HALF_LIFE_PRESETS, initialImageLineage, maxWindowSec, type Coin } from '@qsd/protocol';
 import { QuantumEventBus, bundleHash, canonicalJson, type JsonValue, type OutcomeResolver, type ProofBundle, type QuantumEvent } from '@qsd/quantum';
 import { launchDevnetSplToken, launchOnPumpFun, redactSecrets, type ChainEvent as SolanaChainEvent } from '@qsd/solana';
 import { encodeCryptoEvents } from '@qsd/scene/model';
@@ -78,6 +78,26 @@ export const launchLineageResolver: OutcomeResolver<LaunchInputs> = {
   },
 };
 
+export interface LaunchPreset {
+  id: string;
+  label: string;
+  halfLifeSec: number;
+  maxWindowSec: number;
+}
+
+/** Launch-phase preset: a 30-second half-life, auto-measured after 60 quiet seconds, so a coin with no trading collapses within minutes. */
+export const FAST_LAUNCH_PRESET: LaunchPreset = { id: '30s', label: '30 seconds (launch phase)', halfLifeSec: 30, maxWindowSec: maxWindowSec(30) };
+
+/**
+ * The half-life presets /launch offers. With QSD_FAST_LAUNCH_PHASE=true every
+ * generation-1 coin gets the 30-second preset; daughters still take their
+ * half-life from the genesis channel table (1 hour or more), so only the
+ * first generation is fast.
+ */
+export function launchPresets(): readonly LaunchPreset[] {
+  return process.env.QSD_FAST_LAUNCH_PHASE?.trim() === 'true' ? [FAST_LAUNCH_PRESET] : HALF_LIFE_PRESETS;
+}
+
 export class LaunchValidationError extends Error {
   override readonly name = 'LaunchValidationError';
 }
@@ -86,7 +106,7 @@ export function validateLaunchForm(f: Partial<LaunchForm>): asserts f is LaunchF
   if (!f.name || f.name.trim().length < 1 || f.name.length > 32) throw new LaunchValidationError('name must be 1–32 characters');
   if (!f.ticker || !/^[A-Z0-9]{1,10}$/.test(f.ticker)) throw new LaunchValidationError('ticker must be 1–10 uppercase letters or digits');
   if (typeof f.description !== 'string' || f.description.length > 500) throw new LaunchValidationError('description must be at most 500 characters');
-  if (!f.halfLifePreset || !HALF_LIFE_PRESETS.some((p) => p.id === f.halfLifePreset)) throw new LaunchValidationError('half-life preset is not one of the protocol presets');
+  if (!f.halfLifePreset || !launchPresets().some((p) => p.id === f.halfLifePreset)) throw new LaunchValidationError('half-life preset is not one of the presets offered');
   if (typeof f.devBuySol !== 'number' || !Number.isFinite(f.devBuySol) || f.devBuySol < 0 || f.devBuySol > 100) throw new LaunchValidationError('dev buy must be a number of SOL between 0 and 100');
   if (!f.image || !(f.image.bytes instanceof Uint8Array) || f.image.bytes.length === 0 || f.image.bytes.length > 2_000_000) throw new LaunchValidationError('image must be 1 byte to 2 MB');
   if (!/^image\/(png|jpeg|gif|webp)$/.test(f.image.mime)) throw new LaunchValidationError('image must be png, jpeg, gif or webp');
@@ -102,6 +122,8 @@ export function validateLaunchForm(f: Partial<LaunchForm>): asserts f is LaunchF
 export interface LaunchCosts {
   launchCostLamports: bigint | null;
   identityReserveLamports: bigint | null;
+  /** The fixed dev buy every launch pays for (QSD_LAUNCH_DEV_BUY_LAMPORTS); it funds the coin's collapse reward. */
+  devBuyLamports: bigint | null;
 }
 
 export function launchCosts(): LaunchCosts {
@@ -110,18 +132,21 @@ export function launchCosts(): LaunchCosts {
     if (!v || !/^\d+$/.test(v.trim())) return null;
     return BigInt(v.trim());
   };
-  return { launchCostLamports: read('QSD_LAUNCH_COST_LAMPORTS'), identityReserveLamports: read('QSD_IDENTITY_RESERVE_LAMPORTS') };
+  return { launchCostLamports: read('QSD_LAUNCH_COST_LAMPORTS'), identityReserveLamports: read('QSD_IDENTITY_RESERVE_LAMPORTS'), devBuyLamports: read('QSD_LAUNCH_DEV_BUY_LAMPORTS') };
 }
 
 /** The wallet must have paid launch cost + identity reserve + dev buy to the protocol creator in `paymentSignature`. */
 async function verifyPayment(form: LaunchForm, payTo: PublicKey): Promise<bigint> {
   const costs = launchCosts();
-  if (costs.launchCostLamports === null || costs.identityReserveLamports === null) {
-    throw new LaunchValidationError('launch cost or identity reserve is not configured (QSD_LAUNCH_COST_LAMPORTS / QSD_IDENTITY_RESERVE_LAMPORTS)');
+  if (costs.launchCostLamports === null || costs.identityReserveLamports === null || costs.devBuyLamports === null) {
+    throw new LaunchValidationError('launch cost, identity reserve or dev buy is not configured (QSD_LAUNCH_COST_LAMPORTS / QSD_IDENTITY_RESERVE_LAMPORTS / QSD_LAUNCH_DEV_BUY_LAMPORTS)');
   }
-  const devBuyLamports = BigInt(Math.round(form.devBuySol * 1e9));
-  const total = costs.launchCostLamports + costs.identityReserveLamports + devBuyLamports;
   const chain = getChain();
+  // The dev buy is fixed: on mainnet the treasury's dev-buy tokens are what a collapse burns and pays the measurer with.
+  if (chain.config.cluster === 'mainnet-beta' && costs.devBuyLamports <= 0n) throw new LaunchValidationError('QSD_LAUNCH_DEV_BUY_LAMPORTS must be positive on mainnet, or the coin could never collapse');
+  const devBuyLamports = BigInt(Math.round(form.devBuySol * 1e9));
+  if (devBuyLamports !== costs.devBuyLamports) throw new LaunchValidationError(`dev buy must be exactly ${costs.devBuyLamports} lamports`);
+  const total = costs.launchCostLamports + costs.identityReserveLamports + devBuyLamports;
   const tx = await chain.connection.getTransaction(form.paymentSignature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
   if (!tx || !tx.meta) throw new LaunchValidationError('payment transaction not found or not confirmed');
   if (tx.meta.err) throw new LaunchValidationError('payment transaction failed on-chain');
@@ -177,7 +202,7 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     validateLaunchForm(form);
     const chain = getChain();
     const genesis = genesisConfig();
-    const preset = HALF_LIFE_PRESETS.find((p) => p.id === form.halfLifePreset)!;
+    const preset = launchPresets().find((p) => p.id === form.halfLifePreset)!;
     const { creator, sender, reader, anchor, getMintRentLamports } = await chain.withCreator();
 
     push('status', { step: 'payment', message: 'verifying payment' });

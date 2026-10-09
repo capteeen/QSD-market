@@ -13,6 +13,7 @@ export * from './anchor.js';
 export * from './reserve.js';
 export * from './snapshot.js';
 export * from './launch.js';
+export * from './pump.js';
 export * from './airdrop.js';
 export * from './burn.js';
 export * from './webhooks.js';

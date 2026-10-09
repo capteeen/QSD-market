@@ -64,7 +64,6 @@ describe('executeCollapse', () => {
       journal,
       airdropJournal,
       imageBytes: async () => new Uint8Array([1]),
-      devBuySol: 0,
       devnetSupply: { units: 1_000_000_000_000_000n, decimals: 6 },
       excludeOwners: [pool.publicKey.toBase58()],
       observer,
@@ -149,7 +148,6 @@ describe('executeCollapse', () => {
       journal: new MemoryJournalStore<CollapseJournalDoc>(),
       airdropJournal: new MemoryAirdropJournal(),
       imageBytes: async () => new Uint8Array(),
-      devBuySol: 0,
     };
     await expect(executeCollapse(base, deps)).rejects.toThrow(InvalidCollapseError);
     const motherMint = Keypair.generate().publicKey;
@@ -160,5 +158,83 @@ describe('executeCollapse', () => {
     await expect(executeCollapse(mother, { ...deps, journal: new MemoryJournalStore<CollapseJournalDoc>() })).rejects.toThrow(/HoldingHistory/);
     const history = { async factsFor() { return { firstAcquiredAt: mother.bornAt, heldThroughMeasurementIds: [], heldThroughQuietPeriod: true }; } };
     await expect(executeCollapse(mother, { ...deps, snapshot: { sources: [fakeTokenAccountSource(chain)], history }, journal: new MemoryJournalStore<CollapseJournalDoc>() })).rejects.toThrow(/treasury holds 0 mother units/);
+  });
+
+  describe('mainnet money steps', () => {
+    const setup = async (balanceLamports: bigint) => {
+      const payer = Keypair.generate();
+      const chain = new FakeChain(payer);
+      chain.lamports = balanceLamports;
+      const motherMint = Keypair.generate().publicKey;
+      const { mother: m0 } = await collapsedCoin(coin({ ca: motherMint.toBase58() }));
+      // a 5 % pool (pump.fun supply of 1B tokens at 6 decimals)
+      const mother = { ...m0, supply: { totalUnits: 1_000_000_000_000_000n, remainingUnits: 1_000_000_000_000_000n, decimals: 6 }, superposition: { supplyMin: 50_000_000_000_000n, supplyMax: 50_000_000_000_000n } };
+      chain.createMint(motherMint, 6);
+      chain.mintTo(motherMint, Keypair.generate().publicKey, 1_000_000_000n);
+      const buys: { units: bigint }[] = [];
+      let fetches = 0;
+      const deps = {
+        cluster: 'mainnet-beta' as const,
+        sender: chain,
+        reader: chain,
+        transferSender: chain,
+        anchor: anchorWith({ sender: chain }),
+        snapshot: { sources: [fakeTokenAccountSource(chain)], history: { async factsFor() { return { firstAcquiredAt: mother.bornAt, heldThroughMeasurementIds: [], heldThroughQuietPeriod: true }; } } },
+        launch: { creator: payer, pumpPortalApiUrl: 'https://pumpportal.fun/api', getMintRentLamports: async () => 0, fetchImpl: (async () => { fetches++; throw new Error('no network in tests'); }) as unknown as typeof fetch },
+        vault: new KeyVault(randomBytes(32), new MemoryKeyStore()),
+        reserve: new IdentityReserve(new KeyVault(randomBytes(32), new MemoryKeyStore()), new MemoryReserveBackend()),
+        journal: new MemoryJournalStore<CollapseJournalDoc>(),
+        airdropJournal: new MemoryAirdropJournal(),
+        imageBytes: async () => new Uint8Array([1]),
+        pump: {
+          curve: async () => ({ ...{ virtualSolReserves: 30_000_000_000n, virtualTokenReserves: 1_073_000_000_000_000n }, realTokenReserves: 0n, realSolReserves: 0n, tokenTotalSupply: 0n, complete: false }),
+          buy: async (p: { mint: PublicKey; units: bigint }, onSent: (s: { signature: string; lastValidBlockHeight: number }) => Promise<void>) => {
+            await onSent({ signature: 'buy-sig', lastValidBlockHeight: 1 });
+            buys.push({ units: p.units });
+            chain.mintTo(p.mint, payer.publicKey, p.units);
+            return 'buy-sig';
+          },
+          maxDaughterDevBuySol: 2,
+          maxShortfallSol: 0.5,
+        },
+      };
+      return { chain, mother, deps, buys, fetches: () => fetches };
+    };
+
+    it('buys the mother-token reward shortfall once, then refuses a daughter launch the wallet cannot afford, before any pump.fun request', async () => {
+      const { mother, deps, buys, fetches } = await setup(1_000_000_000n); // 1 SOL: enough for the shortfall, not the ~1.5 SOL dev buy
+      await expect(executeCollapse(mother, deps)).rejects.toThrow(/fee wallet holds 1000000000 lamports but the daughter's 1\.\d+ SOL dev buy needs/);
+      expect(buys).toEqual([{ units: 10_000_000_000_000n }]); // 1 % of remaining supply
+      const j = (await deps.journal.load())!;
+      expect(j.sends['rewards.shortfall-buy']?.status).toBe('confirmed');
+      expect(Object.keys(j.steps)).toEqual(['snapshot', 'rewards', 'daughter-key', 'daughter-identity']);
+      expect(fetches()).toBe(0);
+      // a resume does not buy again
+      await expect(executeCollapse(mother, deps)).rejects.toThrow(/dev buy needs/);
+      expect(buys).toHaveLength(1);
+    });
+
+    it('with shortfall buys off, caps the reward to the mother units the treasury holds and buys nothing', async () => {
+      const { chain, mother, deps, buys } = await setup(1_000_000_000n);
+      const held = 3_500_000_000_000n; // what a 0.10 SOL launch dev buy gets, roughly
+      chain.mintTo(new PublicKey(mother.ca), deps.sender.payer, held);
+      const capped = { ...deps, pump: { ...deps.pump, maxShortfallSol: 0 } };
+      await expect(executeCollapse(mother, capped)).rejects.toThrow(/dev buy needs/);
+      expect(buys).toEqual([]);
+      const j = (await capped.journal.load())!;
+      const r = j.steps.rewards!.result;
+      expect(r.removedUnits).toBe(held);
+      expect(r.measurerUnits + r.burnedUnits).toBe(held);
+      expect(j.rewardRemovedUnits).toBe(held.toString());
+      expect(await chain.getTokenBalance(deps.sender.payer, new PublicKey(mother.ca))).toBe(0n);
+    });
+
+    it('refuses a pool whose dev buy exceeds the limit, and a shortfall buy above its limit', async () => {
+      const a = await setup(100_000_000_000n);
+      await expect(executeCollapse(a.mother, { ...a.deps, pump: { ...a.deps.pump, maxDaughterDevBuySol: 1 } })).rejects.toThrow(/above the 1 SOL limit; launch refused/);
+      const b = await setup(100_000_000_000n);
+      await expect(executeCollapse(b.mother, { ...b.deps, pump: { ...b.deps.pump, maxShortfallSol: 0.1 } })).rejects.toThrow(/reward shortfall would cost/);
+      expect(b.buys).toEqual([]);
+    });
   });
 });

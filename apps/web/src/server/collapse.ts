@@ -1,5 +1,5 @@
 import 'server-only';
-import { executeCollapse, type CollapseJournalDoc, type AirdropJournalDoc } from '@qsd/solana';
+import { bondingCurvePda, buyOnPumpFun, decodeBondingCurve, executeCollapse, type CollapseJournalDoc, type AirdropJournalDoc } from '@qsd/solana';
 import { getChain } from './chain';
 import { db } from './db';
 import { coinFromDb, insertCoin, loadCoin, saveCoinState } from './coins';
@@ -25,6 +25,24 @@ async function motherImageBytes(ca: string, imageUri: string): Promise<Uint8Arra
   return new Uint8Array(await res.arrayBuffer());
 }
 
+/** QSD_MAX_COLLAPSES_PER_DAY, or null for no cap (devnet only; mainnet defaults to 3). */
+function collapseCap(): number | null {
+  const raw = process.env.QSD_MAX_COLLAPSES_PER_DAY?.trim();
+  if (!raw) return getChain().config.cluster === 'mainnet-beta' ? 3 : null;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) throw new Error('QSD_MAX_COLLAPSES_PER_DAY must be a non-negative integer');
+  return n;
+}
+
+/** A SOL spending limit from env, or `fallback` when unset. */
+function solLimit(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) throw new Error(`${name} must be a non-negative number of SOL`);
+  return n;
+}
+
 /**
  * Execute (or resume) a collapse through @qsd/solana `executeCollapse`, then
  * mirror the outcome: daughter coin, allocation table + entries, airdrop
@@ -39,10 +57,18 @@ export async function runCollapse(ca: string, log: (line: string) => void = cons
     log(`collapse ${ca}: daughter ${mother.daughterCa} already recorded`);
     return;
   }
+  // Spending guard: at most QSD_MAX_COLLAPSES_PER_DAY daughters launched in any 24 hours (each costs the fee wallet ~1.2-1.5 SOL).
+  // A collapse over the cap stays collapsed and is retried by the reconcile tick until the window frees up.
+  const cap = collapseCap();
+  if (cap !== null) {
+    const since = Math.floor(Date.now() / 1000) - 86_400;
+    const launched = await db().coin.count({ where: { motherCa: { not: null }, bornAt: { gte: since } } });
+    if (launched >= cap) throw new Error(`collapse ${ca}: ${launched} daughters launched in the last 24 h, at the QSD_MAX_COLLAPSES_PER_DAY cap of ${cap}; waiting`);
+  }
   const chain = getChain();
   const { creator, sender, reader, transferSender, anchor, getMintRentLamports } = await chain.withCreator();
-  const devBuySol = Number(process.env.QSD_DAUGHTER_DEV_BUY_SOL ?? '0');
-  if (!Number.isFinite(devBuySol) || devBuySol < 0) throw new Error('QSD_DAUGHTER_DEV_BUY_SOL must be a non-negative number of SOL');
+  const maxDaughterDevBuySol = solLimit('QSD_DAUGHTER_DEV_BUY_MAX_SOL', 0.1);
+  const maxShortfallSol = solLimit('QSD_REWARD_SHORTFALL_MAX_SOL', 0);
   // H-W13: the holder snapshot is taken at the slot the collapse proof was anchored in (recorded on the
   // collapsing measurement), not at whatever slot this worker happens to start at.
   const collapseSlot = proofAnchorSlot(row);
@@ -62,7 +88,15 @@ export async function runCollapse(ca: string, log: (line: string) => void = cons
     journal: chain.journal<CollapseJournalDoc>(`collapse-${ca}`),
     airdropJournal: chain.airdropJournal(ca) as never,
     imageBytes: () => motherImageBytes(ca, mother.image.uri),
-    devBuySol,
+    pump: {
+      async curve(mint) {
+        const info = await chain.connection.getAccountInfo(bondingCurvePda(mint), 'confirmed');
+        return info ? decodeBondingCurve(info.data) : undefined;
+      },
+      buy: (p, onSent) => buyOnPumpFun(p, { sender, pumpPortalApiUrl: chain.config.pumpPortalApiUrl, onSent }),
+      maxDaughterDevBuySol,
+      maxShortfallSol,
+    },
     ...(chain.config.cluster === 'devnet' ? { devnetSupply: { units: genesisConfig().supplyUnits, decimals: genesisConfig().decimals } } : {}),
     observer: chain.observer,
     log,
@@ -124,7 +158,7 @@ export async function runCollapse(ca: string, log: (line: string) => void = cons
       coinCa: daughter.ca,
       tx: outcome.launch.txSignature,
       summary: `${daughter.ticker} born (generation ${daughter.generation}) from ${mother.ticker}; ${table.entries.length} holder${table.entries.length === 1 ? '' : 's'} allocated ${formatUnits(table.allocatedUnits, daughter.supply.decimals)} units, root ${table.merkleRoot.slice(0, 16)}…`,
-      data: { motherCa: ca, merkleRoot: table.merkleRoot, rootAnchorTx: airdrop.rootAnchorSignature, burnTx: rewards.burnTx, measurerTx: rewards.measurerTx ?? null },
+      data: { motherCa: ca, merkleRoot: table.merkleRoot, rootAnchorTx: airdrop.rootAnchorSignature, burnTx: rewards.burnTx || null, measurerTx: rewards.measurerTx ?? null },
     });
     await logEvent({
       type: 'airdrop',

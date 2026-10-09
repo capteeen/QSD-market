@@ -209,8 +209,12 @@ export interface LaunchQuoteResponse {
   cluster: 'devnet' | 'mainnet-beta';
   launchCostLamports: string | null;
   identityReserveLamports: string | null;
+  /** Fixed dev buy every launch pays for. */
+  devBuyLamports: string | null;
+  /** Half-life presets this deployment offers (only the 30-second one during the launch phase). */
+  presets: { id: string; label: string; maxWindowSec: number }[];
   payTo: string | null;
-  reasons: { launchCost?: string; identityReserve?: string; payTo?: string };
+  reasons: { launchCost?: string; identityReserve?: string; devBuy?: string; payTo?: string };
 }
 
 export interface MeasureChallengeResponse {

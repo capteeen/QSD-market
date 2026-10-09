@@ -176,6 +176,7 @@ function freshEnvironment(): void {
   process.env.QSD_GENESIS_CONFIG = path.join(ROOT, 'apps/web/genesis.example.json');
   process.env.QSD_LAUNCH_COST_LAMPORTS = LAUNCH_COST.toString();
   process.env.QSD_IDENTITY_RESERVE_LAMPORTS = RESERVE.toString();
+  process.env.QSD_LAUNCH_DEV_BUY_LAMPORTS = '0';
   delete process.env.REDIS_URL;
 }
 
@@ -189,7 +190,7 @@ describe('payment is verified on-chain BEFORE any identity or key material exist
     { name: 'paid by another wallet', set: () => (state.payment.payer = Keypair.generate().publicKey), re: /does not involve the wallet and the protocol address/ },
     { name: 'the claimed wallet did not sign', set: () => (state.payment.payerSigned = false), re: /did not sign/ },
     { name: 'one lamport short', set: () => (state.payment.received = LAUNCH_COST + RESERVE - 1n), re: /below the required/ },
-    { name: 'dev buy not covered', set: () => undefined, re: /below the required/ },
+    { name: 'dev buy not covered', set: () => (process.env.QSD_LAUNCH_DEV_BUY_LAMPORTS = '500000000'), re: /below the required/ },
   ];
   for (const f of failures) {
     it(`${f.name}: an error frame, no vault write, no reserve entry, no transaction, no coin`, async () => {
@@ -207,6 +208,14 @@ describe('payment is verified on-chain BEFORE any identity or key material exist
       expect(fakeDb.eventLog.rows.length).toBe(0);
     });
   }
+
+  it('a dev buy other than the fixed amount → refused before the chain is read', async () => {
+    const frames = await collect(form({ devBuySol: 0.5 }));
+    expect(frames.at(-1)!.event).toBe('error');
+    expect(String(json(frames.at(-1)!)['message'])).toMatch(/dev buy must be exactly 0 lamports/);
+    expect(state.getTransactionCalls).toEqual([]);
+    expect(state.vaultWrites).toEqual([]);
+  });
 
   it('launch cost not configured → refused before the chain is read', async () => {
     delete process.env.QSD_LAUNCH_COST_LAMPORTS;

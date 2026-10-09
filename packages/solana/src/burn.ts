@@ -1,6 +1,7 @@
 /**
- * Hourly buy-and-burn: tally lamports received by the fee wallet since the
- * last run (journalled by signature), swap SOL → $QSD through Jupiter, burn
+ * Hourly buy-and-burn: tally the creator fees the fee wallet collected from
+ * its pump.fun creator vault since the last run (journalled by signature;
+ * deposits and launch payments are not fees), swap SOL → $QSD through Jupiter, burn
  * 100 % of what arrived, log every signature.
  *
  * Jupiter — confirmed 2026-10-09 at https://developers.jup.ag/docs/swap/v2/get-quote.md
@@ -15,6 +16,7 @@ import { PublicKey, VersionedTransaction, type Connection } from '@solana/web3.j
 import { createBurnInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { ChainConfigError, ChainUnavailableError, TransientChainError, errorMessage } from './errors.js';
 import type { JournalStore } from './journal.js';
+import { creatorFeeCredit } from './pump.js';
 import type { ChainObserver } from './observer.js';
 import type { ChainReader, TransactionSender } from './sender.js';
 
@@ -79,7 +81,11 @@ export async function fetchJupiterOrder(req: JupiterOrderRequest, fetchImpl: Fet
 export interface FeeLedger {
   /** Signatures touching `wallet` newer than `untilSignature` (oldest first). */
   signaturesSince(wallet: string, untilSignature: string | undefined): Promise<string[]>;
-  /** Lamports credited to `wallet` by each signature (post − pre, only positive). */
+  /**
+   * Real fee income per signature: lamports paid out of `wallet`'s pump.fun
+   * creator vault to `wallet` (see `creatorFeeCredit`). Deposits, launch
+   * payments and operator top-ups are not fees and are never included.
+   */
   creditedLamports(wallet: string, signatures: readonly string[]): Promise<Map<string, bigint>>;
 }
 
@@ -117,11 +123,10 @@ export class Web3FeeLedger implements FeeLedger {
       txs.forEach((tx, j) => {
         const sig = chunk[j] as string;
         if (!tx || !tx.meta) return;
-        const keys = tx.transaction.message.getAccountKeys({ accountKeysFromLookups: tx.meta.loadedAddresses ?? null }).staticAccountKeys;
-        const idx = keys.findIndex((k) => k.toBase58() === wallet);
-        if (idx < 0) return;
-        const delta = BigInt(tx.meta.postBalances[idx] ?? 0) - BigInt(tx.meta.preBalances[idx] ?? 0);
-        if (delta > 0n) m.set(sig, delta);
+        const keys = tx.transaction.message.getAccountKeys({ accountKeysFromLookups: tx.meta.loadedAddresses ?? null });
+        const accountKeys = [...keys.staticAccountKeys, ...(keys.accountKeysFromLookups?.writable ?? []), ...(keys.accountKeysFromLookups?.readonly ?? [])].map((k) => k.toBase58());
+        const credit = creatorFeeCredit({ accountKeys, preBalances: tx.meta.preBalances, postBalances: tx.meta.postBalances }, wallet);
+        if (credit > 0n) m.set(sig, credit);
       });
     }
     return m;

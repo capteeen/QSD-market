@@ -137,7 +137,6 @@ async function world(): Promise<World> {
     journal,
     airdropJournal,
     imageBytes: async () => new Uint8Array([1, 2, 3]),
-    devBuySol: 0,
     devnetSupply: { units: 10_000_000n, decimals: 6 },
     observer,
     sleep: noSleep,
