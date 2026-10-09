@@ -1,3 +1,9 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(here, '../..');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -6,6 +12,13 @@ const nextConfig = {
   experimental: {
     // Keep node-only packages out of the client bundle and out of the server webpack graph.
     serverComponentsExternalPackages: ['@prisma/client', 'ioredis', 'bullmq', 'pino', 'pino-pretty'],
+    // Trace from the monorepo root so serverless bundles (Vercel) keep the repo layout, and
+    // ship docs/physics.md and docs/economics.md with the /how API: it renders those files verbatim at request time.
+    outputFileTracingRoot: workspaceRoot,
+    outputFileTracingIncludes: {
+      '/api/how': ['../../docs/physics.md', '../../docs/economics.md'],
+      '/how': ['../../docs/physics.md', '../../docs/economics.md'],
+    },
   },
   webpack: (config, { isServer }) => {
     // Workspace packages import './x.js' meaning './x.ts' (TS "Bundler" resolution).
