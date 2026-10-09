@@ -1,0 +1,29 @@
+{
+  "name": "@qsd/tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent H (verify): adversarial, independent tests and reference implementations for qsd.market.",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@qsd/crypto": "workspace:*",
+    "@qsd/quantum": "workspace:*",
+    "@qsd/ui-tokens": "workspace:*"
+  },
+  "devDependencies": {
+    "@noble/curves": "^1.9.2",
+    "@noble/hashes": "^1.8.0",
+    "@types/node": "^22.0.0",
+    "fast-check": "^3.23.2",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1"
+  }
+}
