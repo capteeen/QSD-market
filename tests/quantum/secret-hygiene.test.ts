@@ -82,7 +82,7 @@ describe('ANU provider secret hygiene', () => {
 
   it('createProviderFromEnv error messages never echo the key or seed', () => {
     const prev = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'test';
+    Object.assign(process.env, { NODE_ENV: 'test' });
     try {
       for (const env of [
         { QSD_QRNG_API_KEY: API_KEY },
@@ -95,7 +95,7 @@ describe('ANU provider secret hygiene', () => {
         }
       }
     } finally {
-      if (prev === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = prev;
+      if (prev === undefined) Reflect.deleteProperty(process.env, 'NODE_ENV'); else Object.assign(process.env, { NODE_ENV: prev });
     }
   });
 

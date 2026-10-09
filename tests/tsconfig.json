@@ -2,9 +2,29 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
-    "types": ["node", "vitest/globals"],
-    "jsx": "react-jsx"
+    "types": [
+      "node",
+      "vitest/globals"
+    ],
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "../apps/web/src/*"
+      ],
+      "scene-three": [
+        "../packages/scene/node_modules/@types/three/index.d.ts"
+      ],
+      "scene-rttr": [
+        "../packages/scene/node_modules/@react-three/test-renderer/dist/declarations/src/index.d.ts"
+      ]
+    }
   },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

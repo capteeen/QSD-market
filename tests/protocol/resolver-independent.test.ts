@@ -59,8 +59,12 @@ const channelsArb = fc.array(fc.integer({ min: 1, max: 1_000_000 }), { minLength
   ppm[ppm.length - 1]! += 1_000_000 - ppm.reduce((a, b) => a + b, 0);
   return ppm.map((p, i) => ({ id: `ch${i}`, probabilityPpm: p }));
 });
+// H-E2 fix landed between waves: `at`, `lastActivityAt`, `halfLifeSec` are now bound; the resolver reads only the ppb.
 const inputsArb: fc.Arbitrary<MeasurementInputs> = fc.record({
   ca: fc.constant('CA'),
+  at: fc.constant(1_700_003_600),
+  lastActivityAt: fc.constant(1_700_000_000),
+  halfLifeSec: fc.constant(3600),
   decayProgressPpb: fc.oneof(fc.integer({ min: 0, max: 1_000_000_000 }), fc.constantFrom(0, 1, 999_999_999, 1_000_000_000, 500_000_000)),
   channels: channelsArb,
   tunnelProbabilityPpm: fc.oneof(fc.constant(PROTOCOL_PARAMS.TUNNEL_PROBABILITY_PPM), fc.integer({ min: 0, max: 1_000_000 })),
@@ -109,7 +113,7 @@ describe('resolver: documented byte rules reproduced independently (economics.md
     ];
     const zero = new Uint8Array(32);
     const ff = new Uint8Array(32).fill(0xff);
-    const inp = (ppb: number, tunnel = 25_000): MeasurementInputs => ({ ca: 'c', decayProgressPpb: ppb, channels: ch, tunnelProbabilityPpm: tunnel, measurementIndex: 0 });
+    const inp = (ppb: number, tunnel = 25_000): MeasurementInputs => ({ ca: 'c', at: 1_700_003_600, lastActivityAt: 1_700_000_000, halfLifeSec: 3600, decayProgressPpb: ppb, channels: ch, tunnelProbabilityPpm: tunnel, measurementIndex: 0 });
     expect(resolveMeasurement(zero, inp(0))).toEqual({ kind: 'survive' });
     expect(resolveMeasurement(zero, inp(1))).toEqual({ kind: 'tunnel' }); // u1 = 0 < 2.5 %
     expect(resolveMeasurement(zero, inp(1, 0))).toEqual({ kind: 'collapse', channelId: 'a', channelIndex: 0, poolPointPpm: 0 });
@@ -134,7 +138,7 @@ describe('resolver: documented byte rules reproduced independently (economics.md
   });
 
   it('short draws, bad tables and bad inputs are refused (no silent defaults)', () => {
-    const good: MeasurementInputs = { ca: 'c', decayProgressPpb: 1, channels: [{ id: 'a', probabilityPpm: 1_000_000 }], tunnelProbabilityPpm: 0, measurementIndex: 0 };
+    const good: MeasurementInputs = { ca: 'c', at: 1_700_003_600, lastActivityAt: 1_700_000_000, halfLifeSec: 3600, decayProgressPpb: 1, channels: [{ id: 'a', probabilityPpm: 1_000_000 }], tunnelProbabilityPpm: 0, measurementIndex: 0 };
     expect(() => resolveMeasurement(new Uint8Array(31), good)).toThrow(/32/);
     expect(() => resolveMeasurement(new Uint8Array(32), { ...good, channels: [{ id: 'a', probabilityPpm: 999_999 }] })).toThrow(/sum/);
     expect(() => resolveMeasurement(new Uint8Array(32), { ...good, channels: [{ id: 'a', probabilityPpm: 500_000 }, { id: 'a', probabilityPpm: 500_000 }] })).toThrow(/duplicate/);
@@ -158,7 +162,7 @@ describe('resolver: distributions over the dev provider (spec §5 l.218-221)', (
     const client = createQrngClient({ provider: new UnsafeDevRandomProvider() });
     const N = 8_000;
     const counts: Record<string, number> = { alpha: 0, beta: 0, gamma: 0, tunnel: 0 };
-    const inputs: MeasurementInputs = { ca: 'c', decayProgressPpb: 1_000_000_000, channels: ch, tunnelProbabilityPpm: PROTOCOL_PARAMS.TUNNEL_PROBABILITY_PPM, measurementIndex: 0 };
+    const inputs: MeasurementInputs = { ca: 'c', at: 1_700_003_600, lastActivityAt: 1_700_000_000, halfLifeSec: 3600, decayProgressPpb: 1_000_000_000, channels: ch, tunnelProbabilityPpm: PROTOCOL_PARAMS.TUNNEL_PROBABILITY_PPM, measurementIndex: 0 };
     for (let i = 0; i < N; i++) {
       const d = await client.draw(32);
       const o = resolveMeasurement(d.bytes, inputs);
@@ -175,7 +179,7 @@ describe('resolver: distributions over the dev provider (spec §5 l.218-221)', (
 
   it('survive/collapse frequency tracks decayProgress at 0.25 and 0.9 over 6 000 OS-random draws (resolver is a pure function of bytes)', () => {
     for (const p of [0.25, 0.9]) {
-      const inputs: MeasurementInputs = { ca: 'c', decayProgressPpb: Math.round(p * 1e9), channels: ch, tunnelProbabilityPpm: 0, measurementIndex: 0 };
+      const inputs: MeasurementInputs = { ca: 'c', at: 1_700_003_600, lastActivityAt: 1_700_000_000, halfLifeSec: 3600, decayProgressPpb: Math.round(p * 1e9), channels: ch, tunnelProbabilityPpm: 0, measurementIndex: 0 };
       let collapses = 0;
       const N = 6_000;
       for (let i = 0; i < N; i++) if (resolveMeasurement(new Uint8Array(randomBytes(32)), inputs).kind === 'collapse') collapses++;

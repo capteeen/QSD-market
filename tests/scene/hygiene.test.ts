@@ -172,7 +172,7 @@ describe('side panel honesty (item 9)', () => {
     // HashDisplay truncates to prefix…suffix with a copy button (full value in the DOM title/clipboard); check both ends
     const trunc = (h: string) => `${h.slice(0, 8)}…${h.slice(-6)}`;
     expect(t).toContain(trunc(f.rootHex));
-    expect(t).toContain(trunc(f.chain[1]!.txSignature));
+    expect(t).toContain(trunc(f.chain[1]!.txSignature!));
     expect(html).toContain(f.rootHex); // the full root is in the markup (copy/title), not invented or shortened in state
     expect(t).toContain('274432 / 274432');
     expect(t).toContain('256 / 256');

@@ -15,7 +15,8 @@
     "@qsd/scene": "workspace:*",
     "@qsd/ui-tokens": "workspace:*",
     "@qsd/protocol": "workspace:*",
-    "@qsd/solana": "workspace:*"
+    "@qsd/solana": "workspace:*",
+    "web": "workspace:*"
   },
   "devDependencies": {
     "@noble/curves": "^1.9.2",
@@ -30,6 +31,15 @@
     "@types/react-dom": "^18.3.1",
     "@solana/web3.js": "^1.98.4",
     "@solana/spl-token": "^0.4.13",
-    "bs58": "^6.0.0"
+    "bs58": "^6.0.0",
+    "jsdom": "^25.0.1",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/dom": "^10.4.0",
+    "next": "14.2.33",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0",
+    "@tanstack/react-query": "^5.59.0",
+    "@solana/wallet-adapter-react": "^0.15.35",
+    "@solana/wallet-adapter-react-ui": "^0.9.35"
   }
 }

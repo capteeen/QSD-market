@@ -33,20 +33,20 @@ beforeEach(() => {
   savedEnv = process.env.NODE_ENV;
 });
 afterEach(() => {
-  if (savedEnv === undefined) delete process.env.NODE_ENV;
-  else process.env.NODE_ENV = savedEnv;
+  if (savedEnv === undefined) Reflect.deleteProperty(process.env, 'NODE_ENV');
+  else Object.assign(process.env, { NODE_ENV: savedEnv });
 });
 
 describe('guard: exact NODE_ENV=production', () => {
   it('constructor throws ProductionGuardError', () => {
-    process.env.NODE_ENV = 'production';
+    Object.assign(process.env, { NODE_ENV: 'production' });
     expect(() => new UnsafeDevRandomProvider()).toThrow(ProductionGuardError);
   });
 
   it('constructed in test, then NODE_ENV flipped to production: draw() throws', async () => {
-    process.env.NODE_ENV = 'test';
+    Object.assign(process.env, { NODE_ENV: 'test' });
     const p = new UnsafeDevRandomProvider();
-    process.env.NODE_ENV = 'production';
+    Object.assign(process.env, { NODE_ENV: 'production' });
     await expect(p.draw(8)).rejects.toThrow(ProductionGuardError);
     // and through the client too
     const client = createQrngClient({ provider: p });
@@ -54,20 +54,20 @@ describe('guard: exact NODE_ENV=production', () => {
   });
 
   it('createProviderFromEnv({QSD_QRNG_PROVIDER:"UNSAFE_DEV_RANDOM"}) throws', () => {
-    process.env.NODE_ENV = 'production';
+    Object.assign(process.env, { NODE_ENV: 'production' });
     expect(() => createProviderFromEnv({ QSD_QRNG_PROVIDER: 'UNSAFE_DEV_RANDOM' })).toThrow(ProductionGuardError);
     expect(() => createProviderFromEnv({ QSD_QRNG_PROVIDER: ' UNSAFE_DEV_RANDOM ' })).toThrow(ProductionGuardError);
   });
 
   it('an injected env claiming NODE_ENV=test cannot override the real production env', () => {
-    process.env.NODE_ENV = 'production';
+    Object.assign(process.env, { NODE_ENV: 'production' });
     expect(() =>
       createProviderFromEnv({ QSD_QRNG_PROVIDER: 'UNSAFE_DEV_RANDOM', NODE_ENV: 'test' }),
     ).toThrow(ProductionGuardError);
   });
 
   it('createProviderFromEnv never silently returns the dev provider when the real provider is misconfigured', () => {
-    process.env.NODE_ENV = 'production';
+    Object.assign(process.env, { NODE_ENV: 'production' });
     expect(() => createProviderFromEnv({})).toThrow();
     expect(() => createProviderFromEnv({ QSD_QRNG_API_KEY: 'k' })).toThrow();
     expect(() => createProviderFromEnv({ QSD_QRNG_PROVIDER: 'unsafe_dev_random' })).toThrow();
@@ -80,7 +80,7 @@ describe('guard: case / whitespace variants of NODE_ENV', () => {
   // misconfigured platform can leave the dev provider constructible.
   for (const v of ['Production', 'PRODUCTION', ' production', 'production ', 'prod']) {
     it(`FINDING H-Q5 (LOW): NODE_ENV=${JSON.stringify(v)} should still be treated as production`, () => {
-      process.env.NODE_ENV = v;
+      Object.assign(process.env, { NODE_ENV: v });
       expect(() => new UnsafeDevRandomProvider()).toThrow(ProductionGuardError);
     });
   }
@@ -90,7 +90,7 @@ describe('guard: fail-open when NODE_ENV is absent or process is absent', () => 
   it('FINDING H-Q4 (HIGH): with NODE_ENV unset the dev provider is constructible and usable', async () => {
     // A bare `node worker.js` in a container that forgot NODE_ENV gets non-quantum randomness.
     // The guard is "deny if production" not "allow only if development/test".
-    delete process.env.NODE_ENV;
+    Reflect.deleteProperty(process.env, 'NODE_ENV');
     expect(() => new UnsafeDevRandomProvider()).toThrow(ProductionGuardError);
   });
 
@@ -109,7 +109,7 @@ describe('guard: fail-open when NODE_ENV is absent or process is absent', () => 
   });
 
   it('Object.defineProperty / replacing globalThis.process bypasses the guard (INFO: equivalent to code execution)', () => {
-    process.env.NODE_ENV = 'production';
+    Object.assign(process.env, { NODE_ENV: 'production' });
     const realProcess = globalThis.process;
     try {
       globalThis.process = { env: { NODE_ENV: 'test' } } as unknown as NodeJS.Process;
@@ -124,7 +124,7 @@ describe('guard: fail-open when NODE_ENV is absent or process is absent', () => 
 
 describe('a hand-rolled provider claiming the UNSAFE_DEV_RANDOM id', () => {
   it('createQrngClient accepts any object with id+draw, but verify() rejects its unsafe-dev bundles without allowUnsafeDev', async () => {
-    process.env.NODE_ENV = 'production';
+    Object.assign(process.env, { NODE_ENV: 'production' });
     const signer = ephemeralEd25519Signer();
     const fake: QrngProvider = {
       id: UNSAFE_DEV_RANDOM_ID,

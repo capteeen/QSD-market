@@ -48,7 +48,7 @@ const INPUTS: Inputs = { coin: 'So11111111111111111111111111111111111111112', p:
 const clone = <T>(b: T): T => JSON.parse(JSON.stringify(b)) as T;
 
 async function freshBundle(inputs: Inputs = INPUTS): Promise<ProofBundle<Inputs>> {
-  process.env.NODE_ENV = 'test';
+  Object.assign(process.env, { NODE_ENV: 'test' });
   const client = createQrngClient({ provider: new UnsafeDevRandomProvider() });
   const { bundle } = await client.measure(inputs, resolver);
   return bundle;
