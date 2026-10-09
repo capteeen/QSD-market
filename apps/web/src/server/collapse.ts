@@ -25,6 +25,15 @@ async function motherImageBytes(ca: string, imageUri: string): Promise<Uint8Arra
   return new Uint8Array(await res.arrayBuffer());
 }
 
+/** QSD_MAX_COLLAPSES_PER_DAY, or null for no cap (devnet only; mainnet defaults to 3). */
+function collapseCap(): number | null {
+  const raw = process.env.QSD_MAX_COLLAPSES_PER_DAY?.trim();
+  if (!raw) return getChain().config.cluster === 'mainnet-beta' ? 3 : null;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) throw new Error('QSD_MAX_COLLAPSES_PER_DAY must be a non-negative integer');
+  return n;
+}
+
 /** A SOL spending limit from env, or `fallback` when unset. */
 function solLimit(name: string, fallback: number): number {
   const raw = process.env[name]?.trim();
@@ -47,6 +56,14 @@ export async function runCollapse(ca: string, log: (line: string) => void = cons
   if (mother.daughterCa) {
     log(`collapse ${ca}: daughter ${mother.daughterCa} already recorded`);
     return;
+  }
+  // Spending guard: at most QSD_MAX_COLLAPSES_PER_DAY daughters launched in any 24 hours (each costs the fee wallet ~1.2-1.5 SOL).
+  // A collapse over the cap stays collapsed and is retried by the reconcile tick until the window frees up.
+  const cap = collapseCap();
+  if (cap !== null) {
+    const since = Math.floor(Date.now() / 1000) - 86_400;
+    const launched = await db().coin.count({ where: { motherCa: { not: null }, bornAt: { gte: since } } });
+    if (launched >= cap) throw new Error(`collapse ${ca}: ${launched} daughters launched in the last 24 h, at the QSD_MAX_COLLAPSES_PER_DAY cap of ${cap}; waiting`);
   }
   const chain = getChain();
   const { creator, sender, reader, transferSender, anchor, getMintRentLamports } = await chain.withCreator();

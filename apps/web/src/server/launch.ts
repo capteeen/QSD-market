@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { CryptoObserver, redactEvent, toHex, type CryptoEvent } from '@qsd/crypto';
-import { HALF_LIFE_PRESETS, initialImageLineage, type Coin } from '@qsd/protocol';
+import { HALF_LIFE_PRESETS, initialImageLineage, maxWindowSec, type Coin } from '@qsd/protocol';
 import { QuantumEventBus, bundleHash, canonicalJson, type JsonValue, type OutcomeResolver, type ProofBundle, type QuantumEvent } from '@qsd/quantum';
 import { launchDevnetSplToken, launchOnPumpFun, redactSecrets, type ChainEvent as SolanaChainEvent } from '@qsd/solana';
 import { encodeCryptoEvents } from '@qsd/scene/model';
@@ -78,6 +78,26 @@ export const launchLineageResolver: OutcomeResolver<LaunchInputs> = {
   },
 };
 
+export interface LaunchPreset {
+  id: string;
+  label: string;
+  halfLifeSec: number;
+  maxWindowSec: number;
+}
+
+/** Launch-phase preset: a 5-minute half-life, auto-measured after 10 quiet minutes, so a coin with no trading collapses within minutes. */
+export const FAST_LAUNCH_PRESET: LaunchPreset = { id: '5m', label: '5 minutes (launch phase)', halfLifeSec: 300, maxWindowSec: maxWindowSec(300) };
+
+/**
+ * The half-life presets /launch offers. With QSD_FAST_LAUNCH_PHASE=true every
+ * generation-1 coin gets the 5-minute preset; daughters still take their
+ * half-life from the genesis channel table (1 hour or more), so only the
+ * first generation is fast.
+ */
+export function launchPresets(): readonly LaunchPreset[] {
+  return process.env.QSD_FAST_LAUNCH_PHASE?.trim() === 'true' ? [FAST_LAUNCH_PRESET] : HALF_LIFE_PRESETS;
+}
+
 export class LaunchValidationError extends Error {
   override readonly name = 'LaunchValidationError';
 }
@@ -86,7 +106,7 @@ export function validateLaunchForm(f: Partial<LaunchForm>): asserts f is LaunchF
   if (!f.name || f.name.trim().length < 1 || f.name.length > 32) throw new LaunchValidationError('name must be 1–32 characters');
   if (!f.ticker || !/^[A-Z0-9]{1,10}$/.test(f.ticker)) throw new LaunchValidationError('ticker must be 1–10 uppercase letters or digits');
   if (typeof f.description !== 'string' || f.description.length > 500) throw new LaunchValidationError('description must be at most 500 characters');
-  if (!f.halfLifePreset || !HALF_LIFE_PRESETS.some((p) => p.id === f.halfLifePreset)) throw new LaunchValidationError('half-life preset is not one of the protocol presets');
+  if (!f.halfLifePreset || !launchPresets().some((p) => p.id === f.halfLifePreset)) throw new LaunchValidationError('half-life preset is not one of the presets offered');
   if (typeof f.devBuySol !== 'number' || !Number.isFinite(f.devBuySol) || f.devBuySol < 0 || f.devBuySol > 100) throw new LaunchValidationError('dev buy must be a number of SOL between 0 and 100');
   if (!f.image || !(f.image.bytes instanceof Uint8Array) || f.image.bytes.length === 0 || f.image.bytes.length > 2_000_000) throw new LaunchValidationError('image must be 1 byte to 2 MB');
   if (!/^image\/(png|jpeg|gif|webp)$/.test(f.image.mime)) throw new LaunchValidationError('image must be png, jpeg, gif or webp');
@@ -182,7 +202,7 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     validateLaunchForm(form);
     const chain = getChain();
     const genesis = genesisConfig();
-    const preset = HALF_LIFE_PRESETS.find((p) => p.id === form.halfLifePreset)!;
+    const preset = launchPresets().find((p) => p.id === form.halfLifePreset)!;
     const { creator, sender, reader, anchor, getMintRentLamports } = await chain.withCreator();
 
     push('status', { step: 'payment', message: 'verifying payment' });

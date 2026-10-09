@@ -1,7 +1,7 @@
 import type { NextResponse } from 'next/server';
 import { chainStatus, getChain, serverCluster } from '@/server/chain';
 import { genesisStatus } from '@/server/genesis';
-import { launchCosts } from '@/server/launch';
+import { launchCosts, launchPresets } from '@/server/launch';
 import { guarded, json } from '@/server/unavailable';
 import type { LaunchQuoteResponse } from '@/lib/types';
 
@@ -32,6 +32,7 @@ export async function GET(): Promise<NextResponse> {
       launchCostLamports: costs.launchCostLamports?.toString() ?? null,
       identityReserveLamports: costs.identityReserveLamports?.toString() ?? null,
       devBuyLamports: costs.devBuyLamports?.toString() ?? null,
+      presets: launchPresets().map((p) => ({ id: p.id, label: p.label, maxWindowSec: p.maxWindowSec })),
       payTo: g.error ? null : payTo,
       reasons,
     };

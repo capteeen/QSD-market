@@ -74,10 +74,12 @@ export function LaunchView() {
   const [name, setName] = useState('');
   const [ticker, setTicker] = useState('');
   const [description, setDescription] = useState('');
-  const [preset, setPreset] = useState<string>(HALF_LIFE_PRESETS[2]!.id);
+  const [presetChoice, setPreset] = useState<string>(HALF_LIFE_PRESETS[2]!.id);
   const [image, setImage] = useState<File | null>(null);
 
   const q = quote.data && !isUnavailable(quote.data) ? quote.data : null;
+  const presets = q?.presets?.length ? q.presets : HALF_LIFE_PRESETS;
+  const preset = presets.some((p) => p.id === presetChoice) ? presetChoice : presets[0]!.id;
   const devBuyLamports = q && q.devBuyLamports !== null ? BigInt(q.devBuyLamports) : null;
   const total = q && q.launchCostLamports !== null && q.identityReserveLamports !== null && devBuyLamports !== null ? BigInt(q.launchCostLamports) + BigInt(q.identityReserveLamports) + devBuyLamports : null;
   const canLaunch = !!q && !!q.payTo && total !== null && !!publicKey && !!image && name.trim().length > 0 && /^[A-Za-z0-9]{1,10}$/.test(ticker) && phase === 'form';
@@ -254,9 +256,9 @@ export function LaunchView() {
               <label>
                 {LAUNCH.form.halfLife}
                 <select className="qsd-input" value={preset} onChange={(e) => setPreset(e.target.value)}>
-                  {HALF_LIFE_PRESETS.map((p) => (
+                  {presets.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.label} (auto-measurement after {p.maxWindowSec / 3600} h)
+                      {p.label} (auto-measurement after {p.maxWindowSec >= 3600 ? `${p.maxWindowSec / 3600} h` : `${p.maxWindowSec / 60} min`})
                     </option>
                   ))}
                 </select>
