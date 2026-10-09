@@ -1,7 +1,7 @@
 // @vitest-environment node
 /**
  * PrismaKvStore against a real Postgres. Runs only when QSD_TEST_DATABASE_URL
- * points at a database whose schema is pushed (`prisma db push`); its ChainKv
+ * points at a database with the migrations applied (`prisma migrate deploy`); its ChainKv
  * rows are deleted before each test.
  */
 import { describe, expect, it, beforeEach, vi } from 'vitest';

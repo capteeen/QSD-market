@@ -66,7 +66,7 @@ Leave `PUMPPORTAL_API_URL`, `JUPITER_API_URL` and `QSD_QRNG_ENDPOINT` at their d
 
 Each coin's mint key and identity seed, the identity's one-time-key state, and the crash-resume journals for airdrops and collapses are stored in Postgres (table `ChainKv`), with keys encrypted under `QSD_KEY_ENCRYPTION_KEY`. Losing them means the protocol can no longer sign for that coin, so:
 
-- After deploying this version, sync the schema once: `DATABASE_URL=<your Neon URL> pnpm --filter web exec prisma db push`.
+- The table is created automatically: every Vercel build applies pending migrations (`prisma migrate deploy`). Nothing to run by hand.
 - Turn on backups for the database (Neon keeps point-in-time history on paid plans).
 - Leave `QSD_KEYSTORE_PATH` and `QSD_JOURNAL_DIR` unset. Setting them switches back to files, which only makes sense on a host with a persistent disk.
 - Only then set `QSD_MAINNET_ENABLED=true`.
