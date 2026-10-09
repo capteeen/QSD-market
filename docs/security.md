@@ -1,6 +1,6 @@
 # QSD security review — Agent H (verify)
 
-Status: **WAVE 3 (final)** — consolidated over wave 1 (`@qsd/crypto`, `@qsd/quantum`, `@qsd/ui-tokens`,
+Status: **WAVE 3 (final) — after Agent F's apps/web fixes** — consolidated over wave 1 (`@qsd/crypto`, `@qsd/quantum`, `@qsd/ui-tokens`,
 `/docs/physics.md`), wave 2A (`@qsd/protocol`, `@qsd/solana`, `/docs/economics.md`), the scene instance
 (`@qsd/scene`, formerly `tests/scene/FINDINGS.md`, folded in here and deleted) and wave 3 (`apps/web`).
 
@@ -11,18 +11,17 @@ Chronological detail, commands and raw outputs are in [`audit-log.md`](./audit-l
 
 ## 0. Ship gate (SPEC §10 l.419-420, §11 l.435)
 
-**Nothing ships with an open BLOCKING finding — and there is none.** Every BLOCKING and HIGH finding of
-waves 1 and 2A (H-C1, H-C2, H-Q1, H-Q3, H-Q4, H-S1, H-S2, H-S3) is FIXED and re-verified by the unchanged
-`FINDING` tests (crypto 112/112, quantum 112/112, protocol 57/57, solana 54/54, scene 61/61). Wave 3 opens
-**one HIGH: H-W1 — the launch payment can be replayed** (`verifyPayment` checks the payment signature
-against `Coin.launchTx`, which stores the *mint* transaction, so the same paid transaction launches any
-number of coins: `tests/web/launch-stream.test.ts` runs the real `runLaunch` twice on the same payment and
-gets two coins). It is a one-line fix (store `paymentTx` on the coin or the event log and check that
-column) and **must land before mainnet**; on devnet it costs the operator only rent. Open MEDIUM: H-W2
-(no `not-found.tsx` / `error.tsx` → the footer disclaimer is missing on 404 and error pages), H-W3 (the
-MEASURE button promises a fee rebate that nothing pays), H-W6 (challenge nonce consumed non-atomically:
-two concurrent requests both pass), H-W7 (a collapse whose queue job is lost is never reconciled). The §11
-devnet items remain unverified from this sandbox (no egress to Solana hosts) and are the integrator's.
+**Nothing ships with an open BLOCKING finding — and there is none; no HIGH and no MEDIUM is open either.**
+Every BLOCKING / HIGH / MEDIUM finding of every wave (H-C1, H-C2, H-Q1, H-Q3, H-Q4, H-S1, H-S2, H-S3, H-W1 and the
+rest of H-W1…H-W13) is FIXED and re-verified by Agent H's tests, which now all pass: `cd tests && npx vitest run`
+→ **38 files, 549/549**, `tsc --noEmit` exit 0 (crypto 112, quantum 112, ui-tokens 26, docs 12, protocol 57,
+solana 54, scene 61, web 115). The wave-3 `FINDING` tests (H-W1, H-W2, H-W3, H-W5, H-W6) and `LOW` tests (H-W4,
+H-W11) pass **unchanged** against Agent F's fixes; the five assertions that pinned the pre-fix state (review
+table, H-W7, H-W8, H-W13, the dev-bundle reason) were re-verified against the code and now pin the fixed state
+(§2.2 cites each fix by file:line). What remains open is LOW/INFO only (H-Q8, H-C4 from wave 1, unexamined; INFO
+H-W9/10/12/14). **The §11 devnet items stay unverified from this sandbox (no egress to Solana hosts) and are the
+integrator's to run**; on devnet also confirm that the collapse worker's reconciliation job is registered and that
+the measurement rows carry `proofSlot` (H-W7 / H-W13 depend on a running worker and on the anchor-slot lookup).
 
 ---
 
@@ -53,33 +52,34 @@ database serialises nothing beyond its unique indexes (H-W6).
 Severity: BLOCKING > HIGH > MEDIUM > LOW > INFO. Status: **OPEN** / **FIXED** (verified by the named test,
 unchanged) / **ACCEPTED** (integrator decision recorded) / noted (INFO, no action expected).
 
-### 2.1 Open at the end of wave 3
+### 2.1 Open at the end of wave 3 (after the fixes) — LOW / INFO only
 
 | id | sev | Scope | Finding (short) | Repro | Status |
 |---|---|---|---|---|---|
-| **H-W1** | **HIGH** | web `server/launch.ts:134-135, 270-272` | Launch payment replay: the "already used" check reads `Coin.launchTx`, which holds the mint tx | `web/launch-stream.test.ts` `FINDING H-W1` | **OPEN** |
-| H-W2 | MEDIUM | web `src/app/` | No `not-found.tsx` / `error.tsx` / `global-error.tsx`: 404 and error pages carry no footer disclaimer (SPEC §8 l.371-374 "every page") | `web/footer.test.tsx` `FINDING H-W2` | **OPEN** |
-| H-W3 | MEDIUM | web `copy.ts:359-360` | MEASURE promises "a fee rebate of N bps" on survive; no fee is charged, nothing pays a rebate (`surviveRebate` unreferenced in apps/web and @qsd/solana) | `web/copy-claims.test.ts` `FINDING H-W3` | **OPEN** |
-| H-W6 | MEDIUM | web `server/auth.ts:29-43` | Challenge nonce consumption is `findUnique` → checks → `update`, not one conditional write: two concurrent requests with the same signed challenge both pass | `web/measure-auth.test.ts` `FINDING H-W6` | **OPEN** |
-| H-W7 | MEDIUM | web `server/measure.ts:66`, `server/queues.ts:49-56`, `workers/index.ts` | A collapse outcome's daughter launch is only a queue job; `enqueue` swallows every failure (REDIS_URL unset → a warning) and nothing reconciles a collapsed mother without a daughter | `web/api-honesty.test.ts` `MEDIUM H-W7` (documents, passes) | **OPEN** |
-| H-W4 | LOW | web `components/views/CoinView.tsx:244` | The browser verifier's `allowUnsafeDev` is derived from the bundle's own `kind` field (data under verification); today masked because the same call sets `requireInputBinding: true` and dev bundles carry no binding, so they render "invalid" | `web/coin-page.test.tsx` `LOW H-W4` (fails until the option is removed) | OPEN |
-| H-W5 | LOW | web `copy.ts:267` | `LAUNCH.stageNote` "If no event arrives, nothing moves" vs the scene's documented ambient motion (README §3: ring rotation, stage-1 pulse) | `web/copy-claims.test.ts` `FINDING H-W5` | OPEN |
-| H-W8 | LOW | web `server/stats.ts:10-20` | `nextBurnAt` is computed from env presence (`REDIS_URL` + `QSD_TOKEN_MINT`), not from a scheduled job; the home page counts down to a burn no worker may perform | `web/api-honesty.test.ts` `LOW H-W8` (documents, passes) | OPEN |
-| H-W11 | LOW | web `server/launch.ts:294`, `app/api/launch/route.ts` | Every error reaches the SSE `error` frame as the raw `e.message`; web3.js fetch errors carry the RPC URL (which may hold `?api-key=`); `@qsd/solana`'s `redactSecrets` is not applied | `web/launch-stream.test.ts` `LOW H-W11` (fails until redacted) | OPEN |
-| H-W13 | LOW | web `server/collapse.ts:41-57` | `executeCollapse` is called without `collapseSlot`, so the holder snapshot is taken at the worker's start slot (`collapseSlotSource: 'orchestration-start'`), not at the proof-anchor slot the package now accepts (the wave-2A H-S6 fix is unused); `/api/coin/[ca]/holders` passes `collapseSlot: 0` | `web/api-honesty.test.ts` `LOW H-W13` (documents, passes) | OPEN |
 | H-Q8 | LOW | quantum | Provider message spliced into the UI error | wave 1 | OPEN (not re-examined) |
 | H-C4 | LOW | crypto | `validateState` / `mergeStates` laxity | wave 1 (no test) | OPEN |
-| H-W9 | INFO | web (JSX literals) | 30 user-facing strings live outside `copy.ts` although its header says every string is there; all reviewed (§3.1), pinned so additions are reviewed | `web/copy-claims.test.ts` `INFO H-W9` | noted |
-| H-W10 | INFO | web `LineageView.tsx:29`, `api/me/route.ts` | The two `?? 0` defaults that can reach a page (`decimals` of an empty lineage; `tradedUiAmount` of a wallet with no trades) are real zeros in context | `web/placeholders.test.tsx` `INFO H-W10` | noted |
-| H-W12 | INFO | web `.env.example` | Wires `QSD_GENESIS_CONFIG=./genesis.example.json` — operator configuration, not data (the file says so); an operator must still edit it | `web/secrets-livedata.test.ts` `INFO H-W12` | noted |
-| H-E3, H-E4, H-S7 | INFO | protocol / solana | as recorded in wave 2A (defence-in-depth checks; `·5` base name; dev bundles unbound → rejected by `productionVerifyOptions`) | 2A tests (pass) | noted |
+| H-W9 | INFO | web (JSX literals) | 29 user-facing strings live outside `copy.ts` although its header says every string is there; all reviewed (§3.1), pinned so additions are reviewed | `web/copy-claims.test.ts` `INFO H-W9` | noted |
+| H-W10 | INFO | web `LineageView.tsx:29`, `api/me/route.ts` | The two `?? 0` defaults that can reach a page are real zeros in context | `web/placeholders.test.tsx` `INFO H-W10` | noted |
+| H-W12 | INFO | web `.env.example` | Wires `QSD_GENESIS_CONFIG=./genesis.example.json` — operator configuration, not data; an operator must still edit it | `web/secrets-livedata.test.ts` `INFO H-W12` | noted |
+| H-W14 | INFO | `docs/economics.md` parameter table | `SURVIVE_FEE_REBATE_BPS` is documented as "Measurement fee rebated on survive (10 %)" but no measurement fee exists anywhere in the app or the chain package (the copy, fixed for H-W3, now says so); `/how` renders the sentence verbatim | review note on the `MEASURE_TEXT.reward` entry in `web/copy-claims.test.ts` | noted — a one-line doc fix or a protocol-constant removal |
+| H-E3, H-E4, H-S7 | INFO | protocol / solana | as recorded in wave 2A | 2A tests (pass) | noted |
 | H-SC11 … H-SC19 | INFO | scene (were H-S11…H-S19 in `tests/scene/FINDINGS.md`) | perf harness does not self-check the root; `PERF_GATE` undocumented; README 'auto' timing stale; `density` unused; "computing" badge stage-gated; Warmup objects undocumented; draw flash on mount with past events; watermark reset on stale `entropyRequested`; `skipStage` to the current stage counts | manual / documented | noted |
 | H-Q7, H-C5, H-U3, KAT typo | INFO | wave 1 | as recorded | — | noted |
 
-### 2.2 Fixed or accepted (all re-verified in the wave-3 full run — their `FINDING` tests pass unchanged)
+### 2.2 Fixed or accepted (all re-verified in the final full run — every `FINDING` test passes unchanged)
 
 | id | sev | Scope | Finding (short) | Verified by | Status |
 |---|---|---|---|---|---|
+| H-W1 | HIGH | web | launch payment replay (check read `Coin.launchTx`) | **fix:** `prisma/schema.prisma:59` `paymentTx String? @unique`; `server/launch.ts:135` `assertPaymentUnused` before any chain work, `:147-149`, and again inside the insert transaction `:296-301` with the unique index as the last word (`isPaymentUniqueViolation`). `web/launch-stream.test.ts` `FINDING H-W1` passes unchanged (second launch on the same payment → "already used", one coin) | **FIXED** |
+| H-W2 | MEDIUM | web | no 404 / error pages → no footer disclaimer there | **fix:** `src/app/not-found.tsx`, `error.tsx` (inside the root layout), `global-error.tsx` (own `<html>` with `<Footer/>`). `web/footer.test.tsx` renders all three: disclaimer exactly once each | **FIXED** |
+| H-W3 | MEDIUM | web | MEASURE promised a fee rebate nothing pays | **fix:** `copy.ts:364-365` "if it survives you receive nothing — no measurement fee is charged — and 75 % of the coin's quiet time is removed"; `copy.ts:289-290` `surviveCell`; the queue page's "fee rebate" row is gone. `FINDING H-W3` passes unchanged; new sentence reviewed `ok` (see INFO H-W14) | **FIXED** |
+| H-W6 | MEDIUM | web | nonce consumed non-atomically | **fix:** `server/auth.ts:47-48` one conditional `updateMany({ where: { nonce, wallet, purpose, usedAt: null, expiresAt: { gt: now } } })` with `count !== 1` → "already used". `FINDING H-W6` (two concurrent requests, snapshot reads) passes unchanged: exactly one accepted | **FIXED** |
+| H-W7 | MEDIUM | web | lost collapse job never reconciled | **fix:** `server/queues.ts:57-62` `onFailure` reports the enqueue failure; `server/measure.ts:76-79` records `daughterLaunch: scheduled / not-scheduled (reason)` on the measurement result and the page says so (`COIN.daughterScheduled` / `daughterNotScheduled`); `server/reconcile.ts` `collapsedWithoutDaughter()` + `reconcileCollapses()` re-enqueue every collapsed mother without a daughter whose job is not waiting/active; `workers/index.ts:73-76` runs it every 5 minutes. `web/api-honesty.test.ts` `H-W7 (fixed)` exercises `onFailure` and `collapsedWithoutDaughter` on the stand-in | **FIXED** (needs the worker running — §11 note) |
+| H-W4 | LOW | web | `allowUnsafeDev` taken from the bundle's own kind | **fix:** `CoinView.tsx:245` `verify(bundle, resolver, { trustedWitnessKeys, requireInputBinding: true })` only. `LOW H-W4` passes unchanged; the dev bundle is now refused at the attestation-kind step ("unsafe-dev: dev random…"), still "invalid" | **FIXED** |
+| H-W5 | LOW | web | "If no event arrives, nothing moves" | **fix:** `copy.ts:269-270` "…no stage advances and no value changes; the only motion without an event is the chamber's ambient drift" — exactly what `tests/scene/stillness` proves. `FINDING H-W5` passes; new sentence reviewed `ok` | **FIXED** |
+| H-W8 | LOW | web | countdown from env presence | **fix:** `server/burnSchedule.ts` `scheduledBurnAt()` reads the hourly-burn repeatable job's `next` from BullMQ (2.5 s timeout, null on no Redis / no job / error); `server/stats.ts:36,40` reports it. `web/api-honesty.test.ts` `H-W8 (fixed)`: null with an unreachable Redis even when the env is set | **FIXED** |
+| H-W11 | LOW | web | raw `e.message` into the SSE error frame | **fix:** `server/launch.ts:8, 322` `redactSecrets(...)` from `@qsd/solana`. `LOW H-W11` passes unchanged (injected `?api-key=` never reaches the frame) | **FIXED** |
+| H-W13 | LOW | web | proof-anchor slot not passed to `executeCollapse` | **fix:** `server/measure.ts:57-59` looks up the proof anchor's slot and stores `Measurement.proofSlot` (`schema.prisma:111`); `server/collapse.ts:14-17` `proofAnchorSlot(row)` (latest collapse measurement), `:48-52` passed as `collapseSlot` (logged when absent → orchestration start); `api/coin/[ca]/holders/route.ts:25,37` uses the same slot. `web/api-honesty.test.ts` `H-W13 (fixed)` | **FIXED** (slot is `null` → start slot when the anchor lookup failed; logged) |
 | H-C1 | BLOCKING | crypto | stateless `sign`/`signWithIndex` reused a leaf with a stale state | `crypto/key-reuse.test.ts` | **FIXED** |
 | H-C2 | BLOCKING | crypto | `Identity._sign` public | `crypto/key-reuse.test.ts` | **FIXED** |
 | H-S1 | BLOCKING | solana | airdrop paid a batch twice (in-flight tx + transient error) | `solana/airdrop-crash-resume.test.ts` `FINDING H-S1a/b` | **FIXED** |
@@ -101,7 +101,7 @@ unchanged) / **ACCEPTED** (integrator decision recorded) / noted (INFO, no actio
 | H-SC3 | MEDIUM | scene (was H-S3) | leaf change did not clear hashes; link gated on count not arrival | `scene/partial-malformed.test.ts` | **FIXED** |
 | H-SC9 | MEDIUM | scene (was H-S9) | perf harness dropped frames ≥ 2 s before the gating median | `scene/quality.test.ts` / `scripts/perf.ts` re-read | **FIXED** |
 | H-E1 | LOW | economics.md | Zeno rounding sentence the wrong way round | `protocol/decay-zeno.test.ts` `FINDING H-E1` | **FIXED** |
-| H-S6 | LOW | solana | collapse slot = orchestration start slot | package: `executeCollapse` takes an opt-in `collapseSlot` and reports `collapseSlotSource: 'proof-anchor'` (`collapse.ts:155-160`) | **FIXED in the package**; the app does not use it → H-W13 |
+| H-S6 | LOW | solana | collapse slot = orchestration start slot | package: `executeCollapse` takes an opt-in `collapseSlot` and reports `collapseSlotSource: 'proof-anchor'` (`collapse.ts:155-160`) | **FIXED** (package) and now wired in the app (H-W13) |
 | H-SC4 … H-SC8, H-SC10 | LOW | scene (were H-S4…H-S8, H-S10) | `collapse` label vs `collapse:<id>`; string counters; frame-count quality windows; NaN half-life → `0 s`; 67 identity boxes at origin; `PERF_GPU` label from env | `scene/*.test.ts` (61/61) | **FIXED** |
 | H-Q5, H-P3, H-P4, H-P5, H-U1, H-U2 | LOW | wave 1 | see `audit-log.md` | their `FINDING` tests | **FIXED** |
 
@@ -120,16 +120,15 @@ section it rests on and a verdict; the test fails if a new such string appears u
 
 | verdict | count | notes |
 |---|---|---|
-| ok | 114 | e.g. "inspired by quantum mechanics … not a quantum system" (§ *what QSD does NOT claim*, pinned verbatim); "collapse probability" (= decayProgress, §2); "witness-signed / unsafe-dev" labels on every badge and collapse row (physics.md *where the trust actually sits*; H-Q0 acceptance); "the random bytes come from a quantum device; the protocol does not and cannot prove that" (§ trust) |
-| overclaims | 3 entries, 2 findings | **H-W3** `MEASURE_TEXT.reward` "…if it survives you receive a fee rebate of `<R>` bps" and the `MeasureQueueView` "fee rebate" row — economics.md §4 defines `surviveRebate` but no fee is charged anywhere in apps/web or @qsd/solana, so no rebate can be paid; **H-W5** `LAUNCH.stageNote` "If no event arrives, nothing moves" — the scene README §3 documents ambient motion |
+| ok | 118 | e.g. "inspired by quantum mechanics … not a quantum system" (§ *what QSD does NOT claim*, pinned verbatim); "collapse probability" (= decayProgress, §2); "witness-signed / unsafe-dev" labels on every badge and collapse row (physics.md *where the trust actually sits*; H-Q0 acceptance); "the random bytes come from a quantum device; the protocol does not and cannot prove that" (§ trust) |
+| overclaims | 0 after the fixes (were 3 entries / 2 findings) | **H-W3** `MEASURE_TEXT.reward` (old text) "…if it survives you receive a fee rebate of `<R>` bps" and the `MeasureQueueView` "fee rebate" row — economics.md §4 defines `surviveRebate` but no fee is charged anywhere in apps/web or @qsd/solana, so no rebate can be paid; **H-W5** `LAUNCH.stageNote` "If no event arrives, nothing moves" — the scene README §3 documents ambient motion |
 | contradicts | 0 | — |
 
 ### 3.2 Footer (SPEC §8 l.371-374) — `tests/web/footer.test.tsx`
 `FOOTER_DISCLAIMER` equals the SPEC sentence byte for byte (whitespace-normalised). The real `RootLayout`
 renders it exactly once on every route (`/`, `/field`, `/coin/[ca]`, `/lineage/[id]`, `/launch`, `/measure`,
 `/burns`, `/how`, `/me`; the route list is derived from `src/app/**/page.tsx` so a new page cannot escape).
-**H-W2:** no `not-found.tsx`, `error.tsx` or `global-error.tsx` exists; Next's built-in 404 / error pages render
-without the layout's footer.
+**H-W2** (fixed): `not-found.tsx` and `error.tsx` render inside the layout, `global-error.tsx` carries its own `<Footer/>`; all three render the disclaimer exactly once.
 
 ### 3.3 No placeholder numbers (SPEC §2 l.96-97) — `tests/web/placeholders.test.tsx`, `api-honesty.test.ts`
 Every page rendered with every API answering 503 `{unavailable:{reason}}`: zero `[data-unavailable="false"]`
@@ -140,7 +139,7 @@ with the server's reason and the submit button disabled, `/coin` and `/lineage` 
 no-trade sentences. `GET /api/stats` on a connection failure → 503 with only `unavailable` (never `0`); a
 non-connection error → 500 `{error}` without a stack; the client turns non-JSON / network failures into
 unavailable values. `?? 0` / `|| 0` grep: `format.ts` clean; the two that reach a page are real zeros (H-W10).
-The `/` countdown is unavailable when `nextBurnAt` is null; **H-W8** records that `nextBurnAt` is env-derived.
+The `/` countdown is unavailable when `nextBurnAt` is null; after the H-W8 fix `nextBurnAt` is the scheduler's own `next` (null without a registered job).
 
 ### 3.4 `/how` verbatim (SPEC §8 l.360) — `tests/web/how-verbatim.test.tsx`
 `readDocs()` returns both files byte-for-byte with their paths; `GET /api/how` serves them with `no-store`,
@@ -166,7 +165,7 @@ signature on an unknown coin → 409 with the nonce spent; provider unconfigured
 chain access; a collapsed coin → `MeasureError` before the chain or provider is touched. `verifyOptions()`
 with a real provider is exactly `productionVerifyOptions(env)` (`trustedWitnessKeys` + `requireInputBinding`,
 no `allowUnsafeDev`); `UNSAFE_DEV_RANDOM` under `NODE_ENV=production` is not constructible, so the
-`{allowUnsafeDev:true}` branch cannot exist in production. **H-W6:** the nonce check-then-set is not atomic.
+`{allowUnsafeDev:true}` branch cannot exist in production. **H-W6** (fixed): one conditional `updateMany` consumes the nonce; the concurrent-replay test now sees exactly one acceptance.
 
 ### 3.7 Launch API (SPEC §8 /launch, §9) — `tests/web/launch-stream.test.ts`
 The real `runLaunch` against Agent H's ledger, a real vault / reserve and the in-memory DB: seven failed-payment
@@ -179,8 +178,7 @@ the `crypto` frames decode (scene codec) to exactly `redact(regenerate-from-seed
 with depth < 15 carrying `sha256(real value)` and depth 15 / leaves / fused nodes / root carrying the real
 values; the signing stream has no `chainStep` and its `signChainStop` values equal the regenerated leaf-0 chain
 at the stop depths; neither the seed, the KEK nor any unrevealed chain value appears in any frame; the coin
-row, image, identity mirror (`nextIndex 1`) and launch log carry the real mint signature. **H-W1:** the same
-payment launches a second coin. **H-W11:** chain errors reach the browser unredacted.
+row, image, identity mirror (`nextIndex 1`) and launch log carry the real mint signature. **H-W1** (fixed): the second launch on the same payment ends in an `error` frame "already used" and one coin exists. **H-W11** (fixed): the injected `?api-key=` never reaches the error frame.
 
 ### 3.8 Webhook (SPEC §9 l.391-393) — `tests/web/webhook.test.ts`
 Missing / empty / wrong / prefix / suffix / case-different / `Bearer`-prefixed header and an unset secret → 401
@@ -203,7 +201,7 @@ honesty caption, "ppb (matches)"); a flipped outcome → "invalid" with the reso
 an unpublished key → "invalid" (never "self-consistent"); with no key published the page says so and offers only
 the download. An `UNSAFE_DEV_RANDOM` bundle shows the kit's warning on the badge and renders "invalid" (no
 draw binding). The MEASURE button states reward and risk from protocol constants and the live decay
-("2,000 PHO (0.20 % of remaining supply)", "current collapse probability: N.N %"). **H-W4** (LOW) recorded.
+("2,000 PHO (0.20 % of remaining supply)", "current collapse probability: N.N %"). **H-W4** (fixed): the verifier takes no option from the bundle.
 
 ---
 
@@ -236,7 +234,7 @@ old harness kept (H-SC9, fixed); `PERF_GPU=1 … low` 17.9 fps → `GATE FAILED 
 - **Scene**: the reducer reproduces Agent H's own recorded stream exactly (1072 links × 256 leaves, every hover
   hash); nothing moves or counts without an event (60 s of fake time, zero notifications); malformed and
   out-of-order events rejected with the watermark unchanged; headless render counts equal the state.
-- **Web** (this wave): §3.3, §3.4, §3.5, §3.8, §3.9 fully; §3.6 and §3.7 except the open findings; H-U1/H-U2's
+- **Web** (this wave, after the fixes): §3.3-§3.10 fully; H-U1/H-U2's
   attestation-kind label present on every badge and collapse row; every page honest under total and partial
   outage and under empty data; in-browser verification uses only the published witness keys.
 

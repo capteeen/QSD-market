@@ -575,3 +575,44 @@ Fixed and re-verified across all waves: H-C1, H-C2, H-C3, H-Q1-6, H-P1-5, H-U1, 
 Devnet / mainnet items of §11 (no egress); a real Postgres (isolation, transactions) and a generated Prisma
 client; a real Redis / BullMQ (cron, auto-measurer, collapse worker loop read only); `next build` and the real
 client bundle; GPU frame rate and mobile first frame; wave-1 LOW H-Q8, H-C4.
+
+### 11:05 Agent F's apps/web fixes — re-verification (nothing taken on trust)
+Read each fix site before touching a test: `prisma/schema.prisma:59` (`paymentTx @unique`), `server/launch.ts:135,147-149,296-301`
+(payment check before chain work and inside the insert transaction), `src/app/{not-found,error,global-error}.tsx`,
+`copy.ts:269-270,289-290,364-365`, `CoinView.tsx:245`, `server/auth.ts:47-48` (conditional `updateMany`),
+`server/queues.ts:57-62` (`onFailure`), `server/measure.ts:57-59,76-79` (`proofSlot`, `daughterLaunch` status),
+`server/reconcile.ts` + `workers/index.ts:73-76`, `server/burnSchedule.ts` + `stats.ts:36,40`, `server/launch.ts:8,322`
+(`redactSecrets`), `server/collapse.ts:14-17,48-52`, `api/coin/[ca]/holders/route.ts:25,37`.
+```
+cd tests && npx vitest run web   (before any test edit)
+   5 failed | 110 passed: all five were Agent H's own pins of the pre-fix state, as the coordinator said —
+   copy review table (4 unreviewed new strings, 3 stale entries, INFO H-W9 list), LOW H-W13 source pin,
+   coin-page dev-bundle reason regex. Every FINDING/LOW test for H-W1, H-W2, H-W3, H-W4, H-W5, H-W6, H-W11 passed unchanged.
+```
+Agent H's edits (tests only): REVIEWED rows for the new `LAUNCH.stageNote`, `MEASURE_TEXT.reward`, `COIN.daughterScheduled`,
+`COIN.daughterNotScheduled` (all `ok`; the old three removed; H-W9 pin minus the vanished "fee rebate" string);
+`api-honesty` H-W7 / H-W8 / H-W13 tests now pin the fixed behaviour (`onFailure` reported, `collapsedWithoutDaughter`
+on the stand-in, `scheduledBurnAt()` null with an unreachable Redis, `proofAnchorSlot` picks the latest collapse's
+slot); `coin-page` accepts the attestation-kind refusal reason; `footer` renders the three error pages (disclaimer
+exactly once each, `global-error` with its own `<footer>`). New INFO H-W14: `docs/economics.md` still documents
+`SURVIVE_FEE_REBATE_BPS` as a fee rebate although no fee exists (doc / protocol constant, not app copy).
+```
+cd tests && npx vitest run      → Test Files 38 passed (38); Tests 549 passed (549); ≈ 61 s
+npx tsc -p tests/tsconfig.json --noEmit → exit 0
+```
+
+### SPEC §11 integrator checklist — status after the fixes
+
+| §11 item | Status | Evidence / what remains |
+|---|---|---|
+| SPEC.md exists at root and matches this document | not Agent H's to assert | present at root; "matches" is the integrator's statement |
+| All eight agents reported done with passing tests | partly verifiable | apps/web 30/30, protocol, solana suites run by Agent H; other agents' reports not in the repository |
+| Agent H has no open blocking findings | **TRUE** | no BLOCKING, HIGH or MEDIUM open; LOW H-Q8, H-C4 (wave 1, unexamined); INFO only otherwise |
+| A real launch on devnet runs the full LaunchSequence end-to-end, proof panel = on-chain anchor | **OPEN — not verifiable here** (no egress) | same path proved on Agent H's ledger incl. payment replay refusal; on devnet check the `precommit`/`proof` memos, `Coin.launchTx` = mint tx, `Coin.paymentTx` = the payment, stage 7 signatures |
+| A real coin on devnet measured, collapsed, daughter received in proportion | **OPEN — not verifiable here** | collapse + airdrop proportions proved on the ledger (2A); on devnet confirm `Measurement.proofSlot` is set (anchor-slot lookup), the worker registers `reconcile-collapses`, and the snapshot reports `collapseSlotSource: 'proof-anchor'` |
+| No mock data, no placeholder numbers, no canned animations | **TRUE** for apps/web, scene, ui-tokens | `placeholders`, `secrets-livedata`, scene stillness/hygiene; countdown now scheduler-derived (H-W8 fixed) |
+| /how renders the docs verbatim | **TRUE** | `how-verbatim.test.tsx` (note INFO H-W14 in economics.md itself) |
+| Footer disclaimer on every page | **TRUE** incl. 404 / error / global error | `footer.test.tsx` |
+
+### Open at end (final, after fixes)
+BLOCKING / HIGH / MEDIUM: none. LOW: H-Q8, H-C4. INFO: H-W9, H-W10, H-W12, H-W14, H-E3, H-E4, H-S7, H-SC11…H-SC19, H-Q7, H-C5, H-U3, KAT typo.
