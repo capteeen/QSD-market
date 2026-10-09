@@ -137,6 +137,15 @@ reason?, label? }`. Colour mapping (exported as `proofStatusToken`):
 
 Every non-verified status shows its reason (or "no reason given").
 
+`attestationKind?: 'provider-signed' | 'witness-signed' | 'unsafe-dev'` — the
+attestation kind from the proof bundle, rendered as a mono label after the
+status (`verified · witness-signed`). docs/physics.md promises "the UI shows
+the attestation kind on every collapse"; pass the bundle's kind verbatim and
+never relabel witness-signed as provider-signed. `unsafe-dev` renders in the
+collapse colour with the warning "dev randomness, not a quantum draw". Omit
+the prop when there is no bundle. Exports: `AttestationKind`,
+`attestationKindLabel`, `UNSAFE_DEV_WARNING`.
+
 ### `MeasureButton`
 `{ reward?, risk?, disabledReason?, measuring?, label = 'Measure' }` plus
 `<button>` attributes. Reward and risk are opaque, already-formatted strings

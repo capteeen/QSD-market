@@ -35,8 +35,8 @@ export type { DataRowProps } from './components/DataRow.js';
 export { HashDisplay, truncateMiddle } from './components/HashDisplay.js';
 export type { HashDisplayProps } from './components/HashDisplay.js';
 
-export { ProofBadge, proofStatusToken } from './components/ProofBadge.js';
-export type { ProofBadgeProps, ProofStatus } from './components/ProofBadge.js';
+export { ProofBadge, proofStatusToken, attestationKindLabel, UNSAFE_DEV_WARNING } from './components/ProofBadge.js';
+export type { ProofBadgeProps, ProofStatus, AttestationKind } from './components/ProofBadge.js';
 
 export { MeasureButton } from './components/MeasureButton.js';
 export type { MeasureButtonProps } from './components/MeasureButton.js';

@@ -8,7 +8,7 @@ import { HashDisplay, truncateMiddle } from './HashDisplay.js';
 import { LineageBreadcrumb } from './LineageBreadcrumb.js';
 import { MeasureButton } from './MeasureButton.js';
 import { Panel } from './Panel.js';
-import { ProofBadge, proofStatusToken, type ProofStatus } from './ProofBadge.js';
+import { ProofBadge, proofStatusToken, UNSAFE_DEV_WARNING, type ProofStatus } from './ProofBadge.js';
 import { Unavailable } from './Unavailable.js';
 
 const DIGIT = /\d/;
@@ -151,6 +151,28 @@ describe('ProofBadge', () => {
   it('always shows a reason for non-verified statuses', () => {
     render(<ProofBadge status="unavailable" />);
     expect(screen.getByRole('status')).toHaveTextContent('no reason given');
+  });
+  it('shows no attestation kind unless one is given', () => {
+    const { container } = render(<ProofBadge status="verified" />);
+    expect(container.firstElementChild).toHaveAttribute('data-attestation', 'none');
+    expect(container.textContent).not.toMatch(/signed|unsafe/);
+  });
+  it('renders witness-signed as witness-signed, never provider-signed', () => {
+    const { container } = render(<ProofBadge status="verified" attestationKind="witness-signed" />);
+    expect(container.firstElementChild).toHaveAttribute('data-attestation', 'witness-signed');
+    expect(container.querySelector('.qsd-badge__kind')).toHaveTextContent('witness-signed');
+    expect(container.textContent).not.toContain('provider-signed');
+  });
+  it('renders provider-signed', () => {
+    const { container } = render(<ProofBadge status="verified" attestationKind="provider-signed" />);
+    expect(container.querySelector('.qsd-badge__kind')).toHaveTextContent('provider-signed');
+  });
+  it('renders unsafe-dev in the collapse colour with a warning', () => {
+    const { container } = render(<ProofBadge status="verified" attestationKind="unsafe-dev" />);
+    expect(container.firstElementChild).toHaveAttribute('data-attestation', 'unsafe-dev');
+    expect(container.querySelector('.qsd-badge__kind')).toHaveAttribute('data-unsafe', 'true');
+    expect(container.querySelector('.qsd-badge__warning')).toHaveTextContent(UNSAFE_DEV_WARNING);
+    expect(screen.getByRole('status').getAttribute('aria-label')).toContain(UNSAFE_DEV_WARNING);
   });
 });
 

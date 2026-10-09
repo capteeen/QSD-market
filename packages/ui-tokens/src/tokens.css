@@ -222,6 +222,19 @@ html[data-qsd], body[data-qsd], .qsd-root {
   letter-spacing: 0;
   color: var(--qsd-muted);
 }
+.qsd-badge__sep { color: var(--qsd-muted); }
+.qsd-badge__kind {
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: none;
+}
+.qsd-badge__kind[data-unsafe="true"] { color: var(--qsd-collapse); font-weight: 600; }
+.qsd-badge__warning {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--qsd-collapse);
+}
+.qsd-badge[data-attestation="unsafe-dev"] { border-color: var(--qsd-collapse); }
 .qsd-badge[data-status="verified"] { color: var(--qsd-probability); }
 .qsd-badge[data-status="pending"] { color: var(--qsd-decay); }
 .qsd-badge[data-status="invalid"] { color: var(--qsd-collapse); }
