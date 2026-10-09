@@ -77,7 +77,9 @@ export function createChain(config: ChainConfig, storage?: ChainStorage): Chain 
     creator,
     async withCreator() {
       const kp = await creator();
-      const sender = new Web3TransactionSender(connection, kp, config.cluster);
+      const sender = new Web3TransactionSender(connection, kp, config.cluster, {
+        defaultComputeUnitPriceMicroLamports: config.priorityFeeMicroLamports ?? 0,
+      });
       const reader = new Web3ChainReader(connection);
       const transferSender = web3TransferSender(sender, connection, kp);
       const anchor = anchorWith({ sender, observer });

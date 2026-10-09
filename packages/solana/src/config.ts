@@ -19,7 +19,11 @@ export const ENV = {
   WEBHOOK_SECRET: 'QSD_WEBHOOK_SECRET',
   KEYSTORE_PATH: 'QSD_KEYSTORE_PATH',
   JOURNAL_DIR: 'QSD_JOURNAL_DIR',
+  PRIORITY_FEE: 'QSD_PRIORITY_FEE_MICROLAMPORTS',
 } as const;
+
+/** Default priority fee on mainnet (micro-lamports per compute unit); ~0.00002 SOL on a 200k-CU memo. */
+export const DEFAULT_MAINNET_PRIORITY_FEE_MICROLAMPORTS = 100_000;
 
 export const DEFAULT_PUMPPORTAL_API_URL = 'https://pumpportal.fun/api';
 export const DEFAULT_JUPITER_API_URL = 'https://api.jup.ag';
@@ -52,6 +56,8 @@ export interface ChainConfig {
   webhookSecret?: string;
   keystorePath?: string;
   journalDir?: string;
+  /** Priority fee on every protocol transaction, micro-lamports per compute unit (0 = none). */
+  priorityFeeMicroLamports: number;
 }
 
 function readHex32(env: EnvLike, name: string): Uint8Array {
@@ -98,6 +104,11 @@ export function loadChainConfig(env: EnvLike = process.env): ChainConfig {
   const heliusApiKey = opt(env, ENV.HELIUS_API_KEY);
   const rpcUrl = opt(env, ENV.RPC_URL) ?? DEFAULT_RPC_URL[cluster];
   if (!/^https?:\/\//.test(rpcUrl)) throw new ChainConfigError(`${ENV.RPC_URL} must be an http(s) URL`);
+  const feeRaw = opt(env, ENV.PRIORITY_FEE);
+  const priorityFeeMicroLamports = feeRaw === undefined ? (isMainnet ? DEFAULT_MAINNET_PRIORITY_FEE_MICROLAMPORTS : 0) : Number(feeRaw);
+  if (!Number.isSafeInteger(priorityFeeMicroLamports) || priorityFeeMicroLamports < 0 || priorityFeeMicroLamports > 50_000_000) {
+    throw new ChainConfigError(`${ENV.PRIORITY_FEE} must be a whole number of micro-lamports between 0 and 50000000`);
+  }
 
   const cfg: ChainConfig = {
     cluster,
@@ -107,6 +118,7 @@ export function loadChainConfig(env: EnvLike = process.env): ChainConfig {
     pumpPortalApiUrl: opt(env, ENV.PUMPPORTAL_API_URL) ?? DEFAULT_PUMPPORTAL_API_URL,
     jupiterApiUrl: opt(env, ENV.JUPITER_API_URL) ?? DEFAULT_JUPITER_API_URL,
     keyEncryptionKey,
+    priorityFeeMicroLamports,
   };
   const mint = opt(env, ENV.TOKEN_MINT);
   if (mint) cfg.qsdTokenMint = mint;
@@ -176,5 +188,6 @@ export function describeConfig(cfg: ChainConfig): Record<string, unknown> {
     webhookSecret: cfg.webhookSecret ? '[set]' : '[unset]',
     keystorePath: cfg.keystorePath ?? '[unset]',
     journalDir: cfg.journalDir ?? '[unset]',
+    priorityFeeMicroLamports: cfg.priorityFeeMicroLamports,
   };
 }

@@ -154,6 +154,11 @@ export class FakeChain implements TransactionSender, TransferSender, ChainReader
     const signature = this.sig();
     const b = this.sendBehaviours.shift() ?? 'ok';
     if (b === 'transient') throw new TransientChainError('fake: rpc 503');
+    if (b === 'expire') {
+      // dropped by the network: never lands, its blockhash runs out
+      this.blockHeight++;
+      return { signature, lastValidBlockHeight: this.blockHeight + 150 };
+    }
     let memos: string[] = [];
     let status: TxStatus = 'confirmed';
     if (b === 'fail') status = 'failed';

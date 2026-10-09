@@ -68,6 +68,12 @@ export interface Web3SenderOptions {
   pollMs?: number;
   /** How long `confirm` waits after expiry before giving up (ms). */
   maxWaitMs?: number;
+  /**
+   * Priority fee added to every transaction this sender builds, in
+   * micro-lamports per compute unit (a `SendOptions` value wins). Without one,
+   * busy mainnet leaders drop the transaction and its blockhash expires.
+   */
+  defaultComputeUnitPriceMicroLamports?: number;
 }
 
 export class Web3TransactionSender implements TransactionSender {
@@ -78,6 +84,9 @@ export class Web3TransactionSender implements TransactionSender {
   readonly #commitment: Commitment;
   readonly #pollMs: number;
   readonly #maxWaitMs: number;
+  readonly #defaultPrice: number;
+  /** Serialized bytes of transactions submitted by this sender, re-broadcast while they are pending. */
+  readonly #inflight = new Map<string, Uint8Array>();
   constructor(connection: Connection, payerKeypair: Keypair, cluster: string, opts: Web3SenderOptions = {}) {
     this.#connection = connection;
     this.#payerKeypair = payerKeypair;
@@ -86,6 +95,7 @@ export class Web3TransactionSender implements TransactionSender {
     this.#commitment = opts.commitment ?? 'confirmed';
     this.#pollMs = opts.pollMs ?? 1500;
     this.#maxWaitMs = opts.maxWaitMs ?? 120_000;
+    this.#defaultPrice = opts.defaultComputeUnitPriceMicroLamports ?? 0;
   }
 
   get connection(): Connection {
@@ -109,9 +119,8 @@ export class Web3TransactionSender implements TransactionSender {
   async prepare(instructions: TransactionInstruction[], opts: SendOptions = {}): Promise<PreparedTransaction> {
     const ixs: TransactionInstruction[] = [];
     if (opts.computeUnitLimit) ixs.push(ComputeBudgetProgram.setComputeUnitLimit({ units: opts.computeUnitLimit }));
-    if (opts.computeUnitPriceMicroLamports) {
-      ixs.push(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: opts.computeUnitPriceMicroLamports }));
-    }
+    const price = opts.computeUnitPriceMicroLamports ?? this.#defaultPrice;
+    if (price > 0) ixs.push(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: price }));
     ixs.push(...instructions);
     let blockhash: { blockhash: string; lastValidBlockHeight: number };
     try {
@@ -132,6 +141,7 @@ export class Web3TransactionSender implements TransactionSender {
       lastValidBlockHeight: blockhash.lastValidBlockHeight,
       submit: async () => {
         const got = await this.submitRaw(bytes, skipPreflight);
+        this.#remember(signature, bytes);
         if (got !== signature) throw new ChainUnavailableError(`RPC returned signature ${got}, expected ${signature}`);
       },
     };
@@ -146,8 +156,15 @@ export class Web3TransactionSender implements TransactionSender {
     } catch (e) {
       throw new ChainUnavailableError(`getBlockHeight failed: ${errorMessage(e)}`, { cause: e });
     }
-    const signature = await this.submitRaw(tx.serialize(), false);
+    const bytes = tx.serialize();
+    const signature = await this.submitRaw(bytes, false);
+    this.#remember(signature, bytes);
     return { signature, lastValidBlockHeight };
+  }
+
+  #remember(signature: string, bytes: Uint8Array): void {
+    if (this.#inflight.size > 200) this.#inflight.clear();
+    this.#inflight.set(signature, bytes);
   }
 
   private async submitRaw(bytes: Uint8Array, skipPreflight: boolean): Promise<string> {
@@ -187,8 +204,15 @@ export class Web3TransactionSender implements TransactionSender {
     const start = Date.now();
     for (;;) {
       const s = await this.status(signature, lastValidBlockHeight);
-      if (s !== 'pending') return s;
+      if (s !== 'pending') {
+        this.#inflight.delete(signature);
+        return s;
+      }
       if (Date.now() - start > this.#maxWaitMs) throw new TransientChainError(`confirmation of ${signature} timed out`);
+      // Re-broadcast the same signed bytes while the blockhash is valid: the RPC's own retries give up early on a busy
+      // network. Same signature, so it can land at most once.
+      const bytes = this.#inflight.get(signature);
+      if (bytes) await this.#connection.sendRawTransaction(bytes, { skipPreflight: true, maxRetries: 0 }).catch(() => undefined);
       await new Promise((r) => setTimeout(r, this.#pollMs));
     }
   }

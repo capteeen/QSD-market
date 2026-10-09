@@ -8,6 +8,9 @@ import type { AnchorKind, ChainObserver } from './observer.js';
 import type { SentTransaction, TransactionSender } from './sender.js';
 import { ChainUnavailableError } from './errors.js';
 
+/** Sends of one anchor before an expiry is reported (each with a fresh blockhash). */
+export const ANCHOR_ATTEMPTS = 2;
+
 export interface AnchorResult {
   kind: AnchorKind;
   hash: string;
@@ -29,12 +32,20 @@ export async function anchorCommitment(hashHex: string, kind: AnchorKind, deps: 
   const { sender, observer } = deps;
   observer?.emit({ type: 'anchorRequested', kind, hash: hashHex });
   const ix = createAnchorMemoInstruction(kind, hashHex, sender.payer, nonceHex);
-  const sent: SentTransaction = await sender.send([ix]);
+  let sent: SentTransaction = await sender.send([ix]);
   let status: AnchorResult['status'] = 'confirmed';
   if (deps.confirm !== false) {
-    const s = await sender.confirm(sent.signature, sent.lastValidBlockHeight);
-    if (s === 'failed' || s === 'expired') throw new ChainUnavailableError(`anchor transaction ${sent.signature} ${s}`);
-    status = s === 'finalized' ? 'finalized' : 'confirmed';
+    // An expired anchor never landed, so sending it again with a fresh blockhash cannot anchor twice.
+    for (let attempt = 1; ; attempt++) {
+      const s = await sender.confirm(sent.signature, sent.lastValidBlockHeight);
+      if (s === 'expired' && attempt < ANCHOR_ATTEMPTS) {
+        sent = await sender.send([ix]);
+        continue;
+      }
+      if (s === 'failed' || s === 'expired') throw new ChainUnavailableError(`anchor transaction ${sent.signature} ${s}${s === 'expired' ? ` after ${attempt} attempts` : ''}`);
+      status = s === 'finalized' ? 'finalized' : 'confirmed';
+      break;
+    }
   }
   observer?.emit({ type: 'anchored', kind, hash: hashHex, txSignature: sent.signature, cluster: sender.cluster });
   const out: AnchorResult = { kind, hash: hashHex, txSignature: sent.signature, lastValidBlockHeight: sent.lastValidBlockHeight, status };
