@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, SystemProgram, Transaction, type Connection } from '@solana/web3.js';
 import { DataRow, Panel } from '@qsd/ui-tokens';
@@ -19,9 +19,6 @@ import { Empty, LoadingPanel, UnavailablePanel } from '@/components/common';
 import { LaunchPreflightTerminal, LaunchStreamTerminal, cryptoStreamLines, type StreamLine } from '@/components/terminal/pages';
 
 type Phase = 'form' | 'paying' | 'launching' | 'done' | 'failed';
-
-/** Server refusals that mean the remembered payment can never buy a launch (server/launch.ts verifyPayment). */
-const BAD_PAYMENT = /this payment was already used|^payment |payment transaction|the wallet did not sign the payment/;
 
 /** Parses `event:`/`data:` frames from a fetch body. */
 async function* sseFrames(body: ReadableStream<Uint8Array>): AsyncGenerator<{ event: string; data: string }> {
@@ -70,34 +67,6 @@ async function waitForConfirmation(connection: Connection, signature: string): P
   throw new Error(`payment ${signature} was not confirmed in time; check it in your wallet before trying again`);
 }
 
-/**
- * A confirmed payment the server has not used yet. A launch that fails before
- * the coin exists leaves its payment unused, and the server accepts it once
- * more, so a retry does not pay twice. Kept per wallet in this browser; cleared
- * once the coin is created.
- */
-interface PendingPayment {
-  signature: string;
-  lamports: string;
-}
-const pendingKey = (wallet: string) => `qsd:launch-payment:${wallet}`;
-function readPendingPayment(wallet: string): PendingPayment | null {
-  try {
-    const v = JSON.parse(window.localStorage.getItem(pendingKey(wallet)) ?? 'null') as PendingPayment | null;
-    return v && typeof v.signature === 'string' && typeof v.lamports === 'string' ? v : null;
-  } catch {
-    return null;
-  }
-}
-function writePendingPayment(wallet: string, p: PendingPayment | null): void {
-  try {
-    if (p) window.localStorage.setItem(pendingKey(wallet), JSON.stringify(p));
-    else window.localStorage.removeItem(pendingKey(wallet));
-  } catch {
-    // storage unavailable: a retry pays again
-  }
-}
-
 export function LaunchView() {
   const quote = useLaunchQuote();
   const { publicKey, sendTransaction } = useWallet();
@@ -125,49 +94,22 @@ export function LaunchView() {
   const preset = presets.some((p) => p.id === presetChoice) ? presetChoice : presets[0]!.id;
   const devBuyLamports = q && q.devBuyLamports !== null ? BigInt(q.devBuyLamports) : null;
   const total = q && q.launchCostLamports !== null && q.identityReserveLamports !== null && devBuyLamports !== null ? BigInt(q.launchCostLamports) + BigInt(q.identityReserveLamports) + devBuyLamports : null;
-  const canLaunch = !!q && !!q.payTo && total !== null && !!publicKey && !!image && name.trim().length > 0 && /^[A-Za-z0-9]{1,10}$/.test(ticker) && (phase === 'form' || phase === 'failed');
-  const [pending, setPending] = useState<PendingPayment | null>(null);
-  useEffect(() => {
-    if (!publicKey) {
-      setPending(null);
-      return;
-    }
-    // /launch?payment=<signature> recovers a payment made before this page remembered payments.
-    // The server still checks it: signed by this wallet, enough lamports, never used.
-    const fromUrl = new URLSearchParams(window.location.search).get('payment');
-    if (fromUrl && /^[1-9A-HJ-NP-Za-km-z]{64,100}$/.test(fromUrl) && total !== null && !readPendingPayment(publicKey.toBase58())) {
-      writePendingPayment(publicKey.toBase58(), { signature: fromUrl, lamports: total.toString() });
-    }
-    setPending(readPendingPayment(publicKey.toBase58()));
-  }, [publicKey, phase, total]);
-  const reusable = pending && total !== null && pending.lamports === total.toString() ? pending : null;
+  const canLaunch = !!q && !!q.payTo && total !== null && !!publicKey && !!image && name.trim().length > 0 && /^[A-Za-z0-9]{1,10}$/.test(ticker) && phase === 'form';
 
   const launch = async () => {
     if (!q || !q.payTo || total === null || !publicKey || !image) return;
-    const wallet = publicKey.toBase58();
     setError(null);
-    setLines([]);
-    setSources({});
-    // a retry starts the sequence from an empty scene
-    const scene = createSceneStore();
-    storeRef.current = scene;
+    setPhase('paying');
+    setStatus(LAUNCH.form.paying);
     let paymentSignature: string;
-    const earlier = readPendingPayment(wallet);
-    if (earlier && earlier.lamports === total.toString()) {
-      paymentSignature = earlier.signature;
-    } else {
-      setPhase('paying');
-      setStatus(LAUNCH.form.paying);
-      try {
-        const tx = new Transaction().add(SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(q.payTo), lamports: total }));
-        paymentSignature = await sendTransaction(tx, connection);
-        await waitForConfirmation(connection, paymentSignature);
-      } catch (e) {
-        setPhase('failed');
-        setError(e instanceof Error ? e.message : String(e));
-        return;
-      }
-      writePendingPayment(wallet, { signature: paymentSignature, lamports: total.toString() });
+    try {
+      const tx = new Transaction().add(SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(q.payTo), lamports: total }));
+      paymentSignature = await sendTransaction(tx, connection);
+      await waitForConfirmation(connection, paymentSignature);
+    } catch (e) {
+      setPhase('failed');
+      setError(e instanceof Error ? e.message : String(e));
+      return;
     }
     setPhase('launching');
     setStatus(LAUNCH.form.launching);
@@ -190,7 +132,6 @@ export function LaunchView() {
     }
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
-      if (BAD_PAYMENT.test(text)) writePendingPayment(wallet, null);
       setPhase('failed');
       setError(text || `HTTP ${res.status}`);
       return;
@@ -205,7 +146,7 @@ export function LaunchView() {
           case 'crypto':
           {
             const events = decodeCryptoEvents(base64ToBytes(f.data));
-            scene.dispatchMany(events);
+            store.dispatchMany(events);
             print(...cryptoStreamLines(events));
             break;
           }
@@ -213,14 +154,14 @@ export function LaunchView() {
             const s = JSON.parse(f.data) as { supplyMin: string; supplyMax: string; halfLifeSec: number; decayChannels: SuperpositionInput['decayChannels'] };
             const input: SuperpositionInput = { supplyMin: BigInt(s.supplyMin), supplyMax: BigInt(s.supplyMax), halfLifeSec: s.halfLifeSec, decayChannels: s.decayChannels };
             setSources((x) => ({ ...x, superposition: input }));
-            scene.dispatch({ type: 'superposition', input });
+            store.dispatch({ type: 'superposition', input });
             print({ channel: 'state', text: `superposition supply ${s.supplyMin}…${s.supplyMax} · half-life ${s.halfLifeSec}s · ${s.decayChannels.length} decay channels` });
             break;
           }
           case 'quantum': {
             const e = JSON.parse(f.data) as QuantumEvent | (Omit<Extract<QuantumEvent, { type: 'entropyArrived' }>, 'bytes'> & { bytes: string });
             const ev: QuantumEvent = e.type === 'entropyArrived' ? { ...e, bytes: hexToBytes(e.bytes as string) } : (e as QuantumEvent);
-            scene.dispatch(ev);
+            store.dispatch(ev);
             print({
               channel: 'qrng',
               text:
@@ -237,20 +178,18 @@ export function LaunchView() {
           }
           case 'chain': {
             const ev = JSON.parse(f.data) as ChainEvent;
-            scene.dispatch(ev);
+            store.dispatch(ev);
             print({ channel: 'chain', text: ev.type === 'anchored' ? `anchored ${ev.txSignature}${ev.slot !== undefined ? ` slot ${ev.slot}` : ''}` : `anchorSubmitted ${ev.txSignature ?? ''}`, ...(ev.type === 'anchored' ? { tone: 'ok' as const } : {}) });
             break;
           }
           case 'launch':
-            // the coin exists on-chain: this payment is spent, never offer it for a retry
-            writePendingPayment(wallet, null);
             setCa((JSON.parse(f.data) as { ca: string }).ca);
             print({ channel: 'launch', text: `coin address ${(JSON.parse(f.data) as { ca: string }).ca}`, tone: 'ok' });
             break;
           case 'lineage': {
             const input = JSON.parse(f.data) as LineageInput;
             setSources((x) => ({ ...x, lineage: input }));
-            scene.dispatch({ type: 'lineage', input });
+            store.dispatch({ type: 'lineage', input });
             break;
           }
           case 'done':
@@ -259,7 +198,6 @@ export function LaunchView() {
             print({ channel: 'done', text: LAUNCH.done, tone: 'ok' });
             break;
           case 'error':
-            if (BAD_PAYMENT.test((JSON.parse(f.data) as { message: string }).message)) writePendingPayment(wallet, null);
             setPhase('failed');
             setError((JSON.parse(f.data) as { message: string }).message);
             print({ channel: 'error', text: (JSON.parse(f.data) as { message: string }).message, tone: 'fail' });
@@ -339,9 +277,8 @@ export function LaunchView() {
               {!publicKey ? <Empty eyebrow={LAUNCH.noWalletEyebrow} sentence={LAUNCH.noWalletSentence} /> : null}
               <div className="qsd-form__actions">
                 <button type="submit" className="qsd-btn" data-primary="true" disabled={!canLaunch}>
-                  {phase === 'paying' ? LAUNCH.form.paying : reusable ? LAUNCH.form.retry : LAUNCH.form.submit}
+                  {phase === 'paying' ? LAUNCH.form.paying : LAUNCH.form.submit}
                 </button>
-                {reusable ? <p className="qsd-note">{LAUNCH.form.reusePayment}</p> : null}
                 {error ? (
                   <p className="qsd-form__error">
                     {LAUNCH.errorEyebrow}: {error}

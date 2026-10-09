@@ -450,8 +450,6 @@ export const LAUNCH = {
     halfLife: 'half-life preset',
     devBuy: 'dev buy (SOL)',
     submit: 'Pay and launch',
-    retry: 'Try again',
-    reusePayment: 'Your earlier payment was not used, because no coin was created. Trying again reuses it; you will not pay twice.',
     paying: 'confirm the payment in your wallet',
     launching: 'launching — every stage below is a real operation',
   },
