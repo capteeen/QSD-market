@@ -135,9 +135,10 @@ describe('config: errors name variables, never values; mainnet behind the explic
       if (bad.trim()) expect((err as Error).message).not.toContain(bad.trim());
     }
     expect(() => loadChainConfig({ ...base, SOLANA_CLUSTER: 'testnet' })).toThrow(/SOLANA_CLUSTER/);
-    expect(() => loadChainConfig({ ...base, SOLANA_RPC_URL: 'ftp://x' })).toThrow(/SOLANA_RPC_URL/);
-    expect(loadChainConfig(base).cluster).toBe('devnet');
-    expect(loadChainConfig(base).isMainnet).toBe(false);
+    expect(() => loadChainConfig({ ...base, SOLANA_CLUSTER: 'devnet', SOLANA_RPC_URL: 'ftp://x' })).toThrow(/SOLANA_RPC_URL/);
+    expect(() => loadChainConfig(base)).toThrow(/QSD_MAINNET_ENABLED/); // default cluster is mainnet-beta: fails closed without the flag
+    expect(loadChainConfig({ ...base, SOLANA_CLUSTER: 'devnet' }).cluster).toBe('devnet');
+    expect(loadChainConfig({ ...base, SOLANA_CLUSTER: 'devnet' }).isMainnet).toBe(false);
   });
 
   it('mainnet-beta without QSD_MAINNET_ENABLED=true throws from loadChainConfig for every non-exact value', () => {
@@ -157,7 +158,7 @@ describe('config: errors name variables, never values; mainnet behind the explic
   });
 
   it('FINDING H-S5 (MEDIUM): createChain is not itself behind the flag — a hand-built ChainConfig pointing at mainnet-beta with isMainnet=false is accepted (the config carries no record of QSD_MAINNET_ENABLED)', () => {
-    const dev = loadChainConfig(base);
+    const dev = loadChainConfig({ ...base, SOLANA_CLUSTER: 'devnet' });
     const smuggled = { ...dev, cluster: 'mainnet-beta' as const, isMainnet: false, rpcUrl: 'https://api.mainnet-beta.solana.com' };
     expect(() => createChain(smuggled)).toThrow(/QSD_MAINNET_ENABLED|mainnet/);
   });
@@ -165,6 +166,7 @@ describe('config: errors name variables, never values; mainnet behind the explic
   it('describeConfig and redactSecrets hide every secret; loggable', async () => {
     const cfg = loadChainConfig({
       ...base,
+      SOLANA_CLUSTER: 'devnet',
       HELIUS_API_KEY: 'helius-secret-123456',
       PINATA_JWT: 'eyJ.pinata.secret',
       JUPITER_API_KEY: 'jup-secret-7890',
@@ -180,7 +182,7 @@ describe('config: errors name variables, never values; mainnet behind the explic
   });
 
   it('FINDING H-S4b (MEDIUM): the ChainConfig object (and the Chain that embeds it) exposes the key-encryption key bytes and every API secret through JSON.stringify / util.inspect', () => {
-    const cfg = loadChainConfig({ ...base, HELIUS_API_KEY: 'helius-secret-123456', PINATA_JWT: 'eyJ.pinata.secret', QSD_WEBHOOK_SECRET: 'webhook-secret-xyz' });
+    const cfg = loadChainConfig({ ...base, SOLANA_CLUSTER: 'devnet', HELIUS_API_KEY: 'helius-secret-123456', PINATA_JWT: 'eyJ.pinata.secret', QSD_WEBHOOK_SECRET: 'webhook-secret-xyz' });
     const chain = createChain(cfg);
     for (const [name, obj] of [
       ['ChainConfig', cfg],

@@ -1,11 +1,16 @@
 import type { Cluster } from './env';
 
+/** Solana Explorer shows mainnet-beta by default; only devnet needs the query parameter. */
+function explorerSuffix(cluster: Cluster): string {
+  return cluster === 'devnet' ? '?cluster=devnet' : '';
+}
+
 export function explorerTx(sig: string, cluster: Cluster): string {
-  return `https://explorer.solana.com/tx/${sig}?cluster=${cluster === 'mainnet-beta' ? 'mainnet' : 'devnet'}`;
+  return `https://explorer.solana.com/tx/${sig}${explorerSuffix(cluster)}`;
 }
 
 export function explorerAddress(addr: string, cluster: Cluster): string {
-  return `https://explorer.solana.com/address/${addr}?cluster=${cluster === 'mainnet-beta' ? 'mainnet' : 'devnet'}`;
+  return `https://explorer.solana.com/address/${addr}${explorerSuffix(cluster)}`;
 }
 
 export function pumpFunCoin(ca: string): string {

@@ -16,26 +16,28 @@ import { loadChainConfig, createChain, measureCoin, executeCollapse, runAirdrop,
 
 `loadChainConfig(env)` reads everything once. It throws `ChainConfigError`
 naming the variable — never its value — when something is missing or
-malformed. **Mainnet requires the explicit integrator flag**:
-`SOLANA_CLUSTER=mainnet-beta` without `QSD_MAINNET_ENABLED=true` throws.
+malformed. **The default cluster is mainnet-beta**, and mainnet still
+requires the explicit real-funds flag: mainnet-beta (set or defaulted)
+without `QSD_MAINNET_ENABLED=true` throws, so an unconfigured environment
+fails closed. Devnet is opt-in for testing with `SOLANA_CLUSTER=devnet`.
 
-| Variable | devnet | mainnet | Meaning |
+| Variable | mainnet (default) | devnet (testing) | Meaning |
 |---|---|---|---|
-| `SOLANA_CLUSTER` | `devnet` (default) | `mainnet-beta` | Cluster. |
-| `QSD_MAINNET_ENABLED` | ignored | **required `true`** | The explicit mainnet switch. |
-| `SOLANA_RPC_URL` | optional (default `https://api.devnet.solana.com`) | recommended (Helius/Triton…) | JSON-RPC endpoint for sends, confirmations, `getProgramAccounts`. |
-| `HELIUS_API_KEY` | optional | recommended | Enables the DAS `getTokenAccounts` snapshot source (`heliusRpcUrl(cfg)`) and webhook registration. Without it, snapshots fall back to `getProgramAccounts`. |
-| `PUMPPORTAL_API_URL` | unused (pump.fun is mainnet-only) | optional (default `https://pumpportal.fun/api`) | PumpPortal Local Transaction API base. |
-| `PINATA_JWT` | unused | **required for launches** | Pinata upload JWT for pump.fun IPFS metadata (PumpPortal's documented path; the old `pump.fun/api/ipfs` is gone). |
-| `JUPITER_API_URL` | unused (no $QSD on devnet) | optional (default `https://api.jup.ag`) | Jupiter Swap V2 base. |
-| `JUPITER_API_KEY` | unused | required by Jupiter for `api.jup.ag` | Sent as `x-api-key`. |
+| `SOLANA_CLUSTER` | `mainnet-beta` (default) | `devnet` | Cluster. |
+| `QSD_MAINNET_ENABLED` | **required `true`** | ignored | The explicit mainnet switch. |
+| `SOLANA_RPC_URL` | recommended (Helius/Triton…) | optional (default `https://api.devnet.solana.com`) | JSON-RPC endpoint for sends, confirmations, `getProgramAccounts`. |
+| `HELIUS_API_KEY` | recommended | optional | Enables the DAS `getTokenAccounts` snapshot source (`heliusRpcUrl(cfg)`) and webhook registration. Without it, snapshots fall back to `getProgramAccounts`. |
+| `PUMPPORTAL_API_URL` | optional (default `https://pumpportal.fun/api`) | unused (pump.fun is mainnet-only) | PumpPortal Local Transaction API base. |
+| `PINATA_JWT` | **required for launches** | unused | Pinata upload JWT for pump.fun IPFS metadata (PumpPortal's documented path; the old `pump.fun/api/ipfs` is gone). |
+| `JUPITER_API_URL` | optional (default `https://api.jup.ag`) | unused (no $QSD on devnet) | Jupiter Swap V2 base. |
+| `JUPITER_API_KEY` | required by Jupiter for `api.jup.ag` | unused | Sent as `x-api-key`. |
 | `QSD_KEY_ENCRYPTION_KEY` | **required** | **required** | 32 bytes hex. Encrypts every keypair/seed at rest (§4). |
-| `QSD_PROTOCOL_CREATOR_SECRET` | optional | **required** | The protocol creator keypair as an `EncryptedBlob` JSON (inline) or a path to one, label `qsd/protocol-creator`. If unset, the key store is searched under that label. |
-| `QSD_KEYSTORE_PATH` | optional (memory store) | **required** | File-backed `KeyStore` (`<path>`) and identity reserve (`<path>.reserve.json`). Mainnet refuses memory-only stores. |
-| `QSD_JOURNAL_DIR` | optional (memory journals) | **required in practice** | Directory for airdrop / collapse / burn / measurement journals (crash-resume). |
-| `QSD_TOKEN_MINT` | unset | **required for buy-and-burn** | The $QSD mint. `hourlyBuyAndBurn` throws without it. |
-| `QSD_FEE_WALLET` | optional | required for buy-and-burn | Fee wallet; must be the sender payer of the burn job. |
-| `QSD_WEBHOOK_SECRET` | required to accept webhooks | required | The `authHeader` value registered with Helius; compared (constant-time) with the incoming `Authorization` header. |
+| `QSD_PROTOCOL_CREATOR_SECRET` | **required** | optional | The protocol creator keypair as an `EncryptedBlob` JSON (inline) or a path to one, label `qsd/protocol-creator`. If unset, the key store is searched under that label. |
+| `QSD_KEYSTORE_PATH` | **required** | optional (memory store) | File-backed `KeyStore` (`<path>`) and identity reserve (`<path>.reserve.json`). Mainnet refuses memory-only stores. |
+| `QSD_JOURNAL_DIR` | **required in practice** | optional (memory journals) | Directory for airdrop / collapse / burn / measurement journals (crash-resume). |
+| `QSD_TOKEN_MINT` | **required for buy-and-burn** | unset | The $QSD mint. `hourlyBuyAndBurn` throws without it. |
+| `QSD_FEE_WALLET` | required for buy-and-burn | optional | Fee wallet; must be the sender payer of the burn job. |
+| `QSD_WEBHOOK_SECRET` | required | required to accept webhooks | The `authHeader` value registered with Helius; compared (constant-time) with the incoming `Authorization` header. |
 | `QSD_WITNESS_PUBLIC_KEYS`, `QSD_QRNG_*` | see `@qsd/quantum` | see `@qsd/quantum` | Read by `productionVerifyOptions()` / `createProviderFromEnv()`. |
 
 `describeConfig(cfg)` returns a loggable copy with every secret replaced by

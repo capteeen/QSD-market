@@ -33,5 +33,5 @@ export function chainStatus(): { configured: boolean; cluster: 'devnet' | 'mainn
 export function serverCluster(): 'devnet' | 'mainnet-beta' {
   const s = init();
   if (s.chain) return s.chain.config.cluster;
-  return process.env.SOLANA_CLUSTER === 'mainnet-beta' ? 'mainnet-beta' : 'devnet';
+  return process.env.SOLANA_CLUSTER === 'devnet' ? 'devnet' : 'mainnet-beta';
 }

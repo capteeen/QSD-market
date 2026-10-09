@@ -36,7 +36,7 @@ export interface ChainConfig {
   /** True only when the environment said QSD_MAINNET_ENABLED=true. Checked again by createChain. */
   mainnetEnabled: boolean;
   rpcUrl: string;
-  /** Helius API key. Optional on devnet (snapshot falls back to getProgramAccounts). */
+  /** Helius API key. Required in practice on mainnet (DAS snapshots, webhooks); optional on devnet (snapshot falls back to getProgramAccounts). */
   heliusApiKey?: string;
   pumpPortalApiUrl: string;
   /** Pinata JWT for pump.fun IPFS uploads (PumpPortal's documented path, see README). */
@@ -75,22 +75,26 @@ function opt(env: EnvLike, name: string): string | undefined {
 /**
  * Read the chain configuration from an env-like object. Pure and total: it
  * throws `ChainConfigError` (naming the variable, never its value) when a
- * required value is missing or malformed, and it throws when
- * `SOLANA_CLUSTER=mainnet-beta` without `QSD_MAINNET_ENABLED=true`.
+ * required value is missing or malformed, and it throws when the cluster is
+ * mainnet-beta without `QSD_MAINNET_ENABLED=true`.
+ *
+ * The default cluster is mainnet-beta. Devnet is opt-in for testing with
+ * `SOLANA_CLUSTER=devnet`. Mainnet still needs the explicit real-funds flag,
+ * so an environment that sets neither fails closed instead of signing.
  */
 export function loadChainConfig(env: EnvLike = process.env): ChainConfig {
-  const clusterRaw = opt(env, ENV.CLUSTER) ?? 'devnet';
+  const clusterRaw = opt(env, ENV.CLUSTER) ?? 'mainnet-beta';
   if (clusterRaw !== 'devnet' && clusterRaw !== 'mainnet-beta') {
     throw new ChainConfigError(`${ENV.CLUSTER} must be 'devnet' or 'mainnet-beta'`);
   }
   const cluster: Cluster = clusterRaw;
   const isMainnet = cluster === 'mainnet-beta';
+  const keyEncryptionKey = readHex32(env, ENV.KEY_ENCRYPTION_KEY);
   if (isMainnet && opt(env, ENV.MAINNET_ENABLED) !== 'true') {
     throw new ChainConfigError(
-      `${ENV.CLUSTER}=mainnet-beta requires the explicit integrator flag ${ENV.MAINNET_ENABLED}=true`,
+      `${ENV.CLUSTER}=mainnet-beta (the default) requires the explicit integrator flag ${ENV.MAINNET_ENABLED}=true; set ${ENV.CLUSTER}=devnet to test on devnet`,
     );
   }
-  const keyEncryptionKey = readHex32(env, ENV.KEY_ENCRYPTION_KEY);
   const heliusApiKey = opt(env, ENV.HELIUS_API_KEY);
   const rpcUrl = opt(env, ENV.RPC_URL) ?? DEFAULT_RPC_URL[cluster];
   if (!/^https?:\/\//.test(rpcUrl)) throw new ChainConfigError(`${ENV.RPC_URL} must be an http(s) URL`);
