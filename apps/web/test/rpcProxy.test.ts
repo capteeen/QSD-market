@@ -16,3 +16,15 @@ describe('rpcProxyAllows', () => {
     expect(rpcProxyAllows(null)).toBe(false);
   });
 });
+
+describe('rpcProxyWithinLimit', () => {
+  it('allows 60 calls per IP per minute, then refuses until the next minute', async () => {
+    delete process.env.REDIS_URL;
+    const { rpcProxyWithinLimit, RPC_PROXY_PER_MINUTE } = await import('@/server/rpcProxy');
+    const t = 1_700_000_000_000;
+    for (let i = 0; i < RPC_PROXY_PER_MINUTE; i++) expect(await rpcProxyWithinLimit('1.2.3.4', 1, t)).toBe(true);
+    expect(await rpcProxyWithinLimit('1.2.3.4', 1, t)).toBe(false);
+    expect(await rpcProxyWithinLimit('5.6.7.8', 1, t)).toBe(true);
+    expect(await rpcProxyWithinLimit('1.2.3.4', 1, t + 60_000)).toBe(true);
+  });
+});
