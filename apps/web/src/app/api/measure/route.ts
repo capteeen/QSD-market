@@ -41,7 +41,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       if (!row) return NextResponse.json({ error: 'coin vanished' }, { status: 500 });
       const m = row.measurements.find((x) => x.id === r.measurement.id);
       if (!m) return NextResponse.json({ error: 'measurement not persisted' }, { status: 500 });
-      const res: MeasureResponse = { measurement: measurementToDto(m), coin: await coinToDto(row, nowSeconds()) };
+      const res: MeasureResponse = { measurement: measurementToDto(m), coin: await coinToDto(row, nowSeconds()), daughterLaunch: r.daughterLaunch };
       return json(res);
     } catch (e) {
       if (e instanceof MeasureError) return NextResponse.json({ error: e.message }, { status: 409 });

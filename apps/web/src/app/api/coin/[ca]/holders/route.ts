@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { loadCoin, coinFromDb } from '@/server/coins';
 import { TradeLogHoldingHistory, holdersFromTradeLog } from '@/server/holdingHistory';
+import { proofAnchorSlot } from '@/server/collapse';
 import { guarded, json } from '@/server/unavailable';
 import { nowSeconds } from '@/lib/format';
 import type { HoldersResponse, HolderDto } from '@/lib/types';
@@ -20,6 +21,8 @@ export async function GET(_req: Request, { params }: { params: { ca: string } })
     if (!row) return NextResponse.json({ error: 'no such coin' }, { status: 404 });
     const coin = coinFromDb(row);
     const now = coin.collapsedAt ?? nowSeconds();
+    // A collapsed coin's facts are judged at its proof-anchor slot; a live coin has no collapse slot yet (0 = none).
+    const collapseSlot = coin.collapsedAt ? (proofAnchorSlot(row) ?? 0) : 0;
     const balances = await holdersFromTradeLog(coin.ca, now);
     let holders: HolderDto[] | null = null;
     if (balances) {
@@ -31,7 +34,7 @@ export async function GET(_req: Request, { params }: { params: { ca: string } })
             mint: coin.ca,
             bornAt: coin.bornAt,
             collapseAt: now,
-            collapseSlot: 0,
+            collapseSlot,
             quietPeriodStart: coin.lastActivityAt,
             measurements: coin.measurements,
           });

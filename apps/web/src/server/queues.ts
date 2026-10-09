@@ -8,6 +8,7 @@ export const QUEUES = {
   collapse: 'collapse',
   hourlyBurn: 'hourly-burn',
   snapshot: 'snapshot',
+  reconcileCollapses: 'reconcile-collapses',
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
@@ -18,6 +19,7 @@ export interface JobData {
   collapse: { ca: string };
   'hourly-burn': Record<string, never>;
   snapshot: { ca: string };
+  'reconcile-collapses': Record<string, never>;
 }
 
 export function bullConnection(): { host: string; port: number; password?: string; username?: string; tls?: Record<string, never> } {
@@ -43,15 +45,31 @@ export function queue<N extends QueueName>(name: N): Queue<JobData[N]> {
   return q as Queue<JobData[N]>;
 }
 
-/** Enqueue; failures are logged, never thrown (the caller's write already happened). */
-export async function enqueue<N extends QueueName>(name: N, data: JobData[N], opts?: JobsOptions): Promise<void> {
+export interface EnqueueOptions extends JobsOptions {
+  /**
+   * Called with the reason when the job could NOT be scheduled (no REDIS_URL,
+   * Redis unreachable, BullMQ error). The caller's own write has already
+   * happened by then, so enqueue never throws; a caller that must tell the
+   * user (the measurement response: "daughter launch not scheduled") passes
+   * this and reports it. The reconciliation job re-enqueues collapsed coins
+   * without a daughter later (src/server/reconcile.ts).
+   */
+  onFailure?: (reason: string) => void;
+}
+
+/** Enqueue; failures are logged and reported through `onFailure`, never thrown (the caller's write already happened). */
+export async function enqueue<N extends QueueName>(name: N, data: JobData[N], opts?: EnqueueOptions): Promise<void> {
+  const { onFailure, ...jobOpts } = opts ?? {};
   if (!process.env.REDIS_URL) {
     console.warn(`[queues] REDIS_URL unset: job ${name} not enqueued`);
+    onFailure?.('REDIS_URL is unset: no queue is configured');
     return;
   }
   try {
-    await (queue(name) as Queue).add(name, data, { removeOnComplete: 100, removeOnFail: 500, ...opts });
+    await (queue(name) as Queue).add(name, data, { removeOnComplete: 100, removeOnFail: 500, ...jobOpts });
   } catch (e) {
-    console.error('[queues]', name, e instanceof Error ? e.message : String(e));
+    const reason = e instanceof Error ? e.message : String(e);
+    console.error('[queues]', name, reason);
+    onFailure?.(`the queue refused the job: ${reason}`);
   }
 }

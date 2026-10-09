@@ -55,6 +55,8 @@ model Coin {
   launchBundle   Json?
   /// Wallet that paid for / requested the launch.
   createdBy      String?
+  /// The SOL payment transaction this launch consumed. Unique: one payment buys one launch (H-W1).
+  paymentTx      String?   @unique
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -105,6 +107,8 @@ model Measurement {
   decayAfter       Float
   precommitTx      String?
   proofTx          String?
+  /// Slot of the proof anchor transaction: the collapse snapshot slot (H-W13).
+  proofSlot        Int?
   attestationKind  String
   createdAt        DateTime               @default(now())
 

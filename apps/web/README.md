@@ -64,7 +64,7 @@ history (`L = 0`).
 
 | Route | Data | Empty / unavailable |
 | --- | --- | --- |
-| `/` | `FieldScene` from `GET /api/coins`; glass panel; next-burn `Countdown` from `/api/stats.nextBurnAt` (the BullMQ cron's next top of the hour, only when `REDIS_URL` and `QSD_TOKEN_MINT` are set); four steps (copy); live counters from `/api/stats` (Prisma counts); LOG from `/api/log` (`EventLog`, newest first) | empty chamber + `EmptyState`; counters per-row `Unavailable` on 503, `0` only on a real zero; log `EmptyState` |
+| `/` | `FieldScene` from `GET /api/coins`; glass panel; next-burn `Countdown` from `/api/stats.nextBurnAt` (the `next` timestamp of the hourly-burn repeatable job as BullMQ holds it in Redis — `src/server/burnSchedule.ts`; null, i.e. unavailable, when no worker has registered the cron or the lookup fails); four steps (copy); live counters from `/api/stats` (Prisma counts); LOG from `/api/log` (`EventLog`, newest first) | empty chamber + `EmptyState`; counters per-row `Unavailable` on 503, `0` only on a real zero; log `EmptyState` |
 | `/field` | `/api/coins` with client-side filter (superposed / collapsed / tunnelled) and sort (uncertainty = band width, half-life, live decay progress) | `EmptyState` (none / none matching), `Panel unavailable` |
 | `/coin/[ca]` | `/api/coin/[ca]` (Prisma `Coin` + `Channel` + `Measurement`), `/api/coin/[ca]/holders` (trade-log reconstruction), `/api/stats.health` for the measure button | not found → `EmptyState`; every row through `DataRow`/`HashDisplay` unavailable states |
 | `/lineage/[id]` | `/api/lineage/[id]` (`Lineage`, coins by generation, collapse measurements, `AllocationTable` + entry aggregates) | `EmptyState` |
@@ -100,8 +100,13 @@ failure returns **HTTP 503 `{ unavailable: { reason } }`**; the client helper
 
 `POST /api/launch` validates the multipart form, verifies the wallet's payment
 transaction on-chain (a SOL transfer of launch cost + identity reserve + dev
-buy to the protocol creator, signed by the wallet, unused before), then runs
-`src/server/launch.ts` as an async generator of SSE frames:
+buy to the protocol creator, signed by the wallet), then runs
+`src/server/launch.ts` as an async generator of SSE frames. One payment buys
+one launch: the payment signature is stored on the coin (`Coin.paymentTx`,
+unique), checked before any chain work and again inside the transaction that
+inserts the coin, with the unique index as the last word. Error frames carry
+`redactSecrets(message)` from `@qsd/solana`, so an RPC URL with an api-key
+never reaches the browser.
 
 | frame | payload | scene input |
 | --- | --- | --- |
@@ -146,7 +151,20 @@ live `decayProgress`; it is disabled with the reason when the wallet is not
 connected, the QRNG provider or chain is not configured (`/api/stats.health`),
 or the coin is collapsed. After a measurement the `MeasurementScene` replays
 the four draw events from the returned proof bundle (the draw itself runs on
-the server; the values shown are the bundle's).
+the server; the values shown are the bundle's). The button says what a
+survive pays today: nothing — no measurement fee is charged, so nothing is
+rebated; 75 % of the coin's quiet time is removed (economics.md §3).
+
+`POST /api/measure` answers `daughterLaunch` on a collapse outcome:
+`{ status: 'scheduled' }` when the collapse job was accepted by the queue, or
+`{ status: 'not-scheduled', reason }` when it was not (no `REDIS_URL`, Redis
+down); the page shows which. The mother is recorded as collapsed either way
+and the `reconcile-collapses` job re-enqueues her (below). The wallet
+challenge nonce is consumed with one conditional `updateMany` (`usedAt: null`,
+unexpired) so two concurrent requests with the same signed challenge cannot
+both pass. Each measurement row records the proof anchor's slot
+(`Measurement.proofSlot`); the collapse passes it to `executeCollapse` as
+`collapseSlot`, so the holder snapshot is taken at the proof-anchor slot.
 
 The daughter ghost computes the connected wallet's projected allocation
 client-side with `computeAllocation` over the trade-log holder reconstruction,
@@ -182,7 +200,14 @@ the market cap used for the Zeno reset, which is implied by each buy
 `auto-measure` (repeat every minute: `autoMeasureDue` → `performMeasurement`
 with `by = 'protocol'`), `collapse` (`executeCollapse`, resumable, enqueued on
 every collapse outcome with a stable job id), `hourly-burn` (cron `0 * * * *`
-when `QSD_TOKEN_MINT` is set), `ingest-trades`, `snapshot` (identity mirror).
+when `QSD_TOKEN_MINT` is set), `ingest-trades`, `snapshot` (identity mirror),
+`reconcile-collapses` (repeat every 5 minutes: every coin in state
+`collapsed` with no `daughterCa` whose collapse job is not waiting or running
+is re-enqueued and logged as `collapse-pending`; `src/server/reconcile.ts`).
+
+`src/app/not-found.tsx` and `error.tsx` render inside the root layout;
+`global-error.tsx` replaces it and renders the footer disclaimer itself, so
+every page — including 404 and error pages — carries it.
 
 ## Tests (`test/`)
 

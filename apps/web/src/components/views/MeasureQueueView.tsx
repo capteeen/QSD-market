@@ -61,7 +61,7 @@ export function MeasureQueueView() {
                       <td>
                         {formatUnits(r.measurerUnits, c.supply.decimals)} {c.ticker}
                       </td>
-                      <td>fee rebate {formatBps(PROTOCOL_PARAMS.SURVIVE_FEE_REBATE_BPS, 0)}</td>
+                      <td>{MEASURE.surviveCell(formatBps(PROTOCOL_PARAMS.SURVIVE_RESET_BPS, 0))}</td>
                       <td>
                         <Link className="qsd-link" href={routes.coin(c.ca)}>
                           {MEASURE.measureLink}

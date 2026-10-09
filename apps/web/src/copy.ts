@@ -202,6 +202,8 @@ export const COIN = {
   measureRunning: 'measuring — waiting for the draw',
   measureDone: 'measurement recorded',
   measureFailed: 'measurement failed',
+  daughterScheduled: 'the daughter launch has been handed to the collapse worker',
+  daughterNotScheduled: 'the daughter launch could NOT be scheduled; the mother is recorded as collapsed and the reconciliation job will retry',
   holdersEyebrow: 'HOLDERS',
   holdersTitle: 'Holders at the latest snapshot',
   holdersEmptyEyebrow: 'NO HOLDER DATA',
@@ -264,7 +266,8 @@ export const LAUNCH = {
   quoteUnavailableEyebrow: 'LAUNCH NOT AVAILABLE',
   devnetNotice: 'This deployment is on Solana devnet: the coin is minted as a plain SPL token. pump.fun is mainnet-only.',
   mainnetNotice: 'This deployment launches on pump.fun (Solana mainnet).',
-  stageNote: 'Every visual in the sequence is driven by a real event from the key generation, the quantum draw, the signature and the chain. If no event arrives, nothing moves.',
+  stageNote:
+    'Every visual in the sequence is driven by a real event from the key generation, the quantum draw, the signature and the chain. If no event arrives, no stage advances and no value changes; the only motion without an event is the chamber’s ambient drift.',
   streamLost: 'the launch stream was interrupted; the server may still complete the launch — check the log',
   done: 'Launched',
   viewCoin: 'View coin',
@@ -283,6 +286,8 @@ export const MEASURE = {
   emptySentence: 'No coin is in a measurable state.',
   unavailableEyebrow: 'QUEUE NOT AVAILABLE',
   cols: { coin: 'coin', autoAt: 'auto-measurement in', decay: 'collapse probability now', rewardCollapse: 'if it collapses you receive', rewardSurvive: 'if it survives' },
+  /** What a survive pays the measurer today: nothing. No measurement fee is charged, so there is nothing to rebate; the coin's quiet time is partly removed. */
+  surviveCell: (resetPct: string): string => `nothing — the coin stays alive and ${resetPct} of its quiet time is removed`,
   measureLink: 'open',
 } as const;
 
@@ -356,7 +361,19 @@ export const SHARED = {
 
 /** Reward / risk sentences for the MeasureButton. All numbers are computed by the caller. */
 export const MEASURE_TEXT = {
-  reward: (units: string, ticker: string, pct: string, rebateBps: string): string =>
-    `if it collapses you receive ${units} ${ticker} (${pct} of remaining supply); if it survives you receive a fee rebate of ${rebateBps} bps`,
+  reward: (units: string, ticker: string, pct: string, resetPct: string): string =>
+    `if it collapses you receive ${units} ${ticker} (${pct} of remaining supply); if it survives you receive nothing — no measurement fee is charged — and ${resetPct} of the coin’s quiet time is removed`,
   risk: (pct: string): string => `current collapse probability: ${pct}`,
+} as const;
+
+// ───────────────────────────── error pages ─────────────────────────────
+export const ERRORS = {
+  notFoundEyebrow: 'NO SUCH PAGE',
+  notFoundSentence: 'Nothing exists at this address.',
+  notFoundLink: 'Back to the field',
+  errorEyebrow: 'PAGE FAILED',
+  errorSentence: 'This page failed to render. Opening it changed nothing on the protocol.',
+  retry: 'Try again',
+  globalEyebrow: 'SITE FAILED',
+  globalSentence: 'The site shell failed to render. Opening it changed nothing on the protocol.',
 } as const;

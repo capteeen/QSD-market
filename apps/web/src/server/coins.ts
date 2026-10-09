@@ -166,9 +166,23 @@ export async function saveCoinState(coin: Coin): Promise<void> {
   });
 }
 
-/** Insert a brand-new protocol Coin (launch or daughter birth) with its channel table. */
-export async function insertCoin(coin: Coin, extra: { launchPath: string; launchTx: string; launchBundle?: unknown; createdBy?: string }): Promise<void> {
-  await db().$transaction(async (tx) => {
+export interface InsertCoinExtra {
+  launchPath: string;
+  launchTx: string;
+  launchBundle?: unknown;
+  createdBy?: string;
+  /** The payment transaction a user launch consumed (unique on Coin). */
+  paymentTx?: string;
+}
+
+/** Insert a brand-new protocol Coin (launch or daughter birth) with its channel table, in its own transaction. */
+export async function insertCoin(coin: Coin, extra: InsertCoinExtra): Promise<void> {
+  await db().$transaction((tx) => insertCoinWith(tx, coin, extra));
+}
+
+/** The same insert inside a caller-owned transaction (the launch checks the payment and inserts the coin atomically). */
+export async function insertCoinWith(tx: Prisma.TransactionClient, coin: Coin, extra: InsertCoinExtra): Promise<void> {
+  {
     await tx.lineage.upsert({ where: { id: coin.lineageId }, create: { id: coin.lineageId, genesisCa: coin.motherCa ? (await genesisOf(tx, coin)) : coin.ca }, update: {} });
     await tx.coin.create({
       data: {
@@ -198,6 +212,7 @@ export async function insertCoin(coin: Coin, extra: { launchPath: string; launch
         launchTx: extra.launchTx,
         ...(extra.launchBundle !== undefined ? { launchBundle: extra.launchBundle as Prisma.InputJsonValue } : {}),
         createdBy: extra.createdBy ?? null,
+        paymentTx: extra.paymentTx ?? null,
         channels: {
           create: coin.decayChannels.map((c, i) => ({
             channelId: c.id,
@@ -212,7 +227,7 @@ export async function insertCoin(coin: Coin, extra: { launchPath: string; launch
         },
       },
     });
-  });
+  }
 }
 
 async function genesisOf(tx: Prisma.TransactionClient, coin: Coin): Promise<string> {
@@ -221,7 +236,7 @@ async function genesisOf(tx: Prisma.TransactionClient, coin: Coin): Promise<stri
 }
 
 /** Append a measurement row (id = bundleHash) with its anchor signatures. */
-export async function insertMeasurement(ca: string, m: Measurement, index: number, anchors: { precommitTx?: string; proofTx?: string }): Promise<void> {
+export async function insertMeasurement(ca: string, m: Measurement, index: number, anchors: { precommitTx?: string; proofTx?: string; proofSlot?: number }): Promise<void> {
   await db().measurement.create({
     data: {
       id: m.id,
@@ -236,6 +251,7 @@ export async function insertMeasurement(ca: string, m: Measurement, index: numbe
       decayAfter: m.decayAfter,
       precommitTx: anchors.precommitTx ?? null,
       proofTx: anchors.proofTx ?? null,
+      proofSlot: anchors.proofSlot ?? null,
       attestationKind: m.proofBundle.draw.attestation.kind,
     },
   });

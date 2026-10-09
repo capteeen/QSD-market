@@ -10,6 +10,12 @@ import { publish } from './redis';
 import { genesisConfig } from './genesis';
 import { formatUnits } from '@/lib/format';
 
+/** The slot of the proof anchor of the measurement that collapsed the coin (the authoritative snapshot slot), or null if it was not recorded. */
+export function proofAnchorSlot(row: { measurements: { outcomeKind: string; proofSlot: number | null; index: number }[] }): number | null {
+  const collapsing = [...row.measurements].sort((a, b) => b.index - a.index).find((m) => m.outcomeKind === 'collapse');
+  return collapsing?.proofSlot ?? null;
+}
+
 /** Mother image bytes for the daughter's metadata: devnet images live in CoinImage; mainnet images are fetched from their URI. */
 async function motherImageBytes(ca: string, imageUri: string): Promise<Uint8Array> {
   const stored = await db().coinImage.findUnique({ where: { coinCa: ca } });
@@ -37,8 +43,13 @@ export async function runCollapse(ca: string, log: (line: string) => void = cons
   const { creator, sender, reader, transferSender, anchor, getMintRentLamports } = await chain.withCreator();
   const devBuySol = Number(process.env.QSD_DAUGHTER_DEV_BUY_SOL ?? '0');
   if (!Number.isFinite(devBuySol) || devBuySol < 0) throw new Error('QSD_DAUGHTER_DEV_BUY_SOL must be a non-negative number of SOL');
+  // H-W13: the holder snapshot is taken at the slot the collapse proof was anchored in (recorded on the
+  // collapsing measurement), not at whatever slot this worker happens to start at.
+  const collapseSlot = proofAnchorSlot(row);
+  if (collapseSlot === null) log(`collapse ${ca}: no proof-anchor slot recorded on the collapsing measurement; the snapshot slot will be the orchestration start`);
 
   const outcome = await executeCollapse(mother, {
+    ...(collapseSlot !== null ? { collapseSlot } : {}),
     cluster: chain.config.cluster,
     sender,
     reader,

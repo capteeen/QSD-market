@@ -241,13 +241,14 @@ function MeasurementCard({ m, coin }: { m: MeasurementDto; coin: CoinDto }) {
     setBusy(true);
     // verify() is synchronous and pure; defer one tick so the badge shows pending.
     setTimeout(() => {
-      const r = verify(bundle, measurementResolver, { trustedWitnessKeys: keys, requireInputBinding: true, ...(kind === 'unsafe-dev' ? { allowUnsafeDev: true } : {}) });
+      // The verifier's options never come from the bundle under verification: a dev bundle renders "invalid" in production, correctly.
+      const r = verify(bundle, measurementResolver, { trustedWitnessKeys: keys, requireInputBinding: true });
       if (r.ok && !('trust' in r)) setStatus({ status: 'verified' });
       else if (r.ok) setStatus({ status: 'unverified', reason: 'self-consistent only' });
       else setStatus({ status: 'invalid', reason: r.reason });
       setBusy(false);
     }, 0);
-  }, [bundle, keys, kind]);
+  }, [bundle, keys]);
 
   const download = () => {
     const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
@@ -342,10 +343,11 @@ function MeasurePanel({ coin, decay, measurable }: { coin: CoinDto; decay: numbe
   const [phase, setPhase] = useState<'idle' | 'signing' | 'running' | 'done' | 'failed'>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [last, setLast] = useState<MeasurementDto | null>(null);
+  const [daughterNote, setDaughterNote] = useState<string | null>(null);
 
   const rewards = collapseRewards(BigInt(coin.supply.remainingUnits));
   const rewardPct = formatBps((PROTOCOL_PARAMS.COLLAPSE_BURN_BPS * PROTOCOL_PARAMS.MEASURER_SHARE_OF_BURN_BPS) / 10_000, 2);
-  const reward = MEASURE_TEXT.reward(formatUnits(rewards.measurerUnits, coin.supply.decimals), coin.ticker, rewardPct, String(PROTOCOL_PARAMS.SURVIVE_FEE_REBATE_BPS));
+  const reward = MEASURE_TEXT.reward(formatUnits(rewards.measurerUnits, coin.supply.decimals), coin.ticker, rewardPct, formatBps(PROTOCOL_PARAMS.SURVIVE_RESET_BPS, 0));
   const risk = MEASURE_TEXT.risk(formatPercent(decay, 1));
 
   let disabledReason: string | undefined;
@@ -387,6 +389,7 @@ function MeasurePanel({ coin, decay, measurable }: { coin: CoinDto; decay: numbe
     setLast(r.measurement);
     setPhase('done');
     setMessage(`${COIN.measureDone}: ${r.measurement.outcome.kind}`);
+    setDaughterNote(r.daughterLaunch ? (r.daughterLaunch.status === 'scheduled' ? COIN.daughterScheduled : `${COIN.daughterNotScheduled} (${r.daughterLaunch.reason})`) : null);
     void qc.invalidateQueries({ queryKey: ['coin', coin.ca] });
   };
 
@@ -395,6 +398,7 @@ function MeasurePanel({ coin, decay, measurable }: { coin: CoinDto; decay: numbe
       <p className="mb-4 text-xs text-muted">{COIN.measureCaption}</p>
       <MeasureButton reward={reward} risk={risk} measuring={phase === 'signing' || phase === 'running'} {...(disabledReason ? { disabledReason } : {})} onClick={() => void measure()} />
       {message ? <p className="mt-3 text-xs" data-phase={phase}>{message}</p> : null}
+      {daughterNote ? <p className="mt-1 text-xs text-muted" data-daughter-launch>{daughterNote}</p> : null}
       {last ? (
         <div className="mt-4 h-72 w-full border border-border">
           <MeasurementScene sources={{ quantum: bundleEvents(last), superposition: superpositionInput(coin) }} />

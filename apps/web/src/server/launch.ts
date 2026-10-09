@@ -1,15 +1,16 @@
 import 'server-only';
+import type { Prisma } from '@prisma/client';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { CryptoObserver, redactEvent, toHex, type CryptoEvent } from '@qsd/crypto';
 import { HALF_LIFE_PRESETS, initialImageLineage, type Coin } from '@qsd/protocol';
 import { QuantumEventBus, bundleHash, canonicalJson, type JsonValue, type OutcomeResolver, type ProofBundle, type QuantumEvent } from '@qsd/quantum';
-import { launchDevnetSplToken, launchOnPumpFun, type ChainEvent as SolanaChainEvent } from '@qsd/solana';
+import { launchDevnetSplToken, launchOnPumpFun, redactSecrets, type ChainEvent as SolanaChainEvent } from '@qsd/solana';
 import { encodeCryptoEvents } from '@qsd/scene/model';
 import type { ChainEvent as SceneChainEvent, LineageInput, SuperpositionInput } from '@qsd/scene/model';
 import { getChain } from './chain';
 import { db } from './db';
-import { insertCoin } from './coins';
+import { insertCoinWith } from './coins';
 import { logEvent } from './events';
 import { genesisConfig } from './genesis';
 import { syncIdentityMirror } from './identityMirror';
@@ -131,9 +132,28 @@ async function verifyPayment(form: LaunchForm, payTo: PublicKey): Promise<bigint
   if (!tx.transaction.message.isAccountSigner(payerIdx)) throw new LaunchValidationError('the wallet did not sign the payment transaction');
   const received = BigInt(tx.meta.postBalances[payeeIdx] ?? 0) - BigInt(tx.meta.preBalances[payeeIdx] ?? 0);
   if (received < total) throw new LaunchValidationError(`payment of ${received} lamports is below the required ${total}`);
-  const used = await db().coin.findFirst({ where: { launchTx: form.paymentSignature } });
-  if (used) throw new LaunchValidationError('this payment was already used for a launch');
+  await assertPaymentUnused(db(), form.paymentSignature);
   return total;
+}
+
+const PAYMENT_USED = 'this payment was already used for a launch';
+
+/**
+ * One payment buys one launch. `Coin.paymentTx` records the payment a coin
+ * consumed and is unique; it is checked here before any chain work, and again
+ * inside the transaction that inserts the coin (with the unique index as the
+ * last word), so two concurrent launches on the same payment cannot both land.
+ */
+async function assertPaymentUnused(client: Prisma.TransactionClient, paymentTx: string): Promise<void> {
+  const used = await client.coin.findFirst({ where: { paymentTx } });
+  if (used) throw new LaunchValidationError(PAYMENT_USED);
+}
+
+function isPaymentUniqueViolation(e: unknown): boolean {
+  const err = e as { code?: string; meta?: { target?: unknown } };
+  if (err?.code !== 'P2002') return false;
+  const target = err.meta?.target;
+  return Array.isArray(target) ? target.includes('paymentTx') : typeof target === 'string' ? target.includes('paymentTx') : true;
 }
 
 function hexBytes(e: QuantumEvent): JsonValue {
@@ -273,9 +293,16 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
       measurements: [],
       bornAt,
     };
-    await insertCoin(coin, { launchPath: launch.path, launchTx: launch.txSignature, launchBundle: bundle as unknown as ProofBundle, createdBy: form.wallet });
+    try {
+      await db().$transaction(async (tx) => {
+        await assertPaymentUnused(tx, form.paymentSignature);
+        await insertCoinWith(tx, coin, { launchPath: launch.path, launchTx: launch.txSignature, launchBundle: bundle as unknown as ProofBundle, createdBy: form.wallet, paymentTx: form.paymentSignature });
+      });
+    } catch (e) {
+      if (isPaymentUniqueViolation(e)) throw new LaunchValidationError(PAYMENT_USED);
+      throw e;
+    }
     if (!launch.imageUri) await db().coinImage.create({ data: { coinCa: ca, mime: form.image.mime, bytes: Buffer.from(form.image.bytes) } });
-    await db().coin.update({ where: { ca }, data: { launchTx: launch.txSignature } });
     await syncIdentityMirror(ca);
     await logEvent({
       type: 'launch',
@@ -291,7 +318,8 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     push('done', { ca });
     yield* drain();
   } catch (e) {
-    push('error', { message: e instanceof Error ? e.message : String(e) });
+    // Never forward a raw chain/RPC error: web3.js fetch errors can carry the RPC URL and its api-key.
+    push('error', { message: redactSecrets(e instanceof Error ? e.message : String(e)) });
     yield* drain();
   }
 }

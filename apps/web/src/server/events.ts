@@ -4,7 +4,7 @@ import { db } from './db';
 import { publish } from './redis';
 import type { LogEntryDto } from '@/lib/types';
 
-export type LogType = 'launch' | 'measurement' | 'collapse' | 'tunnel' | 'daughter' | 'airdrop' | 'burn' | 'trade' | 'survive';
+export type LogType = 'launch' | 'measurement' | 'collapse' | 'collapse-pending' | 'tunnel' | 'daughter' | 'airdrop' | 'burn' | 'trade' | 'survive';
 
 /** Write an EventLog row and publish it to the live stream. */
 export async function logEvent(e: { type: LogType; at?: Date; coinCa?: string; refId?: string; tx?: string; summary: string; data?: unknown }): Promise<LogEntryDto> {

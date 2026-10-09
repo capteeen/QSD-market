@@ -222,6 +222,8 @@ export interface MeasureChallengeResponse {
 export interface MeasureResponse {
   measurement: MeasurementDto;
   coin: CoinDto;
+  /** Collapse outcomes only: whether the daughter launch was handed to the collapse worker. null for survive / tunnel. */
+  daughterLaunch: { status: 'scheduled'; reason: null } | { status: 'not-scheduled'; reason: string } | null;
 }
 
 /** SSE event names on /api/events. */

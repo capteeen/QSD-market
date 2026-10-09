@@ -40,5 +40,10 @@ export async function verifyChallenge(args: { purpose: string; wallet: string; s
   }
   const msg = new TextEncoder().encode(challengeMessage(purpose, wallet, nonce, subject));
   if (!ed25519Verify(bytesToHex(sig), msg, bytesToHex(pk))) throw new AuthError('signature does not verify for this wallet');
-  await db().authChallenge.update({ where: { nonce }, data: { usedAt: new Date() } });
+  // Consume the nonce with ONE conditional write: only the request whose UPDATE
+  // finds the row still unused (and unexpired) wins; a concurrent duplicate sees
+  // count 0 and is refused, whatever its earlier read returned.
+  const now = new Date();
+  const consumed = await db().authChallenge.updateMany({ where: { nonce, wallet, purpose, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } });
+  if (consumed.count !== 1) throw new AuthError('challenge already used');
 }

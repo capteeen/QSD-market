@@ -6,6 +6,7 @@
  *   collapse       execute / resume a collapse (snapshot → rewards → daughter → allocation → airdrop)
  *   hourly-burn    cron at minute 0: tally fees, buy $QSD, burn
  *   snapshot       refresh a coin's identity-reserve mirror
+ *   reconcile-collapses  every 5 minutes: re-enqueue collapsed mothers whose daughter launch never got scheduled
  *
  * Every worker calls @qsd/solana, writes results to Prisma, and publishes to
  * Redis through the same server modules the route handlers use.
@@ -19,6 +20,8 @@ import { coinFromDb, coinInclude } from '../server/coins';
 import { performMeasurement } from '../server/measure';
 import { runCollapse } from '../server/collapse';
 import { runHourlyBurn } from '../server/burn';
+import { reconcileCollapses } from '../server/reconcile';
+import { nextBurnAt } from '../server/stats';
 import { ingestBuy } from '../server/trades';
 import { syncIdentityMirror } from '../server/identityMirror';
 import { nowSeconds } from '../lib/format';
@@ -67,6 +70,14 @@ async function main(): Promise<void> {
     new Worker<JobData['collapse']>(QUEUES.collapse, async (job) => runCollapse(job.data.ca, log), { connection, concurrency: 1 }),
     new Worker<JobData['hourly-burn']>(QUEUES.hourlyBurn, async () => runHourlyBurn(log), { connection, concurrency: 1 }),
     new Worker<JobData['snapshot']>(QUEUES.snapshot, async (job) => syncIdentityMirror(job.data.ca), { connection }),
+    new Worker<JobData['reconcile-collapses']>(
+      QUEUES.reconcileCollapses,
+      async () => {
+        const r = await reconcileCollapses(log);
+        if (r.checked > 0) log(`reconcile: ${r.checked} collapsed without daughter, ${r.enqueued.length} re-enqueued, ${r.running.length} already queued`);
+      },
+      { connection, concurrency: 1 },
+    ),
   );
   for (const w of workers) {
     w.on('failed', (job, err) => log(`${w.name} job ${job?.id ?? '?'} failed: ${err.message}`));
@@ -79,9 +90,12 @@ async function main(): Promise<void> {
   if (process.env.QSD_TOKEN_MINT) {
     const burn = new Queue(QUEUES.hourlyBurn, { connection });
     await burn.add('hourly', {}, { repeat: { pattern: '0 * * * *' }, jobId: 'hourly-burn-cron', removeOnComplete: 10, removeOnFail: 50 });
+    log(`hourly burn registered; the cron's next slot from configuration is ${nextBurnAt() ?? 'unknown'} (the page reads the scheduler's own value)`);
   } else {
     log('QSD_TOKEN_MINT unset: the hourly burn is not scheduled');
   }
+  const reconcile = new Queue(QUEUES.reconcileCollapses, { connection });
+  await reconcile.add('tick', {}, { repeat: { every: 5 * 60_000 }, jobId: 'reconcile-collapses-tick', removeOnComplete: 10, removeOnFail: 50 });
   log(`workers up: ${workers.map((w) => w.name).join(', ')}`);
 
   const shutdown = async (): Promise<void> => {
