@@ -6,7 +6,7 @@
 import { useMemo, type CSSProperties, type ReactElement } from 'react';
 import { DataRow, HashDisplay, Panel, ProofBadge, colors, fonts, type ProofStatus } from '@qsd/ui-tokens';
 import { authHash, chainLinkHash, fusedHash, leafHash, stopHash, toHex } from '../model/reducer.js';
-import { CHAIN_INSTANCES, CHAINS, FUSED_NODES, LEAVES, STAGE_NAMES, TREE_HEIGHT, type SceneState, type Stage } from '../model/types.js';
+import { STAGE_NAMES, type SceneState, type Stage } from '../model/types.js';
 import { useHover, useSceneSnapshot, type Hover } from './context.js';
 
 export interface SidePanelProps {
@@ -20,31 +20,10 @@ export interface SidePanelProps {
 export type PanelSection = 'stage' | 'keygen' | 'merkle' | 'superposition' | 'draw' | 'signing' | 'anchor' | 'lineage';
 const ALL: readonly PanelSection[] = ['stage', 'keygen', 'merkle', 'superposition', 'draw', 'signing', 'anchor', 'lineage'];
 
-const panelStyle: CSSProperties = {
-  position: 'absolute',
-  top: 16,
-  right: 16,
-  width: 340,
-  maxHeight: 'calc(100% - 32px)',
-  overflowY: 'auto',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 10,
-  fontFamily: fonts.mono,
-  fontSize: 12,
-  color: colors.text,
-  pointerEvents: 'auto',
-};
-
-const btn: CSSProperties = {
-  fontFamily: fonts.mono,
-  fontSize: 11,
-  background: 'transparent',
-  color: colors.probability,
-  border: `1px solid ${colors.border}`,
-  padding: '4px 8px',
-  cursor: 'pointer',
-};
+// prettier-ignore
+const panelStyle: CSSProperties = { position: 'absolute', top: 16, right: 16, width: 340, maxHeight: 'calc(100% - 32px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, fontFamily: fonts.mono, fontSize: 12, color: colors.text, pointerEvents: 'auto' };
+// prettier-ignore
+const btn: CSSProperties = { fontFamily: fonts.mono, fontSize: 11, background: 'transparent', color: colors.probability, border: `1px solid ${colors.border}`, padding: '4px 8px', cursor: 'pointer' };
 
 function hex(b: Uint8Array | null): string | undefined {
   return b ? toHex(b, 0, b.length) : undefined;
@@ -70,6 +49,25 @@ export function hoverDescription(s: SceneState, h: Hover): { label: string; hash
   }
 }
 
+/**
+ * Denominators come from the stream: keygenStart carries leaves / chains /
+ * links. Before it has arrived every total is 0 — "0 / 0" is the truth (zero
+ * of zero announced); "0 / 274432" would be a constant of the construction
+ * presented as if the stream had announced it.
+ */
+export function announcedTotals(s: SceneState): { announced: boolean; leaves: number; chains: number; links: number; fused: number; height: number } {
+  const k = s.keygen;
+  if (!k.started || k.leaves <= 0 || k.chains <= 0 || k.links <= 0) return { announced: false, leaves: 0, chains: 0, links: 0, fused: 0, height: 0 };
+  return {
+    announced: true,
+    leaves: k.leaves,
+    chains: k.leaves * k.chains,
+    links: k.leaves * k.chains * k.links,
+    fused: k.leaves - 1,
+    height: Math.round(Math.log2(k.leaves)),
+  };
+}
+
 function proofStatus(s: SceneState): { status: ProofStatus; reason: string } {
   const d = s.draw;
   if (d.phase === 'idle') return { status: 'unavailable', reason: 'no draw requested' };
@@ -89,6 +87,7 @@ export function SidePanel({ onSkip, sections = ALL, sound, style }: SidePanelPro
   const d = s.draw;
   const a = d.attestation;
   const proof = proofStatus(s);
+  const totals = announcedTotals(s);
 
   return (
     <div style={{ ...panelStyle, ...style }} data-qsd-scene-panel>
@@ -129,16 +128,17 @@ export function SidePanel({ onSkip, sections = ALL, sound, style }: SidePanelPro
           <div style={{ padding: '2px 0 6px' }}>
             <HashDisplay hash={hex(s.keygen.lastHash)} unavailable={{ reason: 'no hash computed yet' }} />
           </div>
-          <DataRow label="links grown" value={`${s.keygen.chainSteps} / ${LEAVES * CHAIN_INSTANCES}`} />
-          <DataRow label="chains complete" value={`${s.keygen.chainsComplete} / ${LEAVES * CHAINS}`} />
-          <DataRow label="leaves formed" value={`${s.keygen.leavesFormed} / ${LEAVES}`} />
+          {/* denominators come from keygenStart (leaves, chains, links); before it announces them they are 0 — never a constant of the construction */}
+          <DataRow label="links grown" value={`${s.keygen.chainSteps - s.keygen.duplicateSteps} / ${totals.links}`} />
+          <DataRow label="chains complete" value={`${s.keygen.chainsComplete} / ${totals.chains}`} />
+          <DataRow label="leaves formed" value={`${s.keygen.leavesFormed} / ${totals.leaves}`} />
         </Panel>
       ) : null}
 
       {has.has('merkle') ? (
         <Panel eyebrow="MERKLE" title="tree of height 8">
-          <DataRow label="fused level" value={s.merkle.highestLevel >= 0 ? s.merkle.highestLevel + 1 : undefined} unit={`/ ${TREE_HEIGHT}`} unavailable={{ reason: 'no treeLevelFused yet' }} />
-          <DataRow label="fused pairs" value={`${s.merkle.fusedTotal} / ${FUSED_NODES}`} />
+          <DataRow label="fused level" value={s.merkle.highestLevel >= 0 ? s.merkle.highestLevel + 1 : undefined} {...(totals.announced ? { unit: `/ ${totals.height}` } : {})} unavailable={{ reason: 'no treeLevelFused yet' }} />
+          <DataRow label="fused pairs" value={`${s.merkle.fusedTotal} / ${totals.fused}`} />
           <div style={{ padding: '2px 0' }}>
             <span style={{ color: colors.muted }}>root </span>
             <HashDisplay hash={hex(s.merkle.root)} unavailable={{ reason: 'rootReady has not arrived' }} />
@@ -151,7 +151,7 @@ export function SidePanel({ onSkip, sections = ALL, sound, style }: SidePanelPro
           <DataRow label="supply min" value={s.cloud.input?.supplyMin.toString()} />
           <DataRow label="supply max" value={s.cloud.input?.supplyMax.toString()} />
           <DataRow label="width" value={s.cloud.input ? s.cloud.width.toFixed(4) : undefined} />
-          <DataRow label="half-life" value={s.cloud.input ? s.cloud.halfLifeSec : undefined} unit="s" />
+          <DataRow label="half-life" value={s.cloud.halfLifeSec > 0 ? s.cloud.halfLifeSec : undefined} unit="s" unavailable={{ reason: 'half-life is not a finite positive number' }} />
           {s.cloud.channels.map((c) => (
             <DataRow key={c.id} label={c.label} value={c.percentLabel} />
           ))}
@@ -219,8 +219,14 @@ export function SidePanel({ onSkip, sections = ALL, sound, style }: SidePanelPro
             <span style={{ color: colors.muted }}>digest </span>
             <HashDisplay hash={hex(s.signature.digest)} unavailable={{ reason: 'signStart has not arrived' }} />
           </div>
-          <DataRow label="chain stops" value={`${s.signature.stopsSeen} / ${CHAINS}`} />
-          <DataRow label="auth path nodes" value={`${s.signature.authCount} / ${TREE_HEIGHT}`} />
+          <DataRow
+            label="chain stops"
+            value={`${s.signature.stopsSeen} / ${s.keygen.chains}`}
+          />
+          <DataRow
+            label="auth path nodes"
+            value={`${s.signature.authCount} / ${totals.height}`}
+          />
           <DataRow label="signature size" value={s.signature.bytesLength ?? undefined} unit="bytes" unavailable={{ reason: 'signatureReady has not arrived' }} />
         </Panel>
       ) : null}

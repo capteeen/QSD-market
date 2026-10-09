@@ -49,10 +49,12 @@ function initialKeygen(): KeygenState {
     links: 0,
     currentLeaf: -1,
     depths: new Int8Array(CHAINS),
+    linkArrived: new Uint8Array(CHAIN_INSTANCES),
     currentLeafHashes: new Uint8Array(CHAIN_INSTANCES * HASH_BYTES),
     linksPerLeaf: new Uint16Array(LEAVES),
     chainsCompletePerLeaf: new Uint8Array(LEAVES),
     chainSteps: 0,
+    duplicateSteps: 0,
     chainsComplete: 0,
     leavesFormed: 0,
     leafFormed: new Uint8Array(LEAVES),
@@ -142,6 +144,7 @@ export function cloneSceneState(s: SceneState): SceneState {
     keygen: {
       ...k,
       depths: k.depths.slice(),
+      linkArrived: k.linkArrived.slice(),
       currentLeafHashes: k.currentLeafHashes.slice(),
       linksPerLeaf: k.linksPerLeaf.slice(),
       chainsCompletePerLeaf: k.chainsCompletePerLeaf.slice(),
@@ -301,16 +304,30 @@ export function sceneReducer(state: SceneState, event: SceneEvent): SceneState {
       if (!intIn(event.depth, 0, LINKS)) return reject(state, `chainStep: depth ${event.depth} out of range`);
       if (!isHash(event.hash)) return reject(state, 'chainStep: hash must be 32 bytes');
       const k = state.keygen;
-      if (event.leaf !== k.currentLeaf) k.depths.fill(0); // fixed-size: O(1)
-      const grown = k.depths[event.chainIdx] ?? 0;
-      k.depths[event.chainIdx] = grown < LINKS ? grown + 1 : LINKS;
-      k.currentLeafHashes.set(event.hash, (event.chainIdx * LINKS + event.depth) * HASH_BYTES);
-      k.linksPerLeaf[event.leaf] = (k.linksPerLeaf[event.leaf] ?? 0) + 1;
+      const link = event.chainIdx * LINKS + event.depth;
+      if (event.leaf !== k.currentLeaf) {
+        // a new leaf in view: the ring starts from dark and no hash of the
+        // previous leaf may be served for it (all fixed-size fills: O(1))
+        k.depths.fill(0);
+        k.linkArrived.fill(0);
+        k.currentLeafHashes.fill(0);
+      }
+      // A re-delivered chainStep (same leaf/chain/depth) is a well-formed
+      // event and is accepted, but the link it names already exists: it is
+      // counted as a duplicate and never lights a second block.
+      const duplicate = k.linkArrived[link] === 1;
+      if (!duplicate) {
+        k.linkArrived[link] = 1;
+        k.depths[event.chainIdx] = (k.depths[event.chainIdx] ?? 0) + 1; // distinct depths that arrived
+        k.linksPerLeaf[event.leaf] = (k.linksPerLeaf[event.leaf] ?? 0) + 1;
+      }
+      k.currentLeafHashes.set(event.hash, link * HASH_BYTES);
       const keygen: KeygenState = {
         ...k,
         started: true,
         currentLeaf: event.leaf,
         chainSteps: k.chainSteps + 1,
+        duplicateSteps: duplicate ? k.duplicateSteps + 1 : k.duplicateSteps,
         lastChainIdx: event.chainIdx,
         lastDepth: event.depth,
         lastHash: event.hash,
@@ -431,6 +448,7 @@ export function sceneReducer(state: SceneState, event: SceneEvent): SceneState {
 
     case 'entropyArrived': {
       if (!(event.bytes instanceof Uint8Array)) return reject(state, 'entropyArrived: bytes must be a Uint8Array');
+      if (state.draw.phase !== 'requested') return reject(state, `entropyArrived: no pending entropyRequested (phase ${state.draw.phase})`);
       const draw: DrawState = {
         ...state.draw,
         phase: 'arrived',
@@ -440,15 +458,22 @@ export function sceneReducer(state: SceneState, event: SceneEvent): SceneState {
         nBytes: event.bytes.length,
         providerId: state.draw.providerId ?? event.attestation.providerId,
       };
-      return withStage(bump({ ...state, draw }, source, seq), 5);
+      return bump({ ...state, draw }, source, seq);
     }
 
     case 'commitmentComputed': {
+      if (state.draw.phase !== 'arrived' || !state.draw.entropy) {
+        return reject(state, `commitmentComputed: no entropy has arrived (phase ${state.draw.phase})`);
+      }
+      if (typeof event.hash !== 'string' || event.hash.length === 0) return reject(state, 'commitmentComputed: hash is required');
       const draw: DrawState = { ...state.draw, phase: 'committed', commitment: event.hash };
-      return withStage(bump({ ...state, draw }, source, seq), 5);
+      return bump({ ...state, draw }, source, seq);
     }
 
     case 'outcomeResolved': {
+      if (state.draw.phase !== 'committed' || !state.draw.entropy || !state.draw.commitment) {
+        return reject(state, `outcomeResolved: no entropy and commitment to resolve from (phase ${state.draw.phase})`);
+      }
       const draw: DrawState = {
         ...state.draw,
         phase: 'resolved',
@@ -456,7 +481,7 @@ export function sceneReducer(state: SceneState, event: SceneEvent): SceneState {
         resolvedAt: event.at,
         resolvedCount: state.draw.resolvedCount + 1,
       };
-      return withStage(bump({ ...state, draw }, source, seq), 5);
+      return bump({ ...state, draw }, source, seq);
     }
 
     // ------------------------------------------------------------------ chain
@@ -499,7 +524,7 @@ export function sceneReducer(state: SceneState, event: SceneEvent): SceneState {
     case 'skipStage': {
       const target = event.to ?? (Math.min(8, state.stage + 1) as Stage);
       if (!intIn(target, 1, 9)) return reject(state, `skipStage: invalid stage ${String(target)}`);
-      if (target <= state.stage) return bump(state, null, null);
+      if (target <= state.stage) return state; // nothing to do: not an event, not counted
       const skipped = [...state.skipped];
       for (let s = state.stage; s < target; s++) if (!skipped.includes(s as Stage)) skipped.push(s as Stage);
       return bump({ ...state, stage: target, skipped }, null, null);
@@ -527,7 +552,7 @@ export function toHex(bytes: Uint8Array, offset = 0, length = HASH_BYTES): strin
 export function chainLinkHash(state: SceneState, chainIdx: number, depth: number): Uint8Array | null {
   const k = state.keygen;
   if (!intIn(chainIdx, 0, CHAINS) || !intIn(depth, 0, LINKS)) return null;
-  if (depth >= (k.depths[chainIdx] ?? 0)) return null;
+  if (k.linkArrived[chainIdx * LINKS + depth] !== 1) return null; // only a link whose chainStep arrived has a hash
   const off = (chainIdx * LINKS + depth) * HASH_BYTES;
   return k.currentLeafHashes.subarray(off, off + HASH_BYTES);
 }

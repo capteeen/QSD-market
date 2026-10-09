@@ -41,7 +41,18 @@ interface PerfResult {
   framePhase: string[];
   phases: Record<string, number[]>;
   stages: { stage: number; at: number }[];
-  finalState?: { stage: number; chainSteps: number; leaves: number; fused: number; root: string | null; stops: number; auth: number; tx: string | null };
+  finalState?: {
+    stage: number;
+    chainSteps: number;
+    leaves: number;
+    fused: number;
+    root: string | null;
+    /** The recorded stream's rootReady, from the manifest — the harness checks the scene reproduced it. */
+    expectedRoot: string | null;
+    stops: number;
+    auth: number;
+    tx: string | null;
+  };
   error?: string;
 }
 
@@ -94,7 +105,7 @@ async function main(): Promise<void> {
       if (mode === 'empty') {
         phase = 'empty';
         await sleep(8000);
-        finish(store);
+        finish(store, null);
         return;
       }
       const [bin, manifest] = await Promise.all([
@@ -161,7 +172,7 @@ async function main(): Promise<void> {
       phase = 'lineage';
       store.dispatch({ type: 'lineage', input: manifest.lineage });
       await sleep(3000);
-      finish(store);
+      finish(store, manifest.rootHex);
     } catch (e) {
       result.error = String(e);
       result.done = true;
@@ -175,7 +186,7 @@ async function main(): Promise<void> {
   );
 }
 
-function finish(store: SceneStore): void {
+function finish(store: SceneStore, expectedRoot: string | null): void {
   const s = store.getState();
   result.finalState = {
     stage: s.stage,
@@ -183,6 +194,7 @@ function finish(store: SceneStore): void {
     leaves: s.keygen.leavesFormed,
     fused: s.merkle.fusedTotal,
     root: s.merkle.root ? Array.from(s.merkle.root, (b) => b.toString(16).padStart(2, '0')).join('') : null,
+    expectedRoot,
     stops: s.signature.stopsSeen,
     auth: s.signature.authCount,
     tx: s.anchor.txSignature,

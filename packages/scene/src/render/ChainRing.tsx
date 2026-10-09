@@ -74,11 +74,11 @@ export function ChainRing({ mode }: ChainRingProps): ReactElement {
     const g = s.signature;
     if (mode === 'keygen') {
       if (s.version === lastVersion.current && lastMode.current === mode) return;
-      for (let c = 0; c < CHAINS; c++) {
-        const grown = k.depths[c] ?? 0;
-        const base = c * LINKS;
-        for (let d = 0; d < LINKS; d++) lit[base + d] = d < grown ? 1 : 0;
-        if (grown > 0 && c === k.lastChainIdx && k.lastDepth === grown - 1) lit[base + grown - 1] = 2;
+      // link (c, d) is lit iff its own chainStep arrived; the newest link is active
+      for (let i = 0; i < CHAIN_INSTANCES; i++) lit[i] = k.linkArrived[i] === 1 ? 1 : 0;
+      if (k.lastChainIdx >= 0 && k.lastDepth >= 0) {
+        const last = k.lastChainIdx * LINKS + k.lastDepth;
+        if (k.linkArrived[last] === 1) lit[last] = 2;
       }
     } else {
       // signing: eased sweep from the tip down to the real stop depth

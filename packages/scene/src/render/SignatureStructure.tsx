@@ -31,8 +31,18 @@ export function SignatureStructure(): ReactElement {
   const to = useMemo<[number, number, number]>(() => [0, 0, 0], []);
 
   useEffect(() => {
-    if (mesh.current) mesh.current.frustumCulled = false;
-  }, []);
+    const m = mesh.current;
+    if (!m) return;
+    m.frustumCulled = false;
+    // no signChainStop yet → nothing to draw: every instance starts at zero scale
+    // (an InstancedMesh's default identity matrices would draw 67 blocks at the origin)
+    dummy.position.set(0, 0, 0);
+    dummy.rotation.set(0, 0, 0);
+    dummy.scale.setScalar(0.0001);
+    dummy.updateMatrix();
+    for (let c = 0; c < CHAINS; c++) m.setMatrixAt(c, dummy.matrix);
+    m.instanceMatrix.needsUpdate = true;
+  }, [dummy]);
 
   useFrame((_, dt) => {
     const m = mesh.current;

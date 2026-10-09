@@ -37,8 +37,9 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] as number;
 }
 
-function stats(frames: number[]): { n: number; medianFps: number; p5Fps: number; p95Fps: number; meanMs: number } {
-  const dts = frames.filter((d) => d > 0 && d < 2).sort((a, b) => a - b);
+/** Every frame counts: a 9 s stall is a frame of the sequence, not an outlier to drop before the gating median. */
+function stats(frames: number[]): { n: number; medianFps: number; p5Fps: number; p95Fps: number; meanMs: number; worstMs: number; over500ms: number } {
+  const dts = frames.filter((d) => d > 0).sort((a, b) => a - b);
   const fps = dts.map((d) => 1 / d).sort((a, b) => a - b);
   return {
     n: dts.length,
@@ -46,7 +47,14 @@ function stats(frames: number[]): { n: number; medianFps: number; p5Fps: number;
     p5Fps: percentile(fps, 0.05),
     p95Fps: percentile(fps, 0.95),
     meanMs: dts.length ? (dts.reduce((a, b) => a + b, 0) / dts.length) * 1000 : Number.NaN,
+    worstMs: dts.length ? (dts[dts.length - 1] as number) * 1000 : Number.NaN,
+    over500ms: dts.filter((d) => d > 0.5).length,
   };
+}
+
+/** Software rasterisers identify themselves in WEBGL_debug_renderer_info. */
+function isSoftwareGl(renderer: string): boolean {
+  return /swiftshader|llvmpipe|softpipe|software|mesa offscreen|microsoft basic render/i.test(renderer);
 }
 
 function findChromium(): string | undefined {
@@ -166,7 +174,9 @@ async function main(): Promise<void> {
   const report = {
     method: {
       renderer: glInfo,
-      gl: gpu ? 'real GPU' : 'SwiftShader (software GL) — a lower bound, NOT the gate',
+      // labelled from what the page actually got, never from the env flag
+      gl: isSoftwareGl(glInfo) ? 'software GL (detected) — a lower bound, NOT the gate' : 'hardware GPU (detected)',
+      requested: gpu ? 'PERF_GPU=1 (hardware)' : 'software GL',
       cpuThrottle: `${throttle}×`,
       viewport: `${vw}x${vh} @${dsf}x`,
       quality,
@@ -190,15 +200,22 @@ async function main(): Promise<void> {
   }
   if (mode === 'full' && perf.finalState) {
     const f = perf.finalState;
-    const ok = f.stage === 8 && f.chainSteps === 274_432 && f.leaves === 256 && f.fused === 255 && f.stops === 67 && f.auth === 8;
+    const ok =
+      f.stage === 8 && f.chainSteps === 274_432 && f.leaves === 256 && f.fused === 255 && f.stops === 67 && f.auth === 8 && f.root !== null && f.root === f.expectedRoot;
     if (!ok) {
-      console.error('correctness failure: the replayed stream did not reproduce the full counts');
+      console.error(`correctness failure: the replayed stream did not reproduce the full counts/root (root ${f.root} vs recorded ${f.expectedRoot})`);
       process.exit(1);
     }
   }
-  if (gpu && all.medianFps < gate) {
-    console.error(`GATE FAILED: median ${all.medianFps.toFixed(1)} fps < ${gate}`);
-    process.exit(1);
+  if (gpu) {
+    if (isSoftwareGl(glInfo)) {
+      console.error(`GATE NOT RUN: PERF_GPU=1 was requested but the page rendered on software GL (${glInfo}); this machine cannot prove the gate`);
+      process.exit(1);
+    }
+    if (all.medianFps < gate) {
+      console.error(`GATE FAILED: median ${all.medianFps.toFixed(1)} fps < ${gate} (${all.over500ms} frames over 500 ms, worst ${all.worstMs.toFixed(0)} ms)`);
+      process.exit(1);
+    }
   }
 }
 

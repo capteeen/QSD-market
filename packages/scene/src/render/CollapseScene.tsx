@@ -23,7 +23,7 @@ import { Chamber } from './Chamber.js';
 import { CoinSphere } from './CoinSphere.js';
 import { useSoundEngine } from './LaunchSequence.js';
 import { Lineage } from './Lineage.js';
-import { QuantumDraw } from './QuantumDraw.js';
+import { QuantumDraw, isCollapseLabel } from './QuantumDraw.js';
 import { SceneCanvas } from './SceneCanvas.js';
 import { SidePanel } from './SidePanel.js';
 import { SuperpositionCloud } from './SuperpositionCloud.js';
@@ -48,7 +48,7 @@ export interface CollapseSceneProps {
     lineage?: LineageInput;
   };
   daughter?: DaughterInput;
-  /** How to tell a collapse outcome from the resolver's label. Default: /collapse/i. */
+  /** How to tell a collapse outcome from the resolver's label. Default: `collapse` or `collapse:<channelId>` (the protocol's format); `tunnel`/`survive` are not collapses. */
   isCollapse?: (label: string) => boolean;
   quality?: 'auto' | QualityLevel;
   qualityController?: QualityController;
@@ -100,7 +100,8 @@ function CollapseContent({ daughter, isCollapse }: { daughter: DaughterInput | u
   );
 }
 
-const defaultIsCollapse = (label: string): boolean => /collapse/i.test(label);
+/** The protocol labels a collapse `collapse:<channelId>` (bare `collapse` accepted); `tunnel` and `survive` are not collapses. */
+const defaultIsCollapse = (label: string): boolean => isCollapseLabel(label);
 
 export function CollapseScene({
   sources,

@@ -111,7 +111,7 @@ describe('recorded real stream', () => {
     expect(s.draw.entropy?.length).toBe(32);
     expect(s.draw.attestation?.kind).toBe('unsafe-dev');
     expect(s.draw.commitment).toMatch(/^[0-9a-f]{64}$/);
-    expect(s.draw.outcome?.label).toMatch(/^(collapse|survive)$/);
+    expect(s.draw.outcome?.label).toMatch(/^(collapse:fixture-fast|survive|tunnel)$/);
     expect(s.draw.resolvedCount).toBe(1);
 
     // cloud, anchor, lineage

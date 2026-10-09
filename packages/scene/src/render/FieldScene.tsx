@@ -118,8 +118,12 @@ export function FieldVessels({ coins, liveMeasurements, radius, lodDistance = 26
   useEffect(() => {
     const C = clouds.current;
     if (!C) return;
+    // tint = state colour, scaled by `density` (0.1..1): a sparse cloud is a dimmer cloud
     const col = new THREE.Color();
-    for (let i = 0; i < n; i++) C.setColorAt(i, col.set(params[i]!.tint));
+    for (let i = 0; i < n; i++) {
+      const p = params[i]!;
+      C.setColorAt(i, col.set(p.tint).multiplyScalar(0.3 + 0.7 * p.density));
+    }
     if (C.instanceColor) C.instanceColor.needsUpdate = true;
   }, [params, n]);
 

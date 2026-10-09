@@ -7,6 +7,12 @@
  *   high    bloom + vignette (no DOF),         transmission glass, dpr ≤ 1.5
  *   medium  vignette only,                      transmission glass, dpr 1
  *   low     no post-processing,                 glass without transmission, dpr 0.75
+ *
+ * Decisions are made per WINDOW OF WALL TIME (default 1.5 s, at least 4
+ * frames), not per fixed number of frames, so a device that cannot hold the
+ * target sheds bloom and DOF within ≈ 5 s whatever its frame rate — the
+ * point of the ladder is exactly the device where frames are slow. A
+ * frame-count window (`window`) is still available for deterministic tests.
  */
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
@@ -53,14 +59,20 @@ export interface QualityOptions {
   cap?: QualityLevel;
   /** Target median fps. Default 55. */
   targetFps?: number;
-  /** Frames per decision window. Default 90 (1.5 s at 60 fps). */
+  /** Decision window in seconds of wall time (sum of frame times). Default 1.5. */
+  windowSec?: number;
+  /** Minimum frames per window so one slow frame cannot decide. Default 4. */
+  minFrames?: number;
+  /** Fixed frame-count window instead of a time window (deterministic tests). */
   window?: number;
 }
 
 export function createQualityController(opts: QualityOptions = {}): QualityController {
   const cap = opts.cap ?? 'ultra';
   const target = opts.targetFps ?? 55;
-  const windowSize = opts.window ?? 90;
+  const windowFrames = opts.window;
+  const windowSec = opts.windowSec ?? 1.5;
+  const minFrames = opts.minFrames ?? 4;
   const mode = opts.mode ?? 'auto';
   const initial = mode === 'auto' ? cap : mode;
 
@@ -68,16 +80,22 @@ export function createQualityController(opts: QualityOptions = {}): QualityContr
   const ctl = base as QualityController;
 
   const times: number[] = [];
+  let elapsed = 0;
   let goodWindows = 0;
   let badWindows = 0;
+
+  const windowComplete = (): boolean =>
+    windowFrames !== undefined ? times.length >= windowFrames : elapsed >= windowSec && times.length >= minFrames;
 
   ctl.sample = (dt) => {
     if (!(dt > 0) || dt > 1) return; // ignore tab-switch stalls
     times.push(dt);
-    if (times.length < windowSize) return;
+    elapsed += dt;
+    if (!windowComplete()) return;
     const sorted = times.slice().sort((a, b) => a - b);
     const median = 1 / (sorted[sorted.length >> 1] as number);
     times.length = 0;
+    elapsed = 0;
     const s = base.getState();
     if (s.mode !== 'auto') {
       base.setState({ medianFps: median });
@@ -110,6 +128,7 @@ export function createQualityController(opts: QualityOptions = {}): QualityContr
 
   ctl.setMode = (m) => {
     times.length = 0;
+    elapsed = 0;
     goodWindows = badWindows = 0;
     base.setState({ mode: m, profile: QUALITY_PROFILES[m === 'auto' ? cap : m] });
   };

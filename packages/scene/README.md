@@ -133,6 +133,7 @@ Listed exhaustively; everything else is in §2.
 | lineage entanglement ring | slow rotation | |
 | field vessel drift | vertical sinusoid | **amplitude = `drift`** from `vesselParams`: traded coins sit still |
 | camera | eases to the pose of the current stage | pose is a function of `stage` |
+| shader warm-up | 14 zero-scale sample objects drawn for one frame after first paint, then hidden | compiles/links every material variant so stage transitions do not stall; invisible, carries no state (§8.2) |
 
 ---
 
@@ -196,6 +197,12 @@ import type { SceneState, SceneEvent, SuperpositionInput, LineageInput, ChainEve
 <FieldScene coins={FieldCoin[]} liveMeasurements={observable<{ ca, at }>} />
 ```
 
+`vesselParams(coin)` → `{ spread, brightness, drift, density, tint, settled }`,
+every field used by the vessel: `spread` = cloud radius, `brightness` =
+emissive level, `drift` = the only ambient amplitude, `density` (0.1..1,
+from the coin's activity) scales the state tint (a sparse cloud is a dimmer
+cloud), `tint` = state colour, `settled` = no cloud at all.
+
 * `SuperpositionInput { supplyMin: bigint; supplyMax: bigint; halfLifeSec: number; decayChannels: { id, probability /* ppm */, label }[] }` — defined here so the scene does not depend on the protocol package's timing; the app maps `Coin` to it.
 * `ChainEvent = { type:'anchorSubmitted'; seq; txSignature? } | { type:'anchored'; seq; txSignature; slot? }` — the chain package emits these through any `{ subscribe }`.
 * `FieldCoin { ca; uncertainty 0..1; activity 0..1; decayProgress 0..1; state }` — computed by the app from live data; `coins=[]` renders an empty chamber with an `EmptyState`.
@@ -213,7 +220,16 @@ count, full entropy hex, attestation kind, keys and signature, the draw
 binding (`inputsHash`, `nonce`) when the attestation carries it, commitment,
 outcome; one-time key index, digest, stops, auth nodes, signature size; tx
 signature, status, slot; lineage. Values that have not arrived render the
-component's unavailable state — never a placeholder. The proof badge is
+component's unavailable state — never a placeholder. Counter denominators
+("links grown n / N", chains, leaves, fused pairs, chain stops, auth path
+nodes) come from `keygenStart` via `announcedTotals(state)`; before it
+arrives they read `0 / 0` — zero of zero announced — never the construction's
+constants (the Merkle panel title "tree of height 8" is the one constant on
+display). `links grown` counts distinct links: a re-delivered `chainStep`
+(same leaf / chain / depth) is accepted (`keygen.chainSteps`, and counted in
+`keygen.duplicateSteps`) but lights nothing and grows nothing. A half-life
+that is not a finite positive number is stored as `0` and the row renders
+unavailable (the ring does not turn). The proof badge is
 `pending` until arrival, `unverified` for a witness/provider attestation
 ("verify the proof bundle" — the scene does not verify), `invalid` for
 `UNSAFE_DEV_RANDOM`.
@@ -250,9 +266,12 @@ as refraction of the lit geometry behind it (the chains, the tree, the cloud)
 ## 7. Quality ladder
 
 `createQualityController({ mode: 'auto', targetFps: 55 })` samples frame time
-every frame (via `CameraRig`), takes the median over 90-frame windows, and
-steps down one level when the median is below target, back up after six
-comfortable windows. **Only post-processing and resolution degrade; geometry
+every frame (via `CameraRig`), takes the median over windows of **1.5 s of
+wall time** (at least 4 frames; `window: n` switches to a fixed frame count
+for deterministic tests), and steps down one level when the median is below
+target, back up after six comfortable windows. Time-based windows matter on
+exactly the device the ladder exists for: at 5 fps, ultra → low takes ≈ 5 s,
+not 270 frames (54 s). **Only post-processing and resolution degrade; geometry
 counts never do**: every level draws the same 1072 links, 256 leaves, 255
 nodes and N vessels.
 
@@ -288,8 +307,16 @@ which replays the **recorded real stream** (`test/fixtures/generated`,
 through the full `<LaunchSequence />`: keygen paced at the recorded rate
 (≈ 3.5 s), then superposition, draw, signing, anchor, lineage with short
 dwells (≈ 25 s). Frame times are `requestAnimationFrame` deltas inside the
-page (`onFrame`). The run fails if the final state does not reproduce the
-full counts (274 432 / 256 / 255 / 67 / 8, stage 8).
+page (`onFrame`). **Every frame counts**: the median and p5 are taken over
+all frames including stalls (a 9 s frame is a frame of the sequence, not an
+outlier); stalls > 500 ms are listed separately with their phase (`stalls`,
+`over500ms`, `worstMs`). The run fails if the final state does not reproduce
+the full counts (274 432 / 256 / 255 / 67 / 8, stage 8) **and** the root the
+recorded stream's `rootReady` carried. The GL renderer is labelled from the
+page's `WEBGL_debug_renderer_info` string, never from the env flag; with
+`PERF_GPU=1` on a machine that renders on software GL the gate is reported as
+NOT RUN (exit 1). `PERF_GATE=<fps>` overrides the 55 fps gate (for
+experiments only; the spec's gate is 55).
 
 Measured in this container (no GPU; Chromium 141 via playwright-core,
 ANGLE/Vulkan SwiftShader, CPU 4× throttled, 390 × 844 @1×; rAF tied to
@@ -301,7 +328,7 @@ rates):
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `low` (no post, no transmission, dpr 0.75) | **14.8** | 4.5 | 1.50 s | 7.5 fps median | 34 s, stage 8 | yes | none |
 | `medium` (transmission on, no post) | 3.3 | 1.0 | 1.58 s | 2.2 fps median | 63 s, stage 8 | yes | 46 (transmission pass) |
-| `auto` (starts at ultra, @2×) | not completed within 10 min | | | | | | shader link + transmission + bloom + DOF on software GL |
+| `auto` (starts at ultra, @2×) | not re-measured after the time-based quality windows (§7) | | | | | | earlier run (before warm-up and the 1.5 s windows): > 10 min on software GL; the ladder now sheds bloom/DOF within ~5 s (`quality.test.ts`) |
 | `low`, **empty stream** | 13.7 | 8.2 | 1.48 s | — | stage 1 throughout, all counts 0 | n/a | none |
 
 The reducer is not in the top 25 self-time functions of a CPU profile of the

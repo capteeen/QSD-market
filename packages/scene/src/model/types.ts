@@ -158,19 +158,22 @@ export interface KeygenState {
   /** Leaf whose chains are rendered in the ring (the leaf of the latest chainStep). -1 before any. */
   currentLeaf: number;
   /**
-   * Grown links per chain of `currentLeaf` (0..16). Exactly what the events
-   * produced: entry i is the number of chainStep events seen for chain i of
-   * the leaf in view.
+   * Computed links per chain of `currentLeaf` (0..16): the number of DISTINCT
+   * depths whose chainStep has arrived for chain i of the leaf in view. A
+   * duplicate chainStep is rejected and never counted.
    */
   depths: Int8Array;
-  /** Hashes of the leaf in view, [chainIdx * 16 + depth] × 32 bytes — for hover. */
+  /** 1 if the chainStep for link [chainIdx * 16 + depth] of the leaf in view has arrived. Cleared on leaf change. */
+  linkArrived: Uint8Array;
+  /** Hashes of the leaf in view, [chainIdx * 16 + depth] × 32 bytes — for hover. Cleared on leaf change. */
   currentLeafHashes: Uint8Array;
   /** Aggregate: chainStep events per leaf (max 1072 each), all 256 leaves. */
   linksPerLeaf: Uint16Array;
   /** Aggregate: chainComplete events per leaf (max 67 each). */
   chainsCompletePerLeaf: Uint8Array;
-  /** Running totals. */
+  /** Running totals. `chainSteps` counts every accepted chainStep event; a re-delivered one (same leaf/chain/depth) is counted here AND in `duplicateSteps`, never as a new link. */
   chainSteps: number;
+  duplicateSteps: number;
   chainsComplete: number;
   leavesFormed: number;
   /** 1 if leafFormed arrived for that leaf. */
@@ -201,7 +204,7 @@ export interface CloudState {
   input: SuperpositionInput | null;
   /** Relative supply spread (supplyMax − supplyMin) / supplyMax, clamped 0..1. Drives breathing amplitude. */
   width: number;
-  /** Half-life in seconds, drives the ring's rotation rate. */
+  /** Half-life in seconds, drives the ring's rotation rate. 0 when the input is not a finite positive number: renderers treat 0 as "unavailable" (the panel shows the unavailable state, the ring does not turn). */
   halfLifeSec: number;
   /** Channels with probability as a fraction 0..1 and a percent label. */
   channels: readonly { id: string; label: string; fraction: number; percentLabel: string }[];

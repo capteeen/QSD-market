@@ -16,9 +16,27 @@ import { useMemo, useRef, type ReactElement } from 'react';
 import * as THREE from 'three';
 import { useSceneStore } from './context.js';
 import { VESSEL_RADIUS } from './layout.js';
-import { COLLAPSE, CYAN, WHITE, approach, emissiveMaterial, lineMaterial, pointsMaterial } from './materials.js';
+import { COLLAPSE, CYAN, TUNNEL, WHITE, approach, emissiveMaterial, lineMaterial, pointsMaterial } from './materials.js';
 
 const MAX_PHOTONS = 1024;
+
+/**
+ * Outcome label → colour. The protocol's resolver labels outcomes
+ * `collapse:<channelId>`, `tunnel` or `survive` (packages/protocol
+ * resolver). Collapse → collapse magenta; tunnel → tunnel white; anything
+ * else (survive, unknown) → plain white.
+ */
+export function isCollapseLabel(label: string | undefined): boolean {
+  return typeof label === 'string' && (label === 'collapse' || label.startsWith('collapse:'));
+}
+export function isTunnelLabel(label: string | undefined): boolean {
+  return label === 'tunnel';
+}
+export function outcomeColor(label: string | undefined): THREE.Color {
+  if (isCollapseLabel(label)) return COLLAPSE;
+  if (isTunnelLabel(label)) return TUNNEL;
+  return WHITE;
+}
 
 export function QuantumDraw(): ReactElement {
   const store = useSceneStore();
@@ -49,7 +67,9 @@ export function QuantumDraw(): ReactElement {
   const pointMat = useMemo(() => emissiveMaterial(WHITE, 0), []);
 
   const lastEntropy = useRef<Uint8Array | null>(null);
-  const lastResolved = useRef(0);
+  // start from the store's count: mounting into a state whose outcome already
+  // resolved shows the collapsed point but does not replay the flash
+  const lastResolved = useRef(store.getState().draw.resolvedCount);
   const flashT = useRef(Number.POSITIVE_INFINITY);
 
   useFrame(({ gl }, dt) => {
@@ -99,7 +119,7 @@ export function QuantumDraw(): ReactElement {
       const on = d.phase === 'resolved';
       pointMat.emissiveIntensity = approach(pointMat.emissiveIntensity, on ? 6 : 0, dt, 12);
       point.current.scale.setScalar(approach(point.current.scale.x, on ? 1 : 0.0001, dt, 12));
-      pointMat.emissive.copy(d.outcome?.label === 'collapse' ? COLLAPSE : WHITE);
+      pointMat.emissive.copy(outcomeColor(d.outcome?.label));
     }
   });
 

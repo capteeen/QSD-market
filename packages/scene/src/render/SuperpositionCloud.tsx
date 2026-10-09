@@ -112,8 +112,8 @@ export function SuperpositionCloud({ cloud, position = [0, 0, 0], ghost = false,
       band.current.visible = !!c.input && phase !== 'resolved';
     }
     if (ring.current) {
-      const period = halfLifePeriodSec(c.halfLifeSec);
-      ring.current.rotation.y += c.input ? (dt * Math.PI * 2) / period : 0;
+      // the ring turns only when the half-life is a real value; an unavailable half-life is a still ring
+      if (c.input && c.halfLifeSec > 0) ring.current.rotation.y += (dt * Math.PI * 2) / halfLifePeriodSec(c.halfLifeSec);
       ring.current.scale.setScalar(Math.max(0.0001, contraction));
       ring.current.visible = !!c.input && phase !== 'resolved';
     }

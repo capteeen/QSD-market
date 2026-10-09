@@ -14,7 +14,7 @@ export { MeasurementScene, type MeasurementSceneProps } from './render/Measureme
 export { CollapseScene, type CollapseSceneProps, type DaughterInput } from './render/CollapseScene.js';
 export { FieldScene, FieldVessels, type FieldSceneProps } from './render/FieldScene.js';
 export { SceneCanvas, type SceneCanvasProps } from './render/SceneCanvas.js';
-export { SidePanel, hoverDescription, type SidePanelProps, type PanelSection } from './render/SidePanel.js';
+export { SidePanel, hoverDescription, announcedTotals, type SidePanelProps, type PanelSection } from './render/SidePanel.js';
 export { SceneProvider, useSceneContext, useSceneStore, useSceneSnapshot, useHover, useQualityProfile, type Hover } from './render/context.js';
 export { useSources, type SceneSources } from './render/useSources.js';
 export {

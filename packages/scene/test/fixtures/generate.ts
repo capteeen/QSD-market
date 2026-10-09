@@ -89,7 +89,15 @@ export async function generateFixture(): Promise<Fixture> {
     { fixture: true },
     {
       id: 'qsd-scene-fixture-resolver',
-      resolve: (bytes) => ({ value: (bytes[0] ?? 0) & 1, label: ((bytes[0] ?? 0) & 1) === 1 ? 'collapse' : 'survive' }),
+      // labels in the protocol's format: `collapse:<channelId>` | `tunnel` | `survive`
+      resolve: (bytes) => {
+        const b = (bytes[0] ?? 0) % 3;
+        return b === 0
+          ? { value: { kind: 'survive' }, label: 'survive' }
+          : b === 1
+            ? { value: { kind: 'collapse', channelId: 'fixture-fast' }, label: 'collapse:fixture-fast' }
+            : { value: { kind: 'tunnel' }, label: 'tunnel' };
+      },
     },
   );
   qrec.stop();
