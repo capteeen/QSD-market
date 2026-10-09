@@ -1,6 +1,7 @@
 @import '@qsd/ui-tokens/tokens.css';
 @import '../styles/terminal.css';
 @import '../styles/home.css';
+@import '../styles/pages.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

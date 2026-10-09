@@ -14,7 +14,7 @@ import {
 } from '@qsd/protocol';
 import { bundleHash, verify, type QuantumEvent, type Attestation } from '@qsd/quantum';
 import type { Observable } from '@qsd/scene/model';
-import { COIN, MEASURE_TEXT, SHARED } from '@/copy';
+import { COIN, MEASURE_TEXT, PAGES, SHARED } from '@/copy';
 import { apiPost, isUnavailable } from '@/lib/api';
 import { liveDecay, superpositionInput, uncertainty } from '@/lib/coin';
 import { publicCluster, publicWitnessKeys } from '@/lib/env';
@@ -24,7 +24,8 @@ import type { CoinDto, HoldersResponse, MeasureChallengeResponse, MeasureRespons
 import { useCoin, useHolders, useStats } from '@/hooks/useApi';
 import { useNow } from '@/hooks/useNow';
 import { MeasurementScene } from '@/components/scenes';
-import { CoinLink, Empty, LoadingPanel, Page, PageHeader, StateLabel, TxLink, UnavailablePanel } from '@/components/common';
+import { ACCENT, PageHero, PageShell } from '@/components/page/PageHero';
+import { CoinLink, Empty, LoadingPanel, Page, StateLabel, TxLink, UnavailablePanel } from '@/components/common';
 import { useQueryClient } from '@tanstack/react-query';
 import { CoinTerminal } from '@/components/terminal/pages';
 
@@ -64,19 +65,17 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
   }, [coin]);
 
   return (
-    <Page wide>
-      <PageHeader eyebrow={`${SHARED.coin} · generation ${coin.generation}`} title={`${coin.name} · ${coin.ticker}`}>
-        <div className="flex items-center gap-4">
-          <StateLabel state={coin.state} />
-          {cluster === 'mainnet-beta' && coin.launchPath === 'pump.fun' ? (
-            <a className="qsd-btn" data-primary="true" href={pumpFunCoin(coin.ca)} target="_blank" rel="noreferrer">
-              {COIN.trade}
-            </a>
-          ) : (
-            <span className="text-xs text-muted">{COIN.tradeDevnet}</span>
-          )}
-        </div>
-      </PageHeader>
+    <PageShell>
+      <PageHero accent={coin.state === 'collapsed' ? ACCENT.collapse : coin.state === 'tunnelled' ? ACCENT.decay : ACCENT.probability} eyebrow={`${SHARED.coin} · generation ${coin.generation}`} title={`${coin.name} · ${coin.ticker}`}>
+        <StateLabel state={coin.state} />
+        {cluster === 'mainnet-beta' && coin.launchPath === 'pump.fun' ? (
+          <a className="qsd-btn" data-primary="true" href={pumpFunCoin(coin.ca)} target="_blank" rel="noreferrer">
+            {COIN.trade}
+          </a>
+        ) : (
+          <span className="qsd-note">{COIN.tradeDevnet}</span>
+        )}
+      </PageHero>
       <div className="mb-6">
         <LineageBreadcrumb nodes={nodes} renderLink={(n, children) => <Link href={n.href!}>{children}</Link>} />{' '}
         <Link className="qsd-link ml-3 text-xs" href={routes.lineage(coin.lineageId)}>
@@ -87,8 +86,8 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
       <CoinTerminal coin={coin} />
       <div className="mb-6" />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Panel eyebrow="IDENTITY">
+      <div className="qsd-pgrid qsd-pgrid--2">
+        <Panel eyebrow={PAGES.coin.identityEyebrow}>
           <DataRow label={COIN.rows.name} value={coin.name} />
           <DataRow label={COIN.rows.ticker} value={coin.ticker} />
           <Row label={COIN.rows.ca}>
@@ -124,25 +123,25 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
           ) : (
             <DataRow label={COIN.rows.nextAutoMeasure} unavailable={{ reason: 'the coin has collapsed' }} />
           )}
-          <div className="mt-3 h-2 w-full border border-border" role="progressbar" aria-valuenow={Math.round(decay * 1000) / 10} aria-valuemin={0} aria-valuemax={100}>
-            <div className="h-full bg-decay transition-all duration-slow ease-viscous" style={{ width: `${decay * 100}%` }} />
+          <div className="qsd-bar" role="progressbar" aria-valuenow={Math.round(decay * 1000) / 10} aria-valuemin={0} aria-valuemax={100}>
+            <i style={{ width: `${decay * 100}%` }} />
           </div>
-          <p className="mt-3 text-xs text-muted">{COIN.decayCaption}</p>
+          <p className="qsd-note mt-3">{COIN.decayCaption}</p>
         </Panel>
 
         <Panel eyebrow={COIN.bandEyebrow} title={COIN.bandTitle}>
           <DataRow label={COIN.rows.supplyMin} value={formatUnits(BigInt(coin.superposition.supplyMin), supplyDecimals)} />
           <DataRow label={COIN.rows.supplyMax} value={formatUnits(BigInt(coin.superposition.supplyMax), supplyDecimals)} />
-          <DataRow label="band width" value={formatPercent(uncertainty(coin.superposition))} />
+          <DataRow label={PAGES.coin.bandWidth} value={formatPercent(uncertainty(coin.superposition))} />
           <BandBar coin={coin} />
-          <p className="mt-3 text-xs text-muted">{COIN.bandCaption}</p>
+          <p className="qsd-note mt-3">{COIN.bandCaption}</p>
         </Panel>
 
         <Panel eyebrow={COIN.channelsEyebrow} title={COIN.channelsTitle}>
           <table className="qsd-table">
             <thead>
               <tr>
-                <th>channel</th>
+                <th>{PAGES.coin.channelCol}</th>
                 <th>{COIN.channelProbability}</th>
                 <th>{COIN.channelHalfLife}</th>
                 <th>{COIN.channelPool}</th>
@@ -166,7 +165,7 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
         </Panel>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      <div className="qsd-pgrid qsd-pgrid--2 mt-6">
         <MeasurePanel coin={coin} decay={decay} measurable={measurable} />
         <DaughterGhost coin={coin} now={now} />
       </div>
@@ -176,7 +175,7 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
           {coin.measurements.length === 0 ? (
             <Empty eyebrow={COIN.measurementsEmptyEyebrow} sentence={COIN.measurementsEmptySentence} />
           ) : (
-            <div className="space-y-4">
+            <div>
               {[...coin.measurements].reverse().map((m) => (
                 <MeasurementCard key={m.id} m={m} coin={coin} />
               ))}
@@ -188,7 +187,7 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
       <div className="mt-6">
         <HoldersPanel coin={coin} />
       </div>
-    </Page>
+    </PageShell>
   );
 }
 
@@ -216,8 +215,8 @@ function BandBar({ coin }: { coin: CoinDto }) {
   if (total <= 0n) return null;
   const pct = (x: bigint) => Number((x * 10_000n) / total) / 100;
   return (
-    <div className="relative mt-3 h-3 w-full border border-border" title="daughter pool band as a share of this coin's total supply">
-      <div className="absolute h-full bg-probability/40" style={{ left: `${pct(min)}%`, width: `${Math.max(0.5, pct(max) - pct(min))}%` }} />
+    <div className="qsd-bar qsd-bar--band" title="daughter pool band as a share of this coin's total supply">
+      <i style={{ left: `${pct(min)}%`, width: `${Math.max(0.5, pct(max) - pct(min))}%` }} />
     </div>
   );
 }
@@ -264,14 +263,14 @@ function MeasurementCard({ m, coin }: { m: MeasurementDto; coin: CoinDto }) {
   };
 
   return (
-    <section id={`m-${m.id}`} className="border-card border-border p-4" data-measurement={m.id}>
-      <div className="flex flex-wrap items-center gap-3">
+    <section id={`m-${m.id}`} className="qsd-measurement" data-measurement={m.id}>
+      <div className="qsd-measurement__head">
         <span className="qsd-eyebrow">
           #{m.index} · {SHARED.outcomeLabels[m.outcome.kind]}
           {m.outcome.kind === 'collapse' ? ` · ${channelLabel(coin, m.outcome.channelId)}` : ''}
         </span>
         <ProofBadge status={busy ? 'pending' : status.status} attestationKind={kind} {...(status.reason && !busy ? { reason: status.reason } : {})} {...(busy ? { reason: COIN.verifying } : {})} />
-        <span className="ml-auto flex gap-2">
+        <span className="qsd-measurement__actions">
           {keys.length === 0 && kind !== 'unsafe-dev' ? (
             <span className="text-xs text-muted">{COIN.verifyNoKeys}</span>
           ) : (
@@ -284,7 +283,7 @@ function MeasurementCard({ m, coin }: { m: MeasurementDto; coin: CoinDto }) {
           </button>
         </span>
       </div>
-      <div className="mt-3 grid gap-x-8 lg:grid-cols-2">
+      <div className="qsd-pcols mt-3">
         <DataRow label={COIN.measurementRows.at} value={formatUnix(m.at)} />
         <DataRow label={COIN.measurementRows.by} value={m.by === PROTOCOL_PARAMS.AUTO_MEASURER_ID ? 'the protocol (auto-measurement)' : m.by} />
         <DataRow label={COIN.measurementRows.decayBefore} value={formatPercent(m.decayBefore, 3)} />
@@ -398,7 +397,7 @@ function MeasurePanel({ coin, decay, measurable }: { coin: CoinDto; decay: numbe
 
   return (
     <Panel eyebrow={COIN.measureEyebrow} title={COIN.measureTitle} computing={phase === 'running'}>
-      <p className="mb-4 text-xs text-muted">{COIN.measureCaption}</p>
+      <p className="qsd-note mb-4">{COIN.measureCaption}</p>
       <MeasureButton reward={reward} risk={risk} measuring={phase === 'signing' || phase === 'running'} {...(disabledReason ? { disabledReason } : {})} onClick={() => void measure()} />
       {message ? <p className="mt-3 text-xs" data-phase={phase}>{message}</p> : null}
       {daughterNote ? <p className="mt-1 text-xs text-muted" data-daughter-launch>{daughterNote}</p> : null}
@@ -420,7 +419,7 @@ function DaughterGhost({ coin, now }: { coin: CoinDto; now: number }) {
   const projection = useMemo(() => projectAllocation(coin, holders.data, wallet, now), [coin, holders.data, wallet, now]);
   return (
     <Panel eyebrow={COIN.daughterEyebrow} title={COIN.daughterTitle}>
-      <p className="mb-3 text-xs text-muted">{COIN.daughterCaption}</p>
+      <p className="qsd-note mb-3">{COIN.daughterCaption}</p>
       {'reason' in projection ? (
         <>
           <DataRow label={COIN.projectedShare} unavailable={{ reason: projection.reason }} />

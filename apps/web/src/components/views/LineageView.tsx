@@ -1,13 +1,14 @@
 'use client';
 import Link from 'next/link';
 import { DataRow, HashDisplay, LineageBreadcrumb, Panel, ProofBadge, type AttestationKind } from '@qsd/ui-tokens';
-import { LINEAGE, SHARED } from '@/copy';
+import { LINEAGE, PAGES, SHARED } from '@/copy';
 import { isUnavailable } from '@/lib/api';
 import { formatBps, formatUnits, formatUnix, shortAddress } from '@/lib/format';
 import { routes } from '@/lib/links';
 import { useLineage } from '@/hooks/useApi';
 import { LineageTerminal } from '@/components/terminal/pages';
-import { CoinLink, Empty, LoadingPanel, Page, PageHeader, ProofLink, TxLink, UnavailablePanel } from '@/components/common';
+import { ACCENT, PageHero, PageShell } from '@/components/page/PageHero';
+import { CoinLink, Empty, LoadingPanel, Page, ProofLink, TxLink, UnavailablePanel } from '@/components/common';
 
 export function LineageView({ id }: { id: string }) {
   const q = useLineage(id);
@@ -29,8 +30,8 @@ export function LineageView({ id }: { id: string }) {
   }
   const decimals = data.coins[0]?.supply.decimals ?? 0;
   return (
-    <Page>
-      <PageHeader eyebrow={`${LINEAGE.eyebrow} · ${shortAddress(data.id, 8, 8)}`} title={LINEAGE.title} />
+    <PageShell>
+      <PageHero accent={ACCENT.teal} eyebrow={`${LINEAGE.eyebrow} · ${shortAddress(data.id, 8, 8)}`} title={LINEAGE.title} body={PAGES.lineage.body} />
       <div className="mb-6">
         <LineageBreadcrumb
           nodes={data.coins.map((c) => ({ label: c.ticker, href: routes.coin(c.ca), generation: c.generation, state: c.state }))}
@@ -42,10 +43,10 @@ export function LineageView({ id }: { id: string }) {
       {data.collapses.length === 0 ? (
         <Empty eyebrow="NO COLLAPSE YET" sentence="No coin in this lineage has collapsed; the lineage is its generation-one coin." />
       ) : (
-        <div className="space-y-6">
+        <div className="qsd-pgrid">
           {data.collapses.map((c) => (
             <Panel key={c.motherCa} eyebrow={`${LINEAGE.collapseEyebrow} · generation ${c.motherGeneration} → ${c.motherGeneration + 1}`} title={c.motherName}>
-              <div className="grid gap-x-8 lg:grid-cols-2">
+              <div className="qsd-pcols">
                 <div className="qsd-datarow" role="row">
                   <span className="qsd-datarow__label">mother</span>
                   <span className="qsd-datarow__value">
@@ -74,7 +75,7 @@ export function LineageView({ id }: { id: string }) {
               </div>
               <h3 className="mt-5 text-lg">{LINEAGE.cohortsTitle}</h3>
               {c.allocation ? (
-                <div className="grid gap-x-8 lg:grid-cols-2">
+                <div className="qsd-pcols">
                   <div className="qsd-datarow" role="row">
                     <span className="qsd-datarow__label">{LINEAGE.allocationRoot}</span>
                     <span className="qsd-datarow__value">
@@ -101,6 +102,6 @@ export function LineageView({ id }: { id: string }) {
           ))}
         </div>
       )}
-    </Page>
+    </PageShell>
   );
 }

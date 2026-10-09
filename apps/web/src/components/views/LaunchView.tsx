@@ -3,16 +3,19 @@ import Link from 'next/link';
 import { useMemo, useRef, useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
-import { Panel } from '@qsd/ui-tokens';
+import { DataRow, Panel } from '@qsd/ui-tokens';
 import { HALF_LIFE_PRESETS } from '@qsd/protocol';
 import { createSceneStore, decodeCryptoEvents, type ChainEvent, type LineageInput, type SceneStore, type SuperpositionInput } from '@qsd/scene/model';
 import type { QuantumEvent } from '@qsd/quantum';
-import { LAUNCH } from '@/copy';
+import { LAUNCH, PAGES } from '@/copy';
 import { isUnavailable } from '@/lib/api';
+import { formatLamports } from '@/lib/format';
 import { routes } from '@/lib/links';
 import { useLaunchQuote } from '@/hooks/useApi';
 import { LaunchSequence } from '@/components/scenes';
-import { Empty, LoadingPanel, Page, PageHeader, UnavailablePanel } from '@/components/common';
+import { RangesFigure } from '@/components/home/FeatureSection';
+import { ACCENT, PageHero, PageShell } from '@/components/page/PageHero';
+import { Empty, LoadingPanel, UnavailablePanel } from '@/components/common';
 import { LaunchPreflightTerminal, LaunchStreamTerminal, cryptoStreamLines, type StreamLine } from '@/components/terminal/pages';
 
 type Phase = 'form' | 'paying' | 'launching' | 'done' | 'failed';
@@ -203,56 +206,58 @@ export function LaunchView() {
 
   if (phase === 'launching' || phase === 'done' || (phase === 'failed' && ca)) {
     return (
-      <div className="relative h-[calc(100vh-56px)] w-full">
+      <div className="qsd-stagepage">
         <LaunchSequence store={store} sources={sources} className="h-full w-full" />
-        <div className="absolute bottom-4 left-4 right-4 max-w-2xl sm:right-auto">
+        <div className="qsd-stagepage__term">
           <LaunchStreamTerminal lines={lines} running={phase === 'launching'} className="max-h-[45vh] overflow-y-auto" />
         </div>
-        <div className="qsd-glass absolute right-4 top-4 max-w-sm p-4 text-xs">
+        <div className="qsd-stagepage__status">
           <p>{status}</p>
-          {error ? <p className="mt-1 text-collapse">{error}</p> : null}
+          {error ? <p className="qsd-form__error mt-1">{error}</p> : null}
           {ca ? (
-            <Link className="qsd-btn mt-3 inline-block" data-primary="true" href={routes.coin(ca)}>
+            <Link className="qsd-btn mt-3 inline-flex" data-primary="true" href={routes.coin(ca)}>
               {LAUNCH.viewCoin}
             </Link>
           ) : null}
-          <p className="mt-2 text-muted">{LAUNCH.stageNote}</p>
+          <p className="qsd-note mt-2">{LAUNCH.stageNote}</p>
         </div>
       </div>
     );
   }
 
+  const lam = (v: string | null, reason: string | null | undefined, label: string) => (v !== null ? <DataRow label={label} value={formatLamports(BigInt(v))} /> : <DataRow label={label} unavailable={{ reason: reason ?? LAUNCH.cost.unavailableReason }} />);
+
   return (
-    <Page>
-      <PageHeader eyebrow={LAUNCH.eyebrow} title={LAUNCH.title} />
+    <PageShell>
+      <PageHero accent={ACCENT.collapse} eyebrow={LAUNCH.eyebrow} title={LAUNCH.title} body={PAGES.launch.body} arrows={PAGES.launch.arrows} figure={<RangesFigure />} />
       {quote.isPending ? (
         <LoadingPanel eyebrow={LAUNCH.costEyebrow} />
       ) : !quote.data || isUnavailable(quote.data) ? (
         <UnavailablePanel eyebrow={LAUNCH.quoteUnavailableEyebrow} reason={quote.data?.unavailable.reason ?? 'no response'} />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+        <div className="qsd-pgrid qsd-pgrid--32">
           <Panel eyebrow={LAUNCH.eyebrow}>
-            <p className="mb-4 text-xs text-muted">{q?.cluster === 'devnet' ? LAUNCH.devnetNotice : LAUNCH.mainnetNotice}</p>
-            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); void launch(); }}>
-              <label className="block text-xs text-muted">
+            <p className="qsd-note mb-4">{q?.cluster === 'devnet' ? LAUNCH.devnetNotice : LAUNCH.mainnetNotice}</p>
+            <form className="qsd-form" onSubmit={(e) => { e.preventDefault(); void launch(); }}>
+              <label>
                 {LAUNCH.form.name}
-                <input className="qsd-input mt-1" value={name} onChange={(e) => setName(e.target.value)} maxLength={32} required />
+                <input className="qsd-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={32} required />
               </label>
-              <label className="block text-xs text-muted">
+              <label>
                 {LAUNCH.form.ticker}
-                <input className="qsd-input mt-1 uppercase" value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())} maxLength={10} pattern="[A-Za-z0-9]{1,10}" required />
+                <input className="qsd-input uppercase" value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())} maxLength={10} pattern="[A-Za-z0-9]{1,10}" required />
               </label>
-              <label className="block text-xs text-muted">
+              <label>
                 {LAUNCH.form.image}
-                <input className="qsd-input mt-1" type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(e) => setImage(e.target.files?.[0] ?? null)} required />
+                <input className="qsd-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(e) => setImage(e.target.files?.[0] ?? null)} required />
               </label>
-              <label className="block text-xs text-muted">
+              <label>
                 {LAUNCH.form.description}
-                <textarea className="qsd-input mt-1" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} />
+                <textarea className="qsd-input" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} />
               </label>
-              <label className="block text-xs text-muted">
+              <label>
                 {LAUNCH.form.halfLife}
-                <select className="qsd-input mt-1" value={preset} onChange={(e) => setPreset(e.target.value)}>
+                <select className="qsd-input" value={preset} onChange={(e) => setPreset(e.target.value)}>
                   {HALF_LIFE_PRESETS.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.label} (auto-measurement after {p.maxWindowSec / 3600} h)
@@ -260,27 +265,38 @@ export function LaunchView() {
                   ))}
                 </select>
               </label>
-              <label className="block text-xs text-muted">
+              <label>
                 {LAUNCH.form.devBuy}
-                <input className="qsd-input mt-1" type="number" min="0" step="0.01" value={devBuy} onChange={(e) => setDevBuy(e.target.value)} />
+                <input className="qsd-input" type="number" min="0" step="0.01" value={devBuy} onChange={(e) => setDevBuy(e.target.value)} />
               </label>
               {!publicKey ? <Empty eyebrow={LAUNCH.noWalletEyebrow} sentence={LAUNCH.noWalletSentence} /> : null}
-              <button type="submit" className="qsd-btn" data-primary="true" disabled={!canLaunch}>
-                {phase === 'paying' ? LAUNCH.form.paying : LAUNCH.form.submit}
-              </button>
-              {error ? (
-                <p className="text-xs text-collapse">
-                  {LAUNCH.errorEyebrow}: {error}
-                </p>
-              ) : null}
+              <div className="qsd-form__actions">
+                <button type="submit" className="qsd-btn" data-primary="true" disabled={!canLaunch}>
+                  {phase === 'paying' ? LAUNCH.form.paying : LAUNCH.form.submit}
+                </button>
+                {error ? (
+                  <p className="qsd-form__error">
+                    {LAUNCH.errorEyebrow}: {error}
+                  </p>
+                ) : null}
+              </div>
             </form>
           </Panel>
-          <div>
-            <LaunchPreflightTerminal quote={q!} wallet={publicKey?.toBase58() ?? null} name={name} ticker={ticker} image={image} devBuyLamports={devBuyLamports} total={total} />
-            <p className="mt-4 text-xs text-muted">{LAUNCH.identityNote}</p>
+          <div className="qsd-pblock">
+            <Panel eyebrow={LAUNCH.costEyebrow}>
+              {lam(q!.launchCostLamports, q!.reasons.launchCost, LAUNCH.cost.launch)}
+              {lam(q!.identityReserveLamports, q!.reasons.identityReserve, LAUNCH.cost.identity)}
+              {devBuyLamports !== null ? <DataRow label={LAUNCH.cost.devBuy} value={formatLamports(devBuyLamports)} /> : <DataRow label={LAUNCH.cost.devBuy} unavailable={{ reason: 'enter a number of SOL' }} />}
+              {total !== null ? <DataRow label={LAUNCH.cost.total} value={formatLamports(total)} /> : <DataRow label={LAUNCH.cost.total} unavailable={{ reason: LAUNCH.cost.unavailableReason }} />}
+              {q!.payTo ? <DataRow label={LAUNCH.cost.payTo} value={q!.payTo} /> : <DataRow label={LAUNCH.cost.payTo} unavailable={{ reason: q!.reasons.payTo ?? LAUNCH.cost.unavailableReason }} />}
+            </Panel>
+            <div className="qsd-pblock">
+              <LaunchPreflightTerminal quote={q!} wallet={publicKey?.toBase58() ?? null} name={name} ticker={ticker} image={image} devBuyLamports={devBuyLamports} total={total} />
+            </div>
+            <p className="qsd-note mt-4">{LAUNCH.identityNote}</p>
           </div>
         </div>
       )}
-    </Page>
+    </PageShell>
   );
 }

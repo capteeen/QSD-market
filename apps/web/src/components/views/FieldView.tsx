@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { Countdown, Panel } from '@qsd/ui-tokens';
-import { FIELD } from '@/copy';
+import { FIELD, PAGES } from '@/copy';
 import { isUnavailable } from '@/lib/api';
 import { fieldCoin, liveDecay, uncertainty } from '@/lib/coin';
 import { formatHalfLife, formatPercent } from '@/lib/format';
@@ -13,7 +13,9 @@ import { LogList } from '@/components/LogList';
 import { useNow } from '@/hooks/useNow';
 import { liveMeasurements } from '@/store/live';
 import { FieldScene } from '@/components/scenes';
-import { Empty, LoadingPanel, Page, PageHeader, StateLabel, UnavailablePanel } from '@/components/common';
+import { DotGridFigure } from '@/components/home/FeatureSection';
+import { ACCENT, PageHero, PageShell } from '@/components/page/PageHero';
+import { Empty, LoadingPanel, StateLabel, UnavailablePanel } from '@/components/common';
 import type { CoinSummaryDto } from '@/lib/types';
 
 type Filter = 'all' | 'superposed' | 'collapsed' | 'tunnelled';
@@ -40,88 +42,84 @@ export function FieldView() {
   }, [data, filter, sort, now]);
 
   return (
-    <Page wide>
-      <PageHeader eyebrow={FIELD.eyebrow} title={FIELD.title}>
-        <div className="flex flex-wrap gap-4 text-xs">
-          <label className="flex items-center gap-2 text-muted">
+    <PageShell>
+      <PageHero accent={ACCENT.probability} eyebrow={FIELD.eyebrow} title={FIELD.title} body={PAGES.field.body} arrows={PAGES.field.arrows} figure={<DotGridFigure />}>
+        <div className="qsd-filters">
+          <label>
             {FIELD.filterLabel}
-            <select className="qsd-input w-auto" value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
+            <select className="qsd-input" value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
               <option value="all">{FIELD.filterAll}</option>
               <option value="superposed">{FIELD.filterSuperposed}</option>
               <option value="collapsed">{FIELD.filterCollapsed}</option>
               <option value="tunnelled">{FIELD.filterTunnelled}</option>
             </select>
           </label>
-          <label className="flex items-center gap-2 text-muted">
+          <label>
             {FIELD.sortLabel}
-            <select className="qsd-input w-auto" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+            <select className="qsd-input" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
               <option value="uncertainty">{FIELD.sortUncertainty}</option>
               <option value="halfLife">{FIELD.sortHalfLife}</option>
               <option value="decay">{FIELD.sortDecay}</option>
             </select>
           </label>
         </div>
-      </PageHeader>
-      <div className="mb-6 h-[50vh] min-h-[360px] w-full border-card border-border">
+      </PageHero>
+      <div className="qsd-pscene">
         <FieldScene coins={list.map((c) => fieldCoin(c, now))} liveMeasurements={liveMeasurements} showEmptyState={false} />
       </div>
-      <div className="mb-6 grid gap-6 lg:grid-cols-[1fr_2fr]">
+      <div className="qsd-pgrid qsd-pgrid--12">
         <StatusTerminal q={stats} />
         <LogList limit={20} />
       </div>
-      {q.isPending ? (
-        <LoadingPanel eyebrow={FIELD.eyebrow} />
-      ) : !data || isUnavailable(data) ? (
-        <UnavailablePanel eyebrow={FIELD.unavailableEyebrow} reason={data?.unavailable.reason ?? 'no response'} />
-      ) : data.coins.length === 0 ? (
-        <Empty eyebrow={FIELD.emptyEyebrow} sentence={FIELD.emptySentence} action={{ label: 'Launch', href: routes.launch }} />
-      ) : list.length === 0 ? (
-        <Empty eyebrow={FIELD.emptyFilteredEyebrow} sentence={FIELD.emptyFilteredSentence} />
-      ) : (
-        <Panel>
-          <div className="overflow-x-auto">
-            <table className="qsd-table">
-              <thead>
-                <tr>
-                  <th>{FIELD.columns.coin}</th>
-                  <th>{FIELD.columns.state}</th>
-                  <th>{FIELD.columns.generation}</th>
-                  <th>{FIELD.columns.halfLife}</th>
-                  <th>{FIELD.columns.decay}</th>
-                  <th>{FIELD.columns.uncertainty}</th>
-                  <th>{FIELD.columns.nextAuto}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((c) => (
-                  <tr key={c.ca}>
-                    <td>
-                      <Link className="qsd-link" href={routes.coin(c.ca)}>
-                        {c.ticker}
-                      </Link>{' '}
-                      <span className="text-muted">{c.name}</span>
-                    </td>
-                    <td>
-                      <StateLabel state={c.state} />
-                    </td>
-                    <td>{c.generation}</td>
-                    <td>{formatHalfLife(c.halfLifeSec)}</td>
-                    <td>{formatPercent(liveDecay(c, now))}</td>
-                    <td>{formatPercent(uncertainty(c.superposition))}</td>
-                    <td>
-                      {c.nextAutoMeasureAt !== null ? (
-                        <Countdown size="sm" target={new Date(c.nextAutoMeasureAt * 1000).toISOString()} />
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </td>
+      <div className="qsd-pblock">
+        {q.isPending ? (
+          <LoadingPanel eyebrow={FIELD.eyebrow} />
+        ) : !data || isUnavailable(data) ? (
+          <UnavailablePanel eyebrow={FIELD.unavailableEyebrow} reason={data?.unavailable.reason ?? 'no response'} />
+        ) : data.coins.length === 0 ? (
+          <Empty eyebrow={FIELD.emptyEyebrow} sentence={FIELD.emptySentence} action={{ label: 'Launch', href: routes.launch }} />
+        ) : list.length === 0 ? (
+          <Empty eyebrow={FIELD.emptyFilteredEyebrow} sentence={FIELD.emptyFilteredSentence} />
+        ) : (
+          <Panel eyebrow={FIELD.eyebrow}>
+            <div className="overflow-x-auto">
+              <table className="qsd-table">
+                <thead>
+                  <tr>
+                    <th>{FIELD.columns.coin}</th>
+                    <th>{FIELD.columns.state}</th>
+                    <th>{FIELD.columns.generation}</th>
+                    <th>{FIELD.columns.halfLife}</th>
+                    <th>{FIELD.columns.decay}</th>
+                    <th>{FIELD.columns.uncertainty}</th>
+                    <th>{FIELD.columns.nextAuto}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
-      )}
-    </Page>
+                </thead>
+                <tbody>
+                  {list.map((c) => (
+                    <tr key={c.ca}>
+                      <td>
+                        <Link className="qsd-link" href={routes.coin(c.ca)}>
+                          {c.ticker}
+                        </Link>{' '}
+                        <span className="text-muted">{c.name}</span>
+                      </td>
+                      <td>
+                        <StateLabel state={c.state} />
+                      </td>
+                      <td>{c.generation}</td>
+                      <td>{formatHalfLife(c.halfLifeSec)}</td>
+                      <td>{formatPercent(liveDecay(c, now))}</td>
+                      <td>{formatPercent(uncertainty(c.superposition))}</td>
+                      <td>{c.nextAutoMeasureAt !== null ? <Countdown size="sm" target={new Date(c.nextAutoMeasureAt * 1000).toISOString()} /> : <span className="text-muted">—</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+        )}
+      </div>
+    </PageShell>
   );
 }

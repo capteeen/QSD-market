@@ -213,6 +213,42 @@ export const TERM = {
   },
 } as const;
 
+// ───────────────────────────── page heroes (the inner pages in the home-page manner) ─────────────────────────────
+export const PAGES = {
+  field: {
+    body: 'Every coin the protocol has launched, in whatever state it is in now. The scene draws the coins that exist; the table lists them.',
+    arrows: ['SUPERPOSED, COLLAPSED OR TUNNELLED', 'DECAY PROGRESS RECOMPUTED LIVE', 'SORT BY WHAT MATTERS TO YOU'],
+  },
+  launch: {
+    body: 'A coin launches on pump.fun with its parameters published as ranges. The identity is a hash-based key, generated for this launch alone.',
+    arrows: ['PAY ONCE, FROM YOUR WALLET', 'EVERY STAGE IS A REAL OPERATION', 'THE STREAM PRINTS WHAT HAPPENS'],
+  },
+  measure: {
+    body: 'Coins nearest to their auto-measurement, soonest first. Anyone can measure any of them before the protocol does.',
+    arrows: ['SOONEST DUE AT THE TOP', 'REWARD PAID ON COLLAPSE', 'THE PROTOCOL MEASURES WHAT NOBODY DOES'],
+  },
+  burns: {
+    body: 'The hourly tally of protocol fees, the $QSD bought with it, and the transaction that burned it.',
+    arrows: ['ONE BURN PER HOUR', 'EVERY TRANSACTION LINKED', 'TOTALS FROM THE LEDGER, NOT A COUNTER'],
+  },
+  how: {
+    body: 'The two documents the protocol is written against, rendered verbatim: the physics the mechanics borrow from, and the economics they implement.',
+    arrows: ['PHYSICS, HONESTLY', 'ECONOMICS, EXACTLY', 'VERIFY A SIGNATURE WHILE YOU READ'],
+  },
+  me: {
+    body: 'What this wallet has launched, holds and has been allocated, read from the protocol’s own records.',
+    arrows: ['COINS YOU LAUNCHED', 'COINS YOU HOLD', 'DAUGHTER SHARES YOU RECEIVED'],
+  },
+  lineage: {
+    body: 'One lineage, from its generation-one coin through every collapse and every daughter born from it.',
+  },
+  coin: {
+    identityEyebrow: 'IDENTITY',
+    channelCol: 'channel',
+    bandWidth: 'band width',
+  },
+} as const;
+
 // ───────────────────────────── field ─────────────────────────────
 export const FIELD = {
   title: 'The field',
@@ -439,6 +475,7 @@ export const BURNS = {
 // ───────────────────────────── how ─────────────────────────────
 export const HOW = {
   eyebrow: 'HOW IT WORKS',
+  title: 'The physics, and the economics',
   physicsTab: 'physics',
   economicsTab: 'economics',
   unavailableEyebrow: 'DOCUMENTS NOT AVAILABLE',

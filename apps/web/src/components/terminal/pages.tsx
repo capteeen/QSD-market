@@ -56,6 +56,11 @@ function apiState<T>(q: { isPending: boolean; data: ApiResult<T> | undefined }, 
   return null;
 }
 
+/** "none", "1 coin", "3 coins": a zero is a word, never a digit that could read as data. */
+function count(n: number, noun: string): string {
+  return n === 0 ? 'none' : `${n} ${noun}${n === 1 ? '' : 's'}`;
+}
+
 function pad(s: string, n: number): string {
   return s.length >= n ? s : s + ' '.repeat(n - s.length);
 }
@@ -149,16 +154,11 @@ export function MeasureQueueTerminal({ q, list }: { q: { isPending: boolean; dat
   const now = useNow();
   const head = apiState(q, 'measurement queue');
   return (
-    <Terminal path="~/measure" meta={`auto-measure on decay · survive resets ${formatBps(PROTOCOL_PARAMS.SURVIVE_RESET_BPS, 0)}`} live testId="term-measure">
+    <Terminal path="~/measure" meta="auto-measure on decay" live testId="term-measure">
       <Cmd>qsd measure --queue --sort=due</Cmd>
       {head ??
         (list.length === 0 ? (
-          <>
-            <Status tone="dim">
-              <span>{MEASURE.emptyEyebrow}</span>
-            </Status>
-            <Out dim>{MEASURE.emptySentence}</Out>
-          </>
+          <Status tone="dim">{MEASURE.emptySentence}</Status>
         ) : (
           <>
             <Out dim>{`${pad('coin', 10)} ${pad('due in', 12)} ${pad('decay', 8)} reward if it collapses`}</Out>
@@ -176,7 +176,7 @@ export function MeasureQueueTerminal({ q, list }: { q: { isPending: boolean; dat
               );
             })}
             <Out dim>
-              {list.length} coin{list.length === 1 ? '' : 's'} measurable
+              {list.length} coin{list.length === 1 ? '' : 's'} measurable · a survive removes {formatBps(PROTOCOL_PARAMS.SURVIVE_RESET_BPS, 0)} of the quiet time
             </Out>
           </>
         ))}
@@ -195,20 +195,8 @@ export function BurnsTerminal({ q }: { q: { isPending: boolean; data: ApiResult<
       {head ??
         (d ? (
           <>
-            <Kv k="$QSD mint" tone={d.qsdMint ? 'plain' : 'dim'}>
-              {d.qsdMint ?? BURNS.qsdCaUnavailable}
-            </Kv>
-            <Kv k="total burned" tone="ok">
-              {formatUnits(BigInt(d.totalBurned), 6)} $QSD
-            </Kv>
-            <Rule />
             {d.burns.length === 0 ? (
-              <>
-                <Status tone="dim">
-                  <span>{BURNS.emptyEyebrow}</span>
-                </Status>
-                <Out dim>{BURNS.emptySentence}</Out>
-              </>
+              <Status tone="dim">{BURNS.emptySentence}</Status>
             ) : (
               <>
                 <Out dim>{`${pad('at', 20)} ${pad('sol in', 14)} ${pad('$QSD burned', 16)} tx`}</Out>
@@ -347,10 +335,10 @@ export function MeTerminal({ wallet, q }: { wallet: string | null; q: { isPendin
           {apiState(q, 'wallet record') ??
             (q.data && !isUnavailable(q.data) ? (
               <>
-                <Kv k="created">{q.data.created.length} coin{q.data.created.length === 1 ? '' : 's'}</Kv>
-                <Kv k="held">{q.data.held.length} coin{q.data.held.length === 1 ? '' : 's'}</Kv>
+                <Kv k="created">{count(q.data.created.length, 'coin')}</Kv>
+                <Kv k="held">{count(q.data.held.length, 'coin')}</Kv>
                 <Kv k="received" tone={q.data.received.length > 0 ? 'ok' : 'plain'}>
-                  {q.data.received.length} daughter share{q.data.received.length === 1 ? '' : 's'}
+                  {count(q.data.received.length, 'daughter share')}
                 </Kv>
                 {q.data.identities.length > 0 ? (
                   <>
@@ -414,21 +402,15 @@ export function LaunchPreflightTerminal({
       <Cmd>qsd launch --dry-run</Cmd>
       <Status tone={wallet ? 'ok' : 'fail'}>wallet {wallet ? shortAddress(wallet, 6, 6) : 'not connected'}</Status>
       <Status tone={name.trim() ? 'ok' : 'dim'}>name {name.trim() ? `"${name.trim()}"` : 'empty'}</Status>
-      <Status tone={tickerOk ? 'ok' : ticker ? 'fail' : 'dim'}>ticker {ticker ? `$${ticker}${tickerOk ? '' : ' · 1-10 letters or digits'}` : 'empty'}</Status>
+      <Status tone={tickerOk ? 'ok' : ticker ? 'fail' : 'dim'}>ticker {ticker ? `$${ticker}${tickerOk ? '' : ' · letters and digits only, ten at most'}` : 'empty'}</Status>
       <Status tone={image ? (imageHash ? 'ok' : 'dim') : 'dim'}>
         image {image ? `${image.name} · ${(image.size / 1024).toFixed(1)} KB · sha256 ${imageHash ? `${imageHash.slice(0, 16)}…` : 'hashing…'}` : 'none chosen'}
       </Status>
       <Rule />
-      <Kv k="launch">{lam(quote.launchCostLamports, quote.reasons.launchCost)}</Kv>
-      <Kv k="identity rent">{lam(quote.identityReserveLamports, quote.reasons.identityReserve)}</Kv>
-      <Kv k="dev buy">{devBuyLamports !== null ? formatLamports(devBuyLamports) : <span className="qsd-term__dim">enter a number of SOL</span>}</Kv>
       <Kv k="total" tone={total !== null ? 'ok' : 'dim'}>
         {total !== null ? formatLamports(total) : 'not available'}
       </Kv>
-      <Kv k="pay to" tone={quote.payTo ? 'plain' : 'dim'}>
-        {quote.payTo ?? quote.reasons.payTo ?? 'not available'}
-      </Kv>
-      <Out dim>on submit: XMSS identity (256 one-time keys) → superposition → quantum draw → sign → anchor</Out>
+      <Out dim>on submit: XMSS identity → superposition → quantum draw → sign → anchor</Out>
     </Terminal>
   );
 }
