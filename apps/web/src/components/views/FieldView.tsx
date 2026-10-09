@@ -60,7 +60,7 @@ export function FieldView() {
         </div>
       </PageHeader>
       <div className="mb-6 h-[50vh] min-h-[360px] w-full border-card border-border">
-        <FieldScene coins={list.map((c) => fieldCoin(c, now))} liveMeasurements={liveMeasurements} />
+        <FieldScene coins={list.map((c) => fieldCoin(c, now))} liveMeasurements={liveMeasurements} showEmptyState={false} />
       </div>
       {q.isPending ? (
         <LoadingPanel eyebrow={FIELD.eyebrow} />
