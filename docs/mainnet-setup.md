@@ -48,6 +48,12 @@ A user pays the sum of three amounts, in lamports (1 SOL = 1 000 000 000). The v
 
 Until all three are set, `/launch` says "not available" and refuses to launch.
 
+`/launch` also needs `QSD_GENESIS_CONFIG`, the generation-1 channel table (airdrop pool of 4–5 % of supply). On Vercel paste the JSON itself:
+
+```
+QSD_GENESIS_CONFIG={"supplyUnits":"1000000000000000","decimals":6,"poolUnits":{"min":"40000000000000","max":"50000000000000"},"channels":[{"id":"fast","probabilityPpm":500000,"label":"fast decay","halfLifeSec":{"min":3600,"max":86400},"poolUnits":{"min":"40000000000000","max":"45000000000000"}},{"id":"slow","probabilityPpm":500000,"label":"slow decay","halfLifeSec":{"min":86400,"max":604800},"poolUnits":{"min":"45000000000000","max":"50000000000000"}}]}
+```
+
 **Collapses are paid by the fee wallet, not by users.** Each daughter is launched with a dev buy just large enough to cover its airdrop pool (4–5 % of supply with `genesis.example.json`, about 1.2–1.5 SOL, estimated from pump.fun's starting price). If the mother coin's dev-buy tokens don't cover the collapse reward, the wallet buys the difference from the mother's curve. A collapse the wallet can't afford stops and resumes after you top it up. Two limits cap what one collapse can spend:
 
 | Variable | Default | Meaning |
