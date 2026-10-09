@@ -73,20 +73,23 @@ describe('GET /api/stats', () => {
     expect(body.health.chain.configured).toBe(false);
   });
 
-  it('LOW H-W8: nextBurnAt is derived from env presence (REDIS_URL + QSD_TOKEN_MINT), not from a scheduler that is known to run — the home page counts down to a burn no worker may perform', async () => {
-    process.env.REDIS_URL = 'redis://localhost:6379';
+  it('H-W8 (fixed): the countdown comes from the scheduler — computeStats reports burnSchedule.scheduledBurnAt() (BullMQ repeatable job `next`), null without Redis; the env-only helper is no longer what the page shows', async () => {
+    const fs = await import('node:fs');
+    const stats = fs.readFileSync(new URL('../../apps/web/src/server/stats.ts', import.meta.url), 'utf8');
+    const sched = fs.readFileSync(new URL('../../apps/web/src/server/burnSchedule.ts', import.meta.url), 'utf8');
+    expect(stats).toMatch(/scheduledBurnAt\(\)/);
+    expect(stats).toMatch(/nextBurnAt: burnAt/);
+    expect(sched).toMatch(/getRepeatableJobs/);
+    // no Redis → no countdown, even with the env set
+    process.env.REDIS_URL = 'redis://127.0.0.1:1';
     process.env.QSD_TOKEN_MINT = 'So11111111111111111111111111111111111111112';
-    const { nextBurnAt } = await import('@/server/stats');
-    const v = nextBurnAt();
-    expect(v).not.toBeNull();
-    // top of the next UTC hour, computed locally
-    const d = new Date(v!);
-    expect(d.getUTCMinutes()).toBe(0);
-    expect(d.getTime()).toBeGreaterThan(Date.now());
-    // documents the limitation: no Redis call was made to find the scheduled job
-    const src = (await import('node:fs')).readFileSync(new URL('../../apps/web/src/server/stats.ts', import.meta.url), 'utf8');
-    expect(src).not.toMatch(/getRepeatableJobs|getDelayed|Queue\(/);
-  });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { scheduledBurnAt } = await import('@/server/burnSchedule');
+    await expect(scheduledBurnAt()).resolves.toBeNull();
+    warn.mockRestore();
+    delete process.env.REDIS_URL;
+    delete process.env.QSD_TOKEN_MINT;
+  }, 30_000);
 });
 
 describe('other handlers', () => {
@@ -130,28 +133,37 @@ describe('other handlers', () => {
     expect(dbUnavailableReason(new Error('first line\nsecond line'))).toBe('the database is not reachable (first line)');
   });
 
-  it('MEDIUM H-W7: a collapse outcome enqueues the daughter launch through `enqueue`, which swallows every failure (REDIS_URL unset → warning only) — a collapsed mother with no queued job is never reconciled', async () => {
+  it('H-W7 (fixed): a collapse still hands the daughter launch to `enqueue` (which cannot throw), but the measurement now reports whether it was scheduled, and the worker runs reconcileCollapses (collapsed mothers without a daughter are re-enqueued)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { enqueue } = await import('@/server/queues');
-    await expect(enqueue('collapse', { ca: 'abc' }, { jobId: 'collapse-abc' })).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/REDIS_URL unset: job collapse not enqueued/));
+    const failures: string[] = [];
+    await expect(enqueue('collapse', { ca: 'abc' }, { jobId: 'collapse-abc', onFailure: (reason: string) => void failures.push(reason) })).resolves.toBeUndefined();
+    expect(failures.length).toBe(1);
+    expect(failures[0]).toMatch(/REDIS_URL/);
     warn.mockRestore();
-    // and nothing in the app looks for collapsed coins without a daughter
     const fs = await import('node:fs');
     const worker = fs.readFileSync(new URL('../../apps/web/src/workers/index.ts', import.meta.url), 'utf8');
     const measure = fs.readFileSync(new URL('../../apps/web/src/server/measure.ts', import.meta.url), 'utf8');
-    expect(measure).toMatch(/await enqueue\('collapse'/);
-    expect(worker).not.toMatch(/daughterCa: null|state: 'collapsed'/);
+    const reconcile = fs.readFileSync(new URL('../../apps/web/src/server/reconcile.ts', import.meta.url), 'utf8');
+    expect(measure).toMatch(/onFailure: \(reason\) => void \(sched\.value = \{ status: 'not-scheduled'/);
+    expect(worker).toMatch(/reconcileCollapses\(/);
+    expect(reconcile).toMatch(/where: \{ state: 'collapsed', daughterCa: null \}/);
+    const { collapsedWithoutDaughter } = await import('@/server/reconcile');
+    await fakeDb.coin.create({ data: { ca: 'm1', name: 'M', ticker: 'M', imageUri: '', imageHash: 'a', imageLineage: 'b', lineageId: 'l', generation: 1, identityRoot: 'r', halfLifeSec: 3600, decayProgress: 1, supplyMin: 1n, supplyMax: 2n, totalUnits: 1n, remainingUnits: 1n, decimals: 0, state: 'collapsed', lastActivityAt: 1, bornAt: 1, collapsedAt: 5, launchPath: 'devnet-spl', launchTx: 'x', daughterCa: null } });
+    await fakeDb.coin.create({ data: { ca: 'm2', name: 'M', ticker: 'M', imageUri: '', imageHash: 'a', imageLineage: 'b', lineageId: 'l', generation: 1, identityRoot: 'r', halfLifeSec: 3600, decayProgress: 1, supplyMin: 1n, supplyMax: 2n, totalUnits: 1n, remainingUnits: 1n, decimals: 0, state: 'collapsed', lastActivityAt: 1, bornAt: 1, collapsedAt: 3, launchPath: 'devnet-spl', launchTx: 'y', daughterCa: 'd2' } });
+    expect((await collapsedWithoutDaughter()).map((c) => c.ca)).toEqual(['m1']);
   });
 
-  it('LOW H-W13: the app calls executeCollapse without `collapseSlot`, so the snapshot slot is the worker start slot (collapseSlotSource "orchestration-start"), not the proof-anchor slot the package accepts since the H-S6 fix; the holders route passes collapseSlot 0', async () => {
+  it('H-W13 (fixed): executeCollapse receives the proof-anchor slot of the collapsing measurement (collapseSlotSource "proof-anchor"); the holders route uses the same slot', async () => {
     const fs = await import('node:fs');
     const collapse = fs.readFileSync(new URL('../../apps/web/src/server/collapse.ts', import.meta.url), 'utf8');
     const holders = fs.readFileSync(new URL('../../apps/web/src/app/api/coin/[ca]/holders/route.ts', import.meta.url), 'utf8');
-    const pkg = fs.readFileSync(new URL('../../packages/solana/src/collapse.ts', import.meta.url), 'utf8');
-    expect(pkg).toMatch(/collapseSlotSource: deps\.collapseSlot !== undefined \? 'proof-anchor' : 'orchestration-start'/);
-    // documents the gap; delete these two lines when the app passes the proof-anchor slot
-    expect(collapse).not.toMatch(/collapseSlot/);
-    expect(holders).toMatch(/collapseSlot: 0/);
+    expect(collapse).toMatch(/const collapseSlot = proofAnchorSlot\(row\)/);
+    expect(collapse).toMatch(/\.\.\.\(collapseSlot !== null \? \{ collapseSlot \} : \{\}\)/);
+    expect(holders).toMatch(/proofAnchorSlot\(row\)/);
+    const { proofAnchorSlot } = await import('@/server/collapse');
+    expect(proofAnchorSlot({ measurements: [{ index: 0, outcomeKind: 'survive', proofSlot: 10 }, { index: 1, outcomeKind: 'collapse', proofSlot: 42 }] })).toBe(42);
+    expect(proofAnchorSlot({ measurements: [{ index: 0, outcomeKind: 'survive', proofSlot: 10 }] })).toBeNull();
+    expect(proofAnchorSlot({ measurements: [{ index: 0, outcomeKind: 'collapse', proofSlot: null }] })).toBeNull();
   });
 });

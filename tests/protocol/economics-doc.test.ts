@@ -56,7 +56,7 @@ describe('economics.md ↔ PROTOCOL_PARAMS', () => {
     expect(doc).toContain(`Tunnelling probability on collapse (${PROTOCOL_PARAMS.TUNNEL_PROBABILITY_PPM / 10_000} %)`);
     expect(doc).toContain(`Share of remaining supply removed on collapse (${pct(PROTOCOL_PARAMS.COLLAPSE_BURN_BPS)})`);
     expect(doc).toContain(`Share of the removed amount paid to the measurer (${pct(PROTOCOL_PARAMS.MEASURER_SHARE_OF_BURN_BPS)})`);
-    expect(doc).toContain(`Measurement fee rebated on survive (${pct(PROTOCOL_PARAMS.SURVIVE_FEE_REBATE_BPS)})`);
+    expect(doc).toContain(`share of a measurement fee rebated on survive (${pct(PROTOCOL_PARAMS.SURVIVE_FEE_REBATE_BPS)})`);
     expect(doc).toContain(`Largest entanglement weight (${PROTOCOL_PARAMS.ENTANGLEMENT_WEIGHT_MAX_BPS / 10_000}×)`);
     expect(doc).toMatch(/L = 0\.5 fL \+ 0\.3 fM \+ 0\.2 fS/);
     expect(PROTOCOL_PARAMS.DAUGHTER_W_LIFETIME_BPS + PROTOCOL_PARAMS.DAUGHTER_W_MEASUREMENTS_BPS + PROTOCOL_PARAMS.DAUGHTER_W_SUPPLY_BPS).toBe(10_000);

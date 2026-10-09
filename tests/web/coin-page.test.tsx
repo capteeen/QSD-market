@@ -157,7 +157,7 @@ describe('proof verification on /coin/[ca] (witness-signed, input-bound bundle; 
 });
 
 describe('UNSAFE_DEV_RANDOM bundle on the coin page', () => {
-  it('renders invalid in the browser (the dev attestation carries no draw binding and the page requires one) with the kit’s warning on the badge', async () => {
+  it('renders invalid in the browser (dev randomness is never accepted by the page’s verifier) with the kit’s warning on the badge', async () => {
     const { dto } = await measured('dev');
     const r = await renderCoin(dto);
     expect(badgeOf(r.container).getAttribute('data-attestation')).toBe('unsafe-dev');
@@ -165,7 +165,8 @@ describe('UNSAFE_DEV_RANDOM bundle on the coin page', () => {
     expect(bodyText(r.container)).toContain('UNSAFE_DEV_RANDOM');
     const badge = await clickVerify(r);
     expect(badge.getAttribute('data-status')).toBe('invalid');
-    expect(badge.getAttribute('aria-label')).toMatch(/binding|bound/i);
+    // with allowUnsafeDev gone (H-W4 fixed) verify() refuses the attestation kind before it reaches the binding check
+    expect(badge.getAttribute('aria-label')).toMatch(/unsafe-dev|dev random|binding|bound/i);
   });
 
   it('LOW H-W4: CoinView passes allowUnsafeDev to verify() whenever the BUNDLE says kind=unsafe-dev — a verifier option taken from the data under verification; masked today by requireInputBinding (above), it must still be removed', () => {

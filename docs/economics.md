@@ -27,7 +27,7 @@ coin always runs under the parameters it was launched with.
 | `TUNNEL_PROBABILITY_PPM` | 25000 | Tunnelling probability on collapse (2.5 %) |
 | `COLLAPSE_BURN_BPS` | 100 | Share of remaining supply removed on collapse (1 %) |
 | `MEASURER_SHARE_OF_BURN_BPS` | 2000 | Share of the removed amount paid to the measurer (20 %) |
-| `SURVIVE_FEE_REBATE_BPS` | 1000 | Measurement fee rebated on survive (10 %) |
+| `SURVIVE_FEE_REBATE_BPS` | 1000 | Reserved: share of a measurement fee rebated on survive (10 %). No measurement fee is charged in this version, so a survive pays nothing. |
 | `AUTO_MEASURER_ID` | `protocol` | Recorded as the measurer on auto-measurement |
 | `DAUGHTER_LIFETIME_REF_HALF_LIVES` | 6 | Lifetime at which the lifetime score saturates |
 | `DAUGHTER_MEASUREMENTS_REF` | 5 | Survived measurements at which that score saturates |
@@ -144,8 +144,10 @@ resolver `qsd/measurement/v1` did not bind the moment; it is retired and
 bundles carrying it are refused.)
 
 **Survive.** The coin stays alive, 75 % (`SURVIVE_RESET_BPS`) of its quiet
-time is removed, and it enters `measured-alive`. The measurer gets 10 %
-(`SURVIVE_FEE_REBATE_BPS`) of their measurement fee back.
+time is removed, and it enters `measured-alive`. The measurer receives
+nothing: no measurement fee is charged in this version. The parameter
+`SURVIVE_FEE_REBATE_BPS` (10 %) is reserved for a future version that
+charges a fee and rebates part of it on survive.
 
 **Collapse.** The coin enters `collapsed`, decay progress is 1 for good, and
 the same draw has already chosen the decay channel and the daughter pool

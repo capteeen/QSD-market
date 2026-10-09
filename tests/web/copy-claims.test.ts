@@ -134,10 +134,10 @@ const REVIEWED: Record<string, Review> = {
   // ── launch
   'half-life preset': { section: 'economics §1', verdict: 'ok' },
   'launching — every stage below is a real operation': { section: 'SPEC §7 CORE RULE; verified by tests/web/launch-stream.test.ts', verdict: 'ok' },
-  'Every visual in the sequence is driven by a real event from the key generation, the quantum draw, the signature and the chain. If no event arrives, nothing moves.': {
-    section: 'SPEC §7 CORE RULE; packages/scene README §3 (documented ambient motion: chamber rings rotate, stage-1 coin pulses ±6 % with no event)',
-    verdict: 'overclaims',
-    note: 'The scene package documents two ambient motions that run with no event (tests/scene/stillness + render-headless: "identical after 60 frames except the two documented ambient items"). "nothing moves" is false; say "no stage advances and no value changes".',
+  'Every visual in the sequence is driven by a real event from the key generation, the quantum draw, the signature and the chain. If no event arrives, no stage advances and no value changes; the only motion without an event is the chamber’s ambient drift.': {
+    section: 'SPEC §7 CORE RULE; packages/scene README §3 (documented ambient motion); tests/scene/stillness (no stage / count / value changes without an event)',
+    verdict: 'ok',
+    note: 'H-W5 fixed: the sentence now claims exactly what the scene tests prove (no state change without an event) and names the documented ambient motion.',
   },
   'The launch identity is generated on the server, in the protocol’s identity reserve. The hash chain values at depths below the tip are one-time secret key material, so the stream you see carries their SHA-256 commitments; every other hash is the real value.': { section: 'crypto README §3; verified byte-for-byte in tests/web/launch-stream.test.ts', verdict: 'ok' },
   // ── measure queue
@@ -149,11 +149,13 @@ const REVIEWED: Record<string, Review> = {
   'collapse probability now': { section: 'economics §1: "the probability that the coin collapses is exactly its decay progress"', verdict: 'ok', note: 'economics §3 counts tunnelling as a kind of collapse, so the doc and the label agree.' },
   'if it collapses you receive': { section: 'economics §3 Collapse (measurer share)', verdict: 'ok' },
   'if it survives': { section: 'economics §3 Survive', verdict: 'ok' },
-  'if it collapses you receive <U> <T> (<P> of remaining supply); if it survives you receive a fee rebate of <R> bps': {
-    section: 'economics.md §3 Survive: "The measurer gets 10 % of their measurement fee back"',
-    verdict: 'overclaims',
-    note: 'No measurement fee exists: /api/measure charges nothing, and `surviveRebate` (@qsd/protocol) is referenced by no module in apps/web or packages/solana, so no rebate is ever paid. The button promises a payout no code path makes (SPEC §8: "MEASURE button stating current reward … plainly"). Also "1000 bps" is rendered where the queue page says "10%".',
+  'if it collapses you receive <U> <T> (<P> of remaining supply); if it survives you receive nothing — no measurement fee is charged — and <R> of the coin’s quiet time is removed': {
+    section: 'economics.md §3 Collapse (measurer share); SURVIVE_RESET_BPS (75 % of quiet time removed on survive)',
+    verdict: 'ok',
+    note: 'H-W3 fixed: the app charges no measurement fee and pays nothing on survive, which is what the sentence now says. INFO H-W14: economics.md’s parameter table still lists SURVIVE_FEE_REBATE_BPS as "Measurement fee rebated on survive (10 %)" although no fee exists anywhere — a doc-vs-app gap outside apps/web copy.',
   },
+  'the daughter launch has been handed to the collapse worker': { section: 'SPEC §9 l.380 (daughter launch fully automatic); server/measure.ts daughterLaunch status', verdict: 'ok' },
+  'the daughter launch could NOT be scheduled; the mother is recorded as collapsed and the reconciliation job will retry': { section: 'SPEC §9 l.380; server/reconcile.ts (H-W7 fix: re-enqueues collapsed mothers without a daughter)', verdict: 'ok' },
   'current collapse probability: <U>': { section: 'economics §1', verdict: 'ok' },
   // ── burns
   'Each hour the protocol tallies its fees, buys $QSD and burns all of it.': { section: 'SPEC §9 l.390', verdict: 'ok' },
@@ -180,7 +182,6 @@ const REVIEWED: Record<string, Review> = {
   'No coin in this lineage has collapsed; the lineage is its generation-one coin.': { section: 'ui', verdict: 'ok' },
   '— the collapse is still executing': { section: 'ui', verdict: 'ok' },
   'collapsed at': { section: 'ui', verdict: 'ok' },
-  'fee rebate': { section: 'economics §3 Survive', verdict: 'overclaims', note: 'See the MEASURE_TEXT.reward entry: no fee is charged, no rebate is paid.' },
   'loading scene': { section: 'ui', verdict: 'ok' },
   'the coin has collapsed': { section: 'ui', verdict: 'ok' },
   '(at the band minimum)': { section: 'economics §5 (pool resolved inside the band at collapse)', verdict: 'ok' },
@@ -332,7 +333,6 @@ describe('user-facing copy vs docs/physics.md (SPEC §2 l.86-90, §10 l.413-414)
         'components/views/LineageView.tsx: — the collapse is still executing',
         'components/views/MeView.tsx: airdrop status',
         'components/views/MeView.tsx: no airdrop record for this wallet yet',
-        'components/views/MeasureQueueView.tsx: fee rebate',
       ].sort(),
     );
   });

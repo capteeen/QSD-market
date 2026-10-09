@@ -75,9 +75,19 @@ describe('footer disclaimer (SPEC §8 l.371-374, §11 l.436)', () => {
     });
   }
 
-  it('FINDING H-W2 (MEDIUM): no not-found.tsx, error.tsx or global-error.tsx exists under src/app — an unknown route and a render error fall back to Next’s built-in pages, and the built-in error page replaces the root layout, so those pages carry no disclaimer', () => {
+  it('H-W2 (fixed): not-found.tsx and error.tsx render inside the RootLayout (disclaimer once); global-error.tsx replaces the layout and carries its own Footer (disclaimer once)', async () => {
     const files = ['not-found.tsx', 'error.tsx', 'global-error.tsx'].map((f) => path.join(APP, f));
-    const missing = files.filter((f) => !existsSync(f));
-    expect(missing.map((f) => path.basename(f))).toEqual([]);
+    expect(files.filter((f) => !existsSync(f))).toEqual([]);
+    const NotFound = (await import('@/app/not-found')).default;
+    const ErrorPage = (await import('@/app/error')).default;
+    const GlobalError = (await import('@/app/global-error')).default;
+    const err = Object.assign(new Error('agent h render error'), { digest: 'x' });
+    for (const el of [React.createElement(NotFound), React.createElement(ErrorPage, { error: err, reset: () => undefined })]) {
+      const html = renderToStaticMarkup(React.createElement(RootLayout, null, el));
+      expect(html.split(FOOTER_DISCLAIMER).length - 1).toBe(1);
+    }
+    const global = renderToStaticMarkup(React.createElement(GlobalError, { error: err, reset: () => undefined }));
+    expect(global.split(FOOTER_DISCLAIMER).length - 1).toBe(1);
+    expect(global).toMatch(/<footer/);
   });
 });
