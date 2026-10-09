@@ -32,6 +32,7 @@ export { halfLifePeriodSec, CONTRACTION } from './render/SuperpositionCloud.js';
 
 // individual stage components, for custom compositions
 export { Chamber } from './render/Chamber.js';
+export { HeroCore, HERO_POSE } from './render/HeroCore.js';
 export { CoinSphere } from './render/CoinSphere.js';
 export { SeedStreams } from './render/SeedStreams.js';
 export { ChainRing, type ChainRingProps } from './render/ChainRing.js';

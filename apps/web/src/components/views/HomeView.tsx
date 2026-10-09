@@ -24,36 +24,35 @@ export function HomeView() {
 
   return (
     <>
-      <section className="relative h-[70vh] min-h-[480px] w-full">
-        <div className="absolute inset-0">
-          <FieldScene coins={fieldCoins} liveMeasurements={liveMeasurements} showEmptyState={false} />
+      <section className="relative w-full lg:h-[78vh] lg:min-h-[560px]">
+        {/* phones: the scene sits above the copy; lg and up: full-bleed, the copy over its left side */}
+        <div className="relative h-[52vh] min-h-[340px] lg:absolute lg:inset-0 lg:h-auto">
+          <FieldScene coins={fieldCoins} liveMeasurements={liveMeasurements} showEmptyState={false} shiftX={0.17} shiftMinWidth={1024} />
         </div>
-        <div className="qsd-glass absolute left-4 top-6 max-w-md p-6 sm:left-8">
-          <span className="qsd-eyebrow">{HOME.eyebrow}</span>
-          <h1 className="mt-2 text-3xl">{HOME.h1}</h1>
-          <p className="mt-3 text-sm leading-relaxed">{HOME.sentence}</p>
-          <div className="mt-5 flex gap-3">
-            <Link href={routes.launch} className="qsd-btn" data-primary="true">
-              {HOME.launch}
-            </Link>
-            <Link href={routes.how} className="qsd-btn">
-              {HOME.how}
-            </Link>
+        <div className="relative flex max-w-md flex-col gap-3 px-4 pb-6 sm:px-8 lg:absolute lg:left-[6vw] lg:top-[10vh] lg:p-0">
+          <div className="qsd-glass p-6">
+            <span className="qsd-eyebrow">{HOME.eyebrow}</span>
+            <h1 className="mt-2 text-3xl">{HOME.h1}</h1>
+            <p className="mt-3 text-sm leading-relaxed">{HOME.sentence}</p>
+            <div className="mt-5 flex gap-3">
+              <Link href={routes.launch} className="qsd-btn" data-primary="true">
+                {HOME.launch}
+              </Link>
+              <Link href={routes.how} className="qsd-btn">
+                {HOME.how}
+              </Link>
+            </div>
+            <div className="mt-5 flex items-baseline gap-3 text-xs text-muted">
+              <span className="uppercase tracking-widest">{HOME.nextBurnLabel}</span>
+              <Countdown size="sm" {...(nextBurn ? { target: nextBurn } : { unavailable: { reason: burnReason } })} />
+            </div>
           </div>
-          <div className="mt-5 flex items-baseline gap-3 text-xs text-muted">
-            <span className="uppercase tracking-widest">{HOME.nextBurnLabel}</span>
-            <Countdown size="sm" {...(nextBurn ? { target: nextBurn } : { unavailable: { reason: burnReason } })} />
-          </div>
-        </div>
-        {coins.data && !isUnavailable(coins.data) && coins.data.coins.length === 0 ? (
-          <div className="absolute bottom-6 left-4 right-4 sm:left-8 sm:right-auto">
+          {coins.data && !isUnavailable(coins.data) && coins.data.coins.length === 0 ? (
             <Empty eyebrow={HOME.fieldEmptyEyebrow} sentence={HOME.fieldEmptySentence} action={{ label: HOME.launch, href: routes.launch }} />
-          </div>
-        ) : coins.data && isUnavailable(coins.data) ? (
-          <div className="absolute bottom-6 left-4 right-4 sm:left-8 sm:right-auto">
+          ) : coins.data && isUnavailable(coins.data) ? (
             <UnavailablePanel eyebrow={FIELD.unavailableEyebrow} reason={coins.data.unavailable.reason} />
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </section>
       <Page>
         <Panel eyebrow={HOME.stepsEyebrow}>

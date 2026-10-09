@@ -12,10 +12,14 @@
  * but its AMPLITUDE is the `drift` parameter (untouched, near-collapse coins
  * drift; traded coins sit still).
  *
- * Empty `coins` → the glass chamber from launch stage 1 (vessel and nested
- * rings, the rings' slow rotation being the only motion, documented ambient
- * that encodes no data), no coin sphere since no coin exists, framed by the
- * stage-1 camera, with an honest EmptyState below it.
+ * Empty `coins` → <HeroCore />: the quantum core, idle and waiting (its
+ * only motion is documented ambient that encodes no data), framed by
+ * HERO_POSE, with an honest EmptyState below it unless the host shows its own.
+ *
+ * `shiftX` moves the whole picture sideways with a lens shift (the camera's
+ * view offset), so a host can place the chamber beside its own copy without
+ * changing the perspective. It applies only when the canvas is at least
+ * `shiftMinWidth` pixels wide; narrower canvases stay centred.
  */
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactElement } from 'react';
@@ -24,10 +28,10 @@ import { EmptyState, colors } from '@qsd/ui-tokens';
 import { vesselParams, vesselPosition, type FieldCoin, type LiveMeasurement } from '../model/field.js';
 import { createSceneStore } from '../model/store.js';
 import type { Observable } from '../model/types.js';
-import { Chamber } from './Chamber.js';
+import { HERO_POSE, HeroCore } from './HeroCore.js';
 import { SceneCanvas } from './SceneCanvas.js';
 import { useQualityProfile } from './context.js';
-import { CAMERA_BY_STAGE, type CameraPose } from './layout.js';
+import type { CameraPose } from './layout.js';
 import { CYAN, WHITE, approach, glassMaterial, litInstancedGlass } from './materials.js';
 import type { QualityController, QualityLevel } from './quality.js';
 
@@ -48,6 +52,10 @@ export interface FieldSceneProps {
    * the host knows which.
    */
   showEmptyState?: boolean;
+  /** Lens shift as a fraction of canvas width; positive moves the picture right. Default 0. */
+  shiftX?: number;
+  /** Narrowest canvas width (px) the shift applies to. Default 900. */
+  shiftMinWidth?: number;
   className?: string;
   style?: CSSProperties;
 }
@@ -159,14 +167,28 @@ export function FieldVessels({ coins, liveMeasurements, radius, lodDistance = 26
   );
 }
 
-export function FieldScene({ coins, liveMeasurements, quality = 'auto', qualityController, radius, lodDistance, onFrame, showEmptyState = true, className, style }: FieldSceneProps): ReactElement {
+/** Applies a horizontal lens shift via the camera's view offset; clears it on narrow canvases and on unmount. */
+function LensShift({ shiftX, minWidth }: { shiftX: number; minWidth: number }): null {
+  const camera = useThree((s) => s.camera);
+  const width = useThree((s) => s.size.width);
+  const height = useThree((s) => s.size.height);
+  useEffect(() => {
+    if (!(camera instanceof THREE.PerspectiveCamera)) return;
+    if (shiftX !== 0 && width >= minWidth) camera.setViewOffset(width, height, -shiftX * width, 0, width, height);
+    else camera.clearViewOffset();
+    return () => camera.clearViewOffset();
+  }, [camera, width, height, shiftX, minWidth]);
+  return null;
+}
+
+export function FieldScene({ coins, liveMeasurements, quality = 'auto', qualityController, radius, lodDistance, onFrame, showEmptyState = true, shiftX = 0, shiftMinWidth = 900, className, style }: FieldSceneProps): ReactElement {
   const store = useMemo(() => createSceneStore(), []);
   const empty = coins.length === 0;
   return (
     <SceneCanvas
       store={store}
       quality={quality}
-      pose={empty ? CAMERA_BY_STAGE[1] : FIELD_POSE}
+      pose={empty ? HERO_POSE : FIELD_POSE}
       {...(qualityController ? { qualityController } : {})}
       {...(onFrame ? { onFrame } : {})}
       {...(className ? { className } : {})}
@@ -179,8 +201,12 @@ export function FieldScene({ coins, liveMeasurements, quality = 'auto', qualityC
         ) : null
       }
     >
-      {empty ? <Chamber /> : null}
-      <FieldVessels coins={coins} {...(liveMeasurements ? { liveMeasurements } : {})} {...(radius !== undefined ? { radius } : {})} {...(lodDistance !== undefined ? { lodDistance } : {})} />
+      <LensShift shiftX={shiftX} minWidth={shiftMinWidth} />
+      {empty ? (
+        <HeroCore />
+      ) : (
+        <FieldVessels coins={coins} {...(liveMeasurements ? { liveMeasurements } : {})} {...(radius !== undefined ? { radius } : {})} {...(lodDistance !== undefined ? { lodDistance } : {})} />
+      )}
     </SceneCanvas>
   );
 }
