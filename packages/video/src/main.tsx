@@ -559,9 +559,7 @@ function Stage(): ReactElement {
           <Dial hollow={false} id="end" />
           <div className="v-end__mark">
             <div>
-              <span className="v-end__word">
-                QSD<i />
-              </span>
+              <img className="v-end__logo" src="/logo-wordmark.png" alt="QSD" width={606} height={374} />
               <div className="v-end__url">qsd.market</div>
               <div className="v-end__line">Your coin dies. Your bag doesn’t.</div>
             </div>
