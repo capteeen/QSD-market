@@ -21,18 +21,20 @@ Source of truth: `src/tokens.ts` (typed) mirrored by `src/tokens.css`
 
 | Token | CSS var | Value | Use |
 | --- | --- | --- | --- |
-| `colors.void` | `--qsd-void` | `#06080A` | Page background |
-| `colors.panel` | `--qsd-panel` | `#0D1117` | Raised surfaces |
-| `colors.border` | `--qsd-border` | `#1C2430` | 1px rules, 2px card borders |
-| `colors.probability` | `--qsd-probability` | `#4DD0E1` | Superposition, verified, alive |
-| `colors.collapse` | `--qsd-collapse` | `#E91E63` | Collapse, invalid |
-| `colors.decay` | `--qsd-decay` | `#FFB300` | Decay in progress, pending |
-| `colors.tunnel` | `--qsd-tunnel` | `#F0F4F8` | Tunnelled (came back as itself) |
-| `colors.dead` | `--qsd-dead` | `#3A4049` | Dead, unavailable, disabled |
-| `colors.text` | `--qsd-text` | `#D7DEE6` | Body text |
-| `colors.muted` | `--qsd-muted` | `#6B7684` | Labels, eyebrows, reasons |
-| `glassEdge` | `--qsd-glass-edge` | `rgba(77,208,225,0.35)` | Refractive inner edge of panels |
-| `glow.compute` | `--glow-compute` | magenta `#FF5CD6` → white `#FFFFFF` box-shadow stack | Live computation |
+| `colors.void` | `--qsd-void` | `#0F0E0D` | Page background (warm near-black) |
+| `colors.panel` | `--qsd-panel` | `#161514` | Raised surfaces |
+| `colors.border` | `--qsd-border` | `#2A2724` | 1px rules, 2px card borders |
+| `colors.probability` | `--qsd-probability` | `#5FBF6A` | Superposition, verified, alive (signal green) |
+| `colors.collapse` | `--qsd-collapse` | `#E5484D` | Collapse, invalid (red) |
+| `colors.decay` | `--qsd-decay` | `#E2B04A` | Decay in progress, pending |
+| `colors.tunnel` | `--qsd-tunnel` | `#F5F2EC` | Tunnelled (came back as itself) |
+| `colors.dead` | `--qsd-dead` | `#4A4642` | Dead, unavailable, disabled |
+| `colors.text` | `--qsd-text` | `#EDEAE4` | Body text (off-white) |
+| `colors.muted` | `--qsd-muted` | `#8C8780` | Labels, eyebrows, reasons (quiet grey) |
+| `colors.gold` | `--qsd-gold` | `#F0A845` | 3D chamber light: core, wiring, heat of computation |
+| `colors.ice` | `--qsd-ice` | `#5B9BD5` | 3D chamber accent: rim light, the qubit; sparing |
+| `glassEdge` | `--qsd-glass-edge` | `rgba(245,242,236,0.07)` | Faint inner hairline of panels |
+| `glow.compute` | `--glow-compute` | amber `#F2C46D` → white `#FFFFFF` box-shadow stack | Live computation |
 | — | `--glow-compute-radial` | radial-gradient of the same | Quantum objects while computing |
 | `fonts.mono` | `--font-mono` | JetBrains Mono | **All** numbers, hashes, proofs, logs, labels |
 | `fonts.heading` | `--font-heading` | Space Grotesk 600 | Headings only |

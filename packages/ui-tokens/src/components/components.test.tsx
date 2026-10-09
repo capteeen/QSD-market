@@ -278,8 +278,8 @@ describe('LineageBreadcrumb', () => {
     expect(items[1]).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: /M/ })).toHaveAttribute('href', '/m');
     const dots = screen.getAllByRole('img');
-    expect(dots[0]).toHaveStyle({ background: '#E91E63' });
-    expect(dots[1]).toHaveStyle({ background: '#4DD0E1' });
+    expect(dots[0]).toHaveStyle({ background: '#E5484D' });
+    expect(dots[1]).toHaveStyle({ background: '#5FBF6A' });
   });
   it('uses a custom link renderer', () => {
     render(

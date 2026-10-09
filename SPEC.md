@@ -230,11 +230,13 @@ Aesthetic: a quantum computer rendered as light in a void. Dark-field
 laboratory. Glass and refraction. Clinical restraint in the chrome,
 spectacle in the chamber.
 
-TOKENS
-  void        #06080A     panel #0D1117     border #1C2430
-  probability #4DD0E1     collapse #E91E63  decay #FFB300
-  tunnel      #F0F4F8     dead #3A4049      text #D7DEE6   muted #6B7684
-  glassEdge   rgba(77,208,225,0.35)   glow magenta-white for computation
+TOKENS  (warm palette, 2026-10-09; replaces the original cold cyan/magenta set)
+  void        #0F0E0D     panel #161514     border #2A2724
+  probability #5FBF6A     collapse #E5484D  decay #E2B04A
+  tunnel      #F5F2EC     dead #4A4642      text #EDEAE4   muted #8C8780
+  gold        #F0A845     ice #5B9BD5       (3D chamber light and accent)
+  glassEdge   rgba(245,242,236,0.07)   glow amber-white for computation
+  Primary buttons are off-white on near-black; one green accent, amber sparing.
   Fonts: JetBrains Mono for ALL numbers, hashes, proofs, logs, labels.
          Space Grotesk 600 for headings. Tabular-nums everywhere.
   Shape: circles and ellipses for quantum objects; 2px-bordered square-

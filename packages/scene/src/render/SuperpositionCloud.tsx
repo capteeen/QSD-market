@@ -166,8 +166,8 @@ function labelStyle(ghost: boolean): React.CSSProperties {
     fontFamily: fonts.mono,
     fontSize: 11,
     whiteSpace: 'nowrap',
-    color: ghost ? 'rgba(77,208,225,0.55)' : '#D7DEE6',
-    textShadow: '0 0 6px rgba(77,208,225,0.6)',
+    color: ghost ? 'rgba(95,191,106,0.6)' : '#EDEAE4',
+    textShadow: '0 0 6px rgba(95,191,106,0.45)',
     pointerEvents: 'none',
     userSelect: 'none',
   };

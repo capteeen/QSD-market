@@ -44,17 +44,67 @@ a {
   transition: border-color var(--dur-slow) var(--ease-viscous), box-shadow var(--dur-slow) var(--ease-viscous);
 }
 .qsd-btn:hover:not(:disabled) {
-  border-color: var(--qsd-probability);
-  box-shadow: inset 0 0 0 1px var(--qsd-glass-edge);
+  border-color: var(--qsd-muted);
 }
+/* Primary: off-white on near-black, the one bright surface on the page. */
 .qsd-btn[data-primary='true'] {
-  border-color: var(--qsd-probability);
+  background: var(--qsd-tunnel);
+  border-color: var(--qsd-tunnel);
+  color: var(--qsd-void);
 }
-.qsd-btn:disabled {
+.qsd-btn[data-primary='true']:hover:not(:disabled) {
+  background: var(--qsd-text);
+  border-color: var(--qsd-text);
+}
+.qsd-btn:disabled,
+.qsd-btn[data-primary='true']:disabled {
+  background: var(--qsd-panel);
   color: var(--qsd-muted);
   border-color: var(--qsd-dead);
   cursor: not-allowed;
 }
+/* Wallet adapter: replace its stock purple with the primary button. The
+   component drops className, so target its own trigger class. */
+.wallet-adapter-button.wallet-adapter-button-trigger {
+  height: auto;
+  line-height: 1;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-card);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  background: var(--qsd-tunnel);
+  border: var(--border-card) solid var(--qsd-tunnel);
+  color: var(--qsd-void);
+}
+.wallet-adapter-button.wallet-adapter-button-trigger:not([disabled]):hover {
+  background: var(--qsd-text);
+  border-color: var(--qsd-text);
+}
+.wallet-adapter-button.wallet-adapter-button-trigger .wallet-adapter-button-start-icon { margin-right: 0.5rem; }
+.wallet-adapter-dropdown-list,
+.wallet-adapter-modal-wrapper {
+  background: var(--qsd-panel);
+  border: var(--border-rule) solid var(--qsd-border);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+}
+.wallet-adapter-dropdown-list-item,
+.wallet-adapter-modal-wrapper .wallet-adapter-button {
+  font-family: var(--font-mono);
+  border-radius: var(--radius-card);
+}
+.wallet-adapter-dropdown-list-item:not([disabled]):hover,
+.wallet-adapter-modal-list .wallet-adapter-button:not([disabled]):hover {
+  background: var(--qsd-border);
+}
+.wallet-adapter-modal-title { color: var(--qsd-text); font-family: var(--font-heading); }
+.wallet-adapter-modal-button-close { background: var(--qsd-border); }
+.wallet-adapter-modal-list-more { color: var(--qsd-muted); }
+.wallet-adapter-modal-middle-button { background: var(--qsd-tunnel); color: var(--qsd-void); border-radius: var(--radius-card); }
 .qsd-input {
   font-family: var(--font-mono);
   font-size: var(--text-base);
@@ -96,7 +146,7 @@ a {
   box-shadow: inset 0 0 0 1px var(--qsd-glass-edge);
 }
 .qsd-markdown h1 { font-size: var(--text-2xl); margin: 2rem 0 1rem; }
-.qsd-markdown h2 { font-size: var(--text-xl); margin: 2.5rem 0 0.75rem; color: var(--qsd-probability); }
+.qsd-markdown h2 { font-size: var(--text-xl); margin: 2.5rem 0 0.75rem; color: var(--qsd-tunnel); }
 .qsd-markdown h3 { font-size: var(--text-lg); margin: 1.5rem 0 0.5rem; }
 .qsd-markdown p, .qsd-markdown li { font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.7; }
 .qsd-markdown p { margin: 0.75rem 0; }

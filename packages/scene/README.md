@@ -249,10 +249,13 @@ tone when `draw.resolvedCount` increments, i.e. on the real `outcomeResolved`.
 Pure geometry and light: no textures, no skybox, no environment map.
 `MeshPhysicalMaterial` with `transmission: 1`, `thickness`, `ior 1.45`,
 `iridescence: 1`, `iridescenceIOR 1.3`, `iridescenceThicknessRange [100, 400]`
-(three's built-in thin-film). Rim light: directional, probability cyan
-`#4DD0E1`. Computation light: magenta `#FF5CD6` → white point light at the
+(three's built-in thin-film). Rim light: directional, probability green
+`#5FBF6A`. Computation light: amber `#F2C46D` → white point light at the
 centre, on while hashes arrive. Per-instance emission through a shader patch
-(`aLit` attribute: 0 dark glass, 1 lit cyan, 2 active magenta-white) — one
+(`aLit` attribute: 0 dark glass, 1 lit green, 2 active amber-white). `GOLD`
+(`#F0A845`) and `ICE` (`#5B9BD5`) are exported from `materials.ts` for chamber
+light and cool accents. The constants are still named `CYAN` and `MAGENTA`
+for history; they resolve to the current tokens — one
 material, one draw call per instanced mesh. Post: `Bloom` (threshold 0.55,
 intensity 0.85), `DepthOfField` focused at the centre (periphery only),
 `Vignette` (faint, radial).

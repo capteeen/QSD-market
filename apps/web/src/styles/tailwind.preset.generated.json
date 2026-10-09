@@ -16,20 +16,24 @@
         "dead": "var(--qsd-dead)",
         "text": "var(--qsd-text)",
         "muted": "var(--qsd-muted)",
+        "gold": "var(--qsd-gold)",
+        "ice": "var(--qsd-ice)",
         "glass": "var(--qsd-glass)",
         "glass-edge": "var(--qsd-glass-edge)",
-        "glow-inner": "#FF5CD6",
+        "glow-inner": "#F2C46D",
         "glow-outer": "#FFFFFF",
-        "void-hex": "#06080A",
-        "panel-hex": "#0D1117",
-        "border-hex": "#1C2430",
-        "probability-hex": "#4DD0E1",
-        "collapse-hex": "#E91E63",
-        "decay-hex": "#FFB300",
-        "tunnel-hex": "#F0F4F8",
-        "dead-hex": "#3A4049",
-        "text-hex": "#D7DEE6",
-        "muted-hex": "#6B7684"
+        "void-hex": "#0F0E0D",
+        "panel-hex": "#161514",
+        "border-hex": "#2A2724",
+        "probability-hex": "#5FBF6A",
+        "collapse-hex": "#E5484D",
+        "decay-hex": "#E2B04A",
+        "tunnel-hex": "#F5F2EC",
+        "dead-hex": "#4A4642",
+        "text-hex": "#EDEAE4",
+        "muted-hex": "#8C8780",
+        "gold-hex": "#F0A845",
+        "ice-hex": "#5B9BD5"
       },
       "fontFamily": {
         "mono": [
@@ -69,8 +73,8 @@
         "quantum": "9999px"
       },
       "boxShadow": {
-        "glow-compute": "0 0 2px #FFFFFF, 0 0 8px rgba(255,92,214,0.9), 0 0 24px rgba(255,92,214,0.55), 0 0 64px rgba(255,92,214,0.25)",
-        "glass-edge": "inset 0 0 0 1px rgba(77,208,225,0.35)"
+        "glow-compute": "0 0 2px #FFFFFF, 0 0 8px rgba(242,196,109,0.9), 0 0 24px rgba(242,196,109,0.55), 0 0 64px rgba(242,196,109,0.25)",
+        "glass-edge": "inset 0 0 0 1px rgba(245,242,236,0.07)"
       },
       "backgroundImage": {
         "glow-compute-radial": "var(--glow-compute-radial)"

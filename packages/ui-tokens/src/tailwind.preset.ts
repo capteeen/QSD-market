@@ -27,6 +27,8 @@ export const preset = {
         dead: 'var(--qsd-dead)',
         text: 'var(--qsd-text)',
         muted: 'var(--qsd-muted)',
+        gold: 'var(--qsd-gold)',
+        ice: 'var(--qsd-ice)',
         glass: 'var(--qsd-glass)',
         'glass-edge': 'var(--qsd-glass-edge)',
         'glow-inner': glow.computeInner,
@@ -41,6 +43,8 @@ export const preset = {
         'dead-hex': colors.dead,
         'text-hex': colors.text,
         'muted-hex': colors.muted,
+        'gold-hex': colors.gold,
+        'ice-hex': colors.ice,
       },
       fontFamily: {
         mono: fonts.mono.split(',').map((s) => s.trim()),

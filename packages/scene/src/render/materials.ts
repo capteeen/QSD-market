@@ -17,6 +17,8 @@ export const COLLAPSE = new THREE.Color(colors.collapse);
 export const VOID = new THREE.Color(colors.void);
 export const DEAD = new THREE.Color(colors.dead);
 export const TUNNEL = new THREE.Color(colors.tunnel);
+export const GOLD = new THREE.Color(colors.gold);
+export const ICE = new THREE.Color(colors.ice);
 
 export interface GlassOptions {
   transmission?: boolean;

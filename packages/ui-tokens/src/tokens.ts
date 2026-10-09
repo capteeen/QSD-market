@@ -1,7 +1,7 @@
 /**
  * QSD design tokens — the single typed source of truth.
  *
- * Aesthetic: a quantum computer rendered as light in a void. Dark-field
+ * Aesthetic: a quantum computer rendered as light in a void. Warm dark-field
  * laboratory. Glass and refraction. Clinical restraint in the chrome,
  * spectacle in the chamber.
  *
@@ -12,43 +12,47 @@
  */
 
 export const colors = {
-  /** Page background. The void the chamber sits in. */
-  void: '#06080A',
+  /** Page background. A warm near-black, never blue. */
+  void: '#0F0E0D',
   /** Raised surface for panels and cards. */
-  panel: '#0D1117',
+  panel: '#161514',
   /** 1px rules and 2px card borders. */
-  border: '#1C2430',
-  /** Cyan. Superposition, probability, verified proofs, "alive". */
-  probability: '#4DD0E1',
-  /** Magenta. Collapse, invalid proofs, the one thing that snaps. */
-  collapse: '#E91E63',
+  border: '#2A2724',
+  /** Signal green. Superposition, probability, verified proofs, "alive". */
+  probability: '#5FBF6A',
+  /** Red. Collapse, invalid proofs, the one thing that snaps. */
+  collapse: '#E5484D',
   /** Amber. Decay in progress, pending, warnings. */
-  decay: '#FFB300',
+  decay: '#E2B04A',
   /** Near-white. Tunnelling — the coin that came back as itself. */
-  tunnel: '#F0F4F8',
+  tunnel: '#F5F2EC',
   /** Grey. Dead, unavailable, disabled. */
-  dead: '#3A4049',
-  /** Body text. */
-  text: '#D7DEE6',
-  /** Secondary text, eyebrows, labels. */
-  muted: '#6B7684',
+  dead: '#4A4642',
+  /** Body text. Off-white, not pure white. */
+  text: '#EDEAE4',
+  /** Secondary text, eyebrows, labels. Quiet warm grey. */
+  muted: '#8C8780',
+  /** Warm gold. Chamber light: the core, the wiring, the heat of computation (3D scene). */
+  gold: '#F0A845',
+  /** Cool blue. Chamber accent: rim light and the qubit at the centre (3D scene). Use sparingly. */
+  ice: '#5B9BD5',
 } as const;
 
 export type ColorToken = keyof typeof colors;
 
-/** Translucent cyan used for the refractive edge of glass panels. */
-export const glassEdge = 'rgba(77,208,225,0.35)' as const;
+/** Faint warm-white hairline used for the refractive edge of glass panels. */
+export const glassEdge = 'rgba(245,242,236,0.07)' as const;
 
 /**
- * The computation glow: magenta → white. Applied as a box-shadow stack while
+ * The computation glow: amber → white. Applied as a box-shadow stack while
  * a real operation (hash chain, QRNG draw, signature) is in flight.
  */
 export const glow = {
-  computeInner: '#FF5CD6',
+  computeInner: '#F2C46D',
   computeOuter: '#FFFFFF',
   /** Full box-shadow value. Mirrors `--glow-compute` in tokens.css. */
   compute:
-    '0 0 2px #FFFFFF, 0 0 8px rgba(255,92,214,0.9), 0 0 24px rgba(255,92,214,0.55), 0 0 64px rgba(255,92,214,0.25)',
+    '0 0 2px #FFFFFF, 0 0 8px rgba(242,196,109,0.9), 0 0 24px rgba(242,196,109,0.55), 0 0 64px rgba(242,196,109,0.25)',
 } as const;
 
 export const fonts = {
@@ -143,4 +147,6 @@ export const specHexes: readonly string[] = [
   colors.dead,
   colors.text,
   colors.muted,
+  colors.gold,
+  colors.ice,
 ];

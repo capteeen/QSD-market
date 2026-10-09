@@ -10,31 +10,33 @@
   color-scheme: dark;
 
   /* ── colour ─────────────────────────────────────────────────────── */
-  --qsd-void: #06080A;
-  --qsd-panel: #0D1117;
-  --qsd-border: #1C2430;
-  --qsd-probability: #4DD0E1;
-  --qsd-collapse: #E91E63;
-  --qsd-decay: #FFB300;
-  --qsd-tunnel: #F0F4F8;
-  --qsd-dead: #3A4049;
-  --qsd-text: #D7DEE6;
-  --qsd-muted: #6B7684;
+  --qsd-void: #0F0E0D;
+  --qsd-panel: #161514;
+  --qsd-border: #2A2724;
+  --qsd-probability: #5FBF6A;
+  --qsd-collapse: #E5484D;
+  --qsd-decay: #E2B04A;
+  --qsd-tunnel: #F5F2EC;
+  --qsd-dead: #4A4642;
+  --qsd-text: #EDEAE4;
+  --qsd-muted: #8C8780;
+  --qsd-gold: #F0A845;
+  --qsd-ice: #5B9BD5;
 
   /* translucent panel surface + refractive edge */
-  --qsd-glass: rgba(13, 17, 23, 0.72);
-  --qsd-glass-edge: rgba(77,208,225,0.35);
+  --qsd-glass: rgba(22, 21, 20, 0.72);
+  --qsd-glass-edge: rgba(245,242,236,0.07);
   --qsd-glass-blur: 12px;
 
-  /* magenta-white computation glow */
-  --qsd-glow-inner: #FF5CD6;
+  /* amber-white computation glow */
+  --qsd-glow-inner: #F2C46D;
   --qsd-glow-outer: #FFFFFF;
   --glow-compute:
     0 0 2px #FFFFFF,
-    0 0 8px rgba(255, 92, 214, 0.9),
-    0 0 24px rgba(255, 92, 214, 0.55),
-    0 0 64px rgba(255, 92, 214, 0.25);
-  --glow-compute-radial: radial-gradient(circle, #FFFFFF 0%, #FF5CD6 18%, rgba(255, 92, 214, 0) 70%);
+    0 0 8px rgba(242, 196, 109, 0.9),
+    0 0 24px rgba(242, 196, 109, 0.55),
+    0 0 64px rgba(242, 196, 109, 0.25);
+  --glow-compute-radial: radial-gradient(circle, #FFFFFF 0%, #F2C46D 18%, rgba(242, 196, 109, 0) 70%);
 
   /* ── type ───────────────────────────────────────────────────────── */
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -65,16 +67,16 @@
 /* Optional light "brightfield" mode. Same hues, inverted field. */
 :root[data-theme="brightfield"] {
   color-scheme: light;
-  --qsd-void: #F0F4F8;
+  --qsd-void: #F5F2EC;
   --qsd-panel: #FFFFFF;
-  --qsd-border: #C9D3DE;
-  --qsd-tunnel: #06080A;
-  --qsd-dead: #9AA3AE;
-  --qsd-text: #0D1117;
-  --qsd-muted: #5A6675;
+  --qsd-border: #DAD5CC;
+  --qsd-tunnel: #0F0E0D;
+  --qsd-dead: #A39E96;
+  --qsd-text: #161514;
+  --qsd-muted: #6B665F;
   --qsd-glass: rgba(255, 255, 255, 0.72);
-  --qsd-glass-edge: rgba(0, 151, 167, 0.45);
-  --qsd-probability: #0097A7;
+  --qsd-glass-edge: rgba(15, 14, 13, 0.06);
+  --qsd-probability: #2F8F3A;
 }
 
 /* ── base ───────────────────────────────────────────────────────────── */
@@ -257,8 +259,8 @@ html[data-qsd], body[data-qsd], .qsd-root {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--qsd-void);
-  background: var(--qsd-probability);
-  border: var(--border-card) solid var(--qsd-probability);
+  background: var(--qsd-tunnel);
+  border: var(--border-card) solid var(--qsd-tunnel);
   border-radius: var(--radius-card);
   text-align: center;
   transition:
@@ -287,8 +289,8 @@ html[data-qsd], body[data-qsd], .qsd-root {
 }
 .qsd-measure[data-measuring="true"] {
   box-shadow: var(--glow-compute);
-  background: var(--qsd-tunnel);
-  border-color: var(--qsd-tunnel);
+  background: var(--qsd-glow-inner);
+  border-color: var(--qsd-glow-inner);
 }
 .qsd-measure__label {
   font-size: var(--text-sm);

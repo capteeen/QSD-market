@@ -10,16 +10,18 @@ const css = readFileSync(fileURLToPath(new URL('./tokens.css', import.meta.url))
 
 describe('tokens.css', () => {
   const spec = {
-    void: '#06080A',
-    panel: '#0D1117',
-    border: '#1C2430',
-    probability: '#4DD0E1',
-    collapse: '#E91E63',
-    decay: '#FFB300',
-    tunnel: '#F0F4F8',
-    dead: '#3A4049',
-    text: '#D7DEE6',
-    muted: '#6B7684',
+    void: '#0F0E0D',
+    panel: '#161514',
+    border: '#2A2724',
+    probability: '#5FBF6A',
+    collapse: '#E5484D',
+    decay: '#E2B04A',
+    tunnel: '#F5F2EC',
+    dead: '#4A4642',
+    text: '#EDEAE4',
+    muted: '#8C8780',
+    gold: '#F0A845',
+    ice: '#5B9BD5',
   } as const;
 
   for (const [name, hex] of Object.entries(spec)) {

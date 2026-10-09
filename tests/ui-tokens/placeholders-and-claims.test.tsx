@@ -119,10 +119,11 @@ describe('source scan: no hard-coded numeric copy in components; stories label e
 describe('tokens match spec §6 exactly', () => {
   it('colour hexes', () => {
     expect(colors).toEqual({
-      void: '#06080A', panel: '#0D1117', border: '#1C2430', probability: '#4DD0E1', collapse: '#E91E63',
-      decay: '#FFB300', tunnel: '#F0F4F8', dead: '#3A4049', text: '#D7DEE6', muted: '#6B7684',
+      void: '#0F0E0D', panel: '#161514', border: '#2A2724', probability: '#5FBF6A', collapse: '#E5484D',
+      decay: '#E2B04A', tunnel: '#F5F2EC', dead: '#4A4642', text: '#EDEAE4', muted: '#8C8780',
+      gold: '#F0A845', ice: '#5B9BD5',
     });
-    expect(glassEdge).toBe('rgba(77,208,225,0.35)');
+    expect(glassEdge).toBe('rgba(245,242,236,0.07)');
   });
   it('motion: cubic-bezier(0.4,0,0.2,1), ≥700ms, only collapse snaps', () => {
     expect(motion.easeViscous.replace(/\s/g, '')).toBe('cubic-bezier(0.4,0,0.2,1)');
