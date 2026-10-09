@@ -16,20 +16,36 @@
         "dead": "var(--qsd-dead)",
         "text": "var(--qsd-text)",
         "muted": "var(--qsd-muted)",
+        "gold": "var(--qsd-gold)",
+        "ice": "var(--qsd-ice)",
+        "paper": "var(--qsd-paper)",
+        "ink": "var(--qsd-ink)",
+        "line": "var(--qsd-line)",
+        "rim": "var(--qsd-rim)",
+        "teal": "var(--qsd-teal)",
+        "violet": "var(--qsd-violet)",
         "glass": "var(--qsd-glass)",
         "glass-edge": "var(--qsd-glass-edge)",
-        "glow-inner": "#FF5CD6",
+        "glow-inner": "#F6C9A6",
         "glow-outer": "#FFFFFF",
-        "void-hex": "#06080A",
-        "panel-hex": "#0D1117",
-        "border-hex": "#1C2430",
-        "probability-hex": "#4DD0E1",
-        "collapse-hex": "#E91E63",
-        "decay-hex": "#FFB300",
-        "tunnel-hex": "#F0F4F8",
-        "dead-hex": "#3A4049",
-        "text-hex": "#D7DEE6",
-        "muted-hex": "#6B7684"
+        "void-hex": "#252423",
+        "panel-hex": "#2E2D2C",
+        "border-hex": "#3D3B39",
+        "probability-hex": "#BFEF5A",
+        "collapse-hex": "#FF6B5E",
+        "decay-hex": "#F5B04B",
+        "tunnel-hex": "#F5F2EC",
+        "dead-hex": "#57544F",
+        "text-hex": "#F2EFE9",
+        "muted-hex": "#9A958D",
+        "gold-hex": "#F0A845",
+        "ice-hex": "#6FA2FF",
+        "paper-hex": "#D9D7D2",
+        "ink-hex": "#262524",
+        "line-hex": "#8A8781",
+        "rim-hex": "#F6C9A6",
+        "teal-hex": "#5CDFB4",
+        "violet-hex": "#B18BFF"
       },
       "fontFamily": {
         "mono": [
@@ -62,15 +78,15 @@
       },
       "borderWidth": {
         "rule": "1px",
-        "card": "2px"
+        "card": "1px"
       },
       "borderRadius": {
-        "card": "0px",
+        "card": "8px",
         "quantum": "9999px"
       },
       "boxShadow": {
-        "glow-compute": "0 0 2px #FFFFFF, 0 0 8px rgba(255,92,214,0.9), 0 0 24px rgba(255,92,214,0.55), 0 0 64px rgba(255,92,214,0.25)",
-        "glass-edge": "inset 0 0 0 1px rgba(77,208,225,0.35)"
+        "glow-compute": "0 0 2px #FFFFFF, 0 0 8px rgba(246,201,166,0.9), 0 0 24px rgba(246,201,166,0.55), 0 0 64px rgba(246,201,166,0.25)",
+        "glass-edge": "inset 0 0 0 1px rgba(245,242,236,0.06)"
       },
       "backgroundImage": {
         "glow-compute-radial": "var(--glow-compute-radial)"

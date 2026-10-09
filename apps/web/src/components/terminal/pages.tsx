@@ -36,7 +36,7 @@ function CoinRef({ ca, label }: { ca: string; label?: string }) {
 const stateTone = (s: CoinSummaryDto['state']) => (s === 'collapsed' ? 'fail' : s === 'tunnelled' ? 'warn' : 'ok');
 
 /** Loading / unavailable lines every data terminal shares. Returns null when data is present. */
-function apiState<T>(q: { isPending: boolean; data: ApiResult<T> | undefined }, what: string): ReactNode | null {
+function apiState<T>(q: { isPending: boolean; data: ApiResult<T> | undefined }, what: string, unavailableLabel?: string): ReactNode | null {
   if (q.isPending) {
     return (
       <Out dim>
@@ -48,7 +48,7 @@ function apiState<T>(q: { isPending: boolean; data: ApiResult<T> | undefined }, 
   if (!q.data || isUnavailable(q.data)) {
     return (
       <>
-        <Status tone="fail">{what} not available</Status>
+        <Status tone="fail">{unavailableLabel ?? `${what} not available`}</Status>
         <Out dim>  reason: {q.data && isUnavailable(q.data) ? q.data.unavailable.reason : 'no response'}</Out>
       </>
     );
@@ -96,11 +96,11 @@ export function StatusTerminal({ q }: { q: { isPending: boolean; data: ApiResult
 /* ── tail events (home, /field) ──────────────────────────────────────── */
 
 export function LogTerminal({ q, limit }: { q: { isPending: boolean; data: ApiResult<LogResponse> | undefined }; limit: number }) {
-  const head = apiState(q, 'event log');
+  const head = apiState(q, 'event log', HOME.logUnavailableEyebrow);
   const entries = q.data && !isUnavailable(q.data) ? q.data.entries : [];
   return (
-    <Terminal path="~/log" meta={`newest first · ${limit} max`} live testId="term-log">
-      <Cmd>tail -n {limit} /var/log/qsd/events</Cmd>
+    <Terminal path="~/log" meta="newest first" live testId="term-log">
+      <Cmd>tail -f /var/log/qsd/events</Cmd>
       {head ??
         (entries.length === 0 ? (
           <>

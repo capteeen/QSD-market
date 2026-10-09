@@ -1,29 +1,32 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { LEN, W } from '@qsd/crypto';
-import { Cmd, Comment, Cursor, Kv, Out, Rule, Status, Terminal, hex, prefersReducedMotion } from './Terminal';
-import { runXmssDemo, type XmssDemoRun } from './xmssDemo';
+import { TERM } from '@/copy';
+import { Cmd, Comment, Cursor, Kv, Out, Rule, Status, Terminal, Waiting, hex, prefersReducedMotion, useInView } from './Terminal';
+import { runXmss, type XmssRun } from './xmssRun';
+
+const TEST_ID = 'term-xmss';
 
 const SHOWN_CHAINS = 5;
 const TICK_MS = 70;
-/** Seconds a finished run stays on screen before a new key is generated. */
 const HOLD_MS = 9000;
 
 /**
- * A live XMSS / WOTS+ verification, recomputed in the browser with
- * @qsd/crypto on every run: a fresh key, a fresh message, a real signature,
- * a real verify. The chain rows show where the signer stopped (amber) and the
- * hashes the verifier ran to reach the public key (accent).
+ * A live XMSS / WOTS+ verification recomputed in the browser with @qsd/crypto
+ * on every run: a fresh key, a fresh message, a real signature, a real verify.
+ * Starts when the panel scrolls into view.
  */
 export function XmssVerifyTerminal({ height = 3, className }: { height?: number; className?: string | undefined }) {
-  const [run, setRun] = useState<XmssDemoRun | null>(null);
+  const [ref, seen] = useInView<HTMLDivElement>();
+  const [run, setRun] = useState<XmssRun | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [t, setT] = useState(0);
   const [runs, setRuns] = useState(0);
+  const T = TERM.xmss;
 
   const next = useCallback(() => {
     try {
-      setRun(runXmssDemo(height));
+      setRun(runXmss(height));
       setError(null);
     } catch (e) {
       setRun(null);
@@ -33,8 +36,8 @@ export function XmssVerifyTerminal({ height = 3, className }: { height?: number;
   }, [height]);
 
   useEffect(() => {
-    next();
-  }, [next]);
+    if (seen) next();
+  }, [seen, next]);
 
   const end = W - 1 + height + 3;
   useEffect(() => {
@@ -66,75 +69,81 @@ export function XmssVerifyTerminal({ height = 3, className }: { height?: number;
   const phase = !chainsDone ? 1 : climbed < height ? 3 : 4;
 
   return (
-    <Terminal path="~/verify" meta={`xmss-sha256 · w=${W} · h=${height}`} live={!!run && !done} className={className} testId="term-xmss">
-      <Cmd>xmss verify --live</Cmd>
-      {error ? (
-        <Status tone="fail">verifier error: {error}</Status>
-      ) : !run ? (
-        <Out dim>
-          generating a fresh key in this browser
-          <Cursor />
-        </Out>
-      ) : (
-        <>
-          <Comment>{'# sign      σ[i] = H^d[i](sk[i])'}</Comment>
-          <Comment active={phase === 1}>{`# verify    pk[i] =? H^(${W - 1}-d[i])(σ[i])`}</Comment>
-          <Comment active={phase === 3 && climbed === 0}>{`# compress  ℓ = L-tree(pk[0] … pk[${LEN - 1}])`}</Comment>
-          <Comment active={phase === 3 || phase === 4}>{`# climb     root =? H(…H(ℓ ‖ a[0])… ‖ a[${height - 1}])`}</Comment>
-          <div className="mt-3">
-            {run.startDepths.slice(0, SHOWN_CHAINS).map((d, i) => {
-              const reached = Math.min(W - 1, d + t);
-              const ok = reached >= W - 1;
-              return (
-                <div key={i} className="qsd-term__line qsd-term__chain" data-chain={i}>
-                  <span className="qsd-term__dim">
-                    c{String(i).padStart(2, '0')} d={d.toString(16)}
-                  </span>
-                  <span className="qsd-term__cells" aria-hidden="true">
-                    {Array.from({ length: W }, (_, k) => (
-                      <span key={k} className="qsd-term__cell" data-k={k < d ? 'signer' : k === d ? 'sig' : k <= reached ? 'verify' : 'todo'} />
-                    ))}
-                  </span>
-                  <span className={ok ? 'qsd-term__ok' : 'qsd-term__dim'}>{ok ? `${hex(run.tips[i]!, 8)} ok` : '········ '}</span>
-                </div>
-              );
-            })}
-            <Out dim>
-              … {LEN - SHOWN_CHAINS} more chains · {run.verifyChainSteps} verifier hashes in all
-            </Out>
-          </div>
-          <Rule />
-          <Kv k="msg">0x{hex(run.message, 24)}…</Kv>
-          <Kv k={`leaf ${run.index}`}>{chainsDone ? `0x${hex(run.leaf, 24)}…` : '…'}</Kv>
-          <Kv k={`root ${climbed}/${height}`} tone={climbed === height ? (run.valid ? 'ok' : 'fail') : 'plain'}>
-            {climbed > 0 ? `0x${hex(run.climb[climbed - 1]!, 24)}…` : '…'}
-          </Kv>
-          <div className="mt-2">
-            {done ? (
-              run.valid ? (
-                <Status tone="ok">
-                  signature verified · {run.signatureBytes.toLocaleString('en-US')} B · sha-256 only · {run.ms.toFixed(0)} ms in your browser
-                </Status>
-              ) : (
-                <Status tone="fail">signature rejected · recomputed root ≠ public root</Status>
-              )
-            ) : (
+    <div ref={ref}>
+      <Terminal path={T.path} meta={T.meta} live={!!run && !done} className={className} testId={TEST_ID}>
+        {!seen ? (
+          <Waiting cmd={T.cmd} />
+        ) : (
+          <>
+            <Cmd>{T.cmd}</Cmd>
+            {error ? (
+              <Status tone="fail">
+                {T.error} {error}
+              </Status>
+            ) : !run ? (
               <Out dim>
-                verifying
+                {T.generating}
                 <Cursor />
               </Out>
+            ) : (
+              <>
+                <Comment>{T.cSign}</Comment>
+                <Comment active={phase === 1}>{T.cVerify(String(W - 1))}</Comment>
+                <Comment active={phase === 3 && climbed === 0}>{T.cCompress(String(LEN - 1))}</Comment>
+                <Comment active={phase === 3 || phase === 4}>{T.cClimb(String(height - 1))}</Comment>
+                <div className="mt-3">
+                  {run.startDepths.slice(0, SHOWN_CHAINS).map((d, i) => {
+                    const reached = Math.min(W - 1, d + t);
+                    const ok = reached >= W - 1;
+                    return (
+                      <div key={i} className="qsd-term__line qsd-term__chain" data-chain={i}>
+                        <span className="qsd-term__dim">
+                          c{String(i).padStart(2, '0')} d={d.toString(16)}
+                        </span>
+                        <span className="qsd-term__cells" aria-hidden="true">
+                          {Array.from({ length: W }, (_, k) => (
+                            <span key={k} className="qsd-term__cell" data-k={k < d ? 'signer' : k === d ? 'sig' : k <= reached ? 'verify' : 'todo'} />
+                          ))}
+                        </span>
+                        <span className={ok ? 'qsd-term__ok' : 'qsd-term__dim'}>{ok ? `${hex(run.tips[i]!, 8)} ok` : '········ '}</span>
+                      </div>
+                    );
+                  })}
+                  <Out dim>{T.moreChains(String(LEN - SHOWN_CHAINS), String(run.verifyChainSteps))}</Out>
+                </div>
+                <Rule />
+                <Kv k={T.msg}>0x{hex(run.message, 24)}…</Kv>
+                <Kv k={T.leaf(String(run.index))}>{chainsDone ? `0x${hex(run.leaf, 24)}…` : '…'}</Kv>
+                <Kv k={T.root(String(climbed), String(height))} tone={climbed === height ? (run.valid ? 'ok' : 'fail') : 'plain'}>
+                  {climbed > 0 ? `0x${hex(run.climb[climbed - 1]!, 24)}…` : '…'}
+                </Kv>
+                <div className="mt-2">
+                  {done ? (
+                    run.valid ? (
+                      <Status tone="ok">{T.verified(run.signatureBytes.toLocaleString('en-US'), run.ms.toFixed(0))}</Status>
+                    ) : (
+                      <Status tone="fail">{T.rejected}</Status>
+                    )
+                  ) : (
+                    <Out dim>
+                      {T.verifying}
+                      <Cursor />
+                    </Out>
+                  )}
+                </div>
+                {done ? (
+                  <Out dim>
+                    {T.runs(String(runs), String(Math.round(HOLD_MS / 1000)))}{' '}
+                    <button type="button" className="qsd-term__action underline" onClick={next}>
+                      {TERM.runAgain}
+                    </button>
+                  </Out>
+                ) : null}
+              </>
             )}
-          </div>
-          {done ? (
-            <Out dim>
-              run {runs} · new key in {Math.round(HOLD_MS / 1000)} s ·{' '}
-              <button type="button" className="qsd-term__action underline" onClick={next}>
-                run again
-              </button>
-            </Out>
-          ) : null}
-        </>
-      )}
-    </Terminal>
+          </>
+        )}
+      </Terminal>
+    </div>
   );
 }

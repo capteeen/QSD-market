@@ -16,7 +16,7 @@ import {
  * at a random leaf, then the full verification. Everything the verify terminal
  * prints is read from the verifier's own events.
  */
-export interface XmssDemoRun {
+export interface XmssRun {
   height: number;
   leaves: number;
   index: number;
@@ -37,7 +37,7 @@ export interface XmssDemoRun {
   ms: number;
 }
 
-export function runXmssDemo(height = 3, rand: (n: number) => Uint8Array = randomBytes): XmssDemoRun {
+export function runXmss(height = 3, rand: (n: number) => Uint8Array = randomBytes): XmssRun {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const material = deriveKeyMaterial(rand(32));
   const kp = xmssKeyGen(material, height);

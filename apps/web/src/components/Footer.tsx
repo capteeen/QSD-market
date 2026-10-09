@@ -1,9 +1,14 @@
-import { FOOTER_DISCLAIMER } from '@/copy';
+import { FOOTER_DISCLAIMER, SITE_NAME, SITE_TAGLINE } from '@/copy';
 
 export function Footer() {
   return (
-    <footer data-testid="footer" className="border-t border-border px-4 py-6 text-xs text-muted sm:px-8">
-      <p className="mx-auto max-w-6xl font-mono">{FOOTER_DISCLAIMER}</p>
+    <footer data-testid="footer" className="qsd-footer">
+      <div className="qsd-footer__inner">
+        <span className="qsd-footer__brand">
+          {SITE_NAME} <span className="qsd-footer__sep">·</span> {SITE_TAGLINE}
+        </span>
+        <p className="qsd-footer__disclaimer">{FOOTER_DISCLAIMER}</p>
+      </div>
     </footer>
   );
 }

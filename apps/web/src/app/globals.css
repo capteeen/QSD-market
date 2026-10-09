@@ -1,5 +1,6 @@
 @import '@qsd/ui-tokens/tokens.css';
 @import '../styles/terminal.css';
+@import '../styles/home.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -18,8 +19,10 @@ h1,
 h2,
 h3 {
   font-family: var(--font-heading);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
+::selection { background: var(--qsd-collapse); color: var(--qsd-void); }
 a {
   color: inherit;
 }
@@ -31,30 +34,6 @@ a {
 }
 .qsd-link:hover {
   text-decoration-color: var(--qsd-probability);
-}
-.qsd-btn {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0.75rem 1.25rem;
-  border: var(--border-card) solid var(--qsd-border);
-  border-radius: var(--radius-card);
-  background: var(--qsd-panel);
-  color: var(--qsd-text);
-  transition: border-color var(--dur-slow) var(--ease-viscous), box-shadow var(--dur-slow) var(--ease-viscous);
-}
-.qsd-btn:hover:not(:disabled) {
-  border-color: var(--qsd-probability);
-  box-shadow: inset 0 0 0 1px var(--qsd-glass-edge);
-}
-.qsd-btn[data-primary='true'] {
-  border-color: var(--qsd-probability);
-}
-.qsd-btn:disabled {
-  color: var(--qsd-muted);
-  border-color: var(--qsd-dead);
-  cursor: not-allowed;
 }
 .qsd-input {
   font-family: var(--font-mono);
@@ -91,13 +70,13 @@ a {
   vertical-align: top;
 }
 .qsd-glass {
-  background: color-mix(in srgb, var(--qsd-panel) 72%, transparent);
+  background: color-mix(in srgb, var(--qsd-panel) 80%, transparent);
   backdrop-filter: blur(14px);
   border: var(--border-card) solid var(--qsd-border);
-  box-shadow: inset 0 0 0 1px var(--qsd-glass-edge);
+  border-radius: var(--radius-card);
 }
 .qsd-markdown h1 { font-size: var(--text-2xl); margin: 2rem 0 1rem; }
-.qsd-markdown h2 { font-size: var(--text-xl); margin: 2.5rem 0 0.75rem; color: var(--qsd-probability); }
+.qsd-markdown h2 { font-size: var(--text-xl); margin: 2.5rem 0 0.75rem; color: var(--qsd-collapse); }
 .qsd-markdown h3 { font-size: var(--text-lg); margin: 1.5rem 0 0.5rem; }
 .qsd-markdown p, .qsd-markdown li { font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.7; }
 .qsd-markdown p { margin: 0.75rem 0; }

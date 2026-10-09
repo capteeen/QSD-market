@@ -2,13 +2,13 @@ import './setup-mocks';
 import { describe, expect, it } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
 import { recordEvents, xmssKeyGen, deriveKeyMaterial } from '@qsd/crypto';
-import { runXmssDemo } from '@/components/terminal/xmssDemo';
+import { runXmss } from '@/components/terminal/xmssRun';
 import { cryptoStreamLines } from '@/components/terminal/pages';
 import { XmssVerifyTerminal } from '@/components/terminal/XmssVerifyTerminal';
 
 describe('terminal: live XMSS verify', () => {
   it('verifies a fresh signature and reports what the verifier recomputed', () => {
-    const r = runXmssDemo(3);
+    const r = runXmss(3);
     expect(r.valid).toBe(true);
     expect(r.startDepths).toHaveLength(67);
     expect(r.tips).toHaveLength(67);
@@ -19,6 +19,16 @@ describe('terminal: live XMSS verify', () => {
 
   it('renders the verified line once the animation completes', async () => {
     window.matchMedia = ((q: string) => ({ matches: q.includes('reduce'), media: q, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    // the terminal starts only once on screen; jsdom has no layout, so report every target as visible at once
+    class VisibleAtOnce {
+      constructor(private cb: IntersectionObserverCallback) {}
+      observe(el: Element) {
+        this.cb([{ isIntersecting: true, target: el } as IntersectionObserverEntry], this as unknown as IntersectionObserver);
+      }
+      disconnect() {}
+      unobserve() {}
+    }
+    window.IntersectionObserver = VisibleAtOnce as unknown as typeof IntersectionObserver;
     const { container } = render(<XmssVerifyTerminal />);
     await waitFor(() => expect(container.textContent).toContain('signature verified'));
   });

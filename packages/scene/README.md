@@ -250,7 +250,7 @@ Pure geometry and light: no textures, no skybox, no environment map.
 `MeshPhysicalMaterial` with `transmission: 1`, `thickness`, `ior 1.45`,
 `iridescence: 1`, `iridescenceIOR 1.3`, `iridescenceThicknessRange [100, 400]`
 (three's built-in thin-film). Rim light: directional, probability cyan
-`#4DD0E1`. Computation light: magenta `#FF5CD6` → white point light at the
+`#BFEF5A` (lime). Computation light: peach `#F6C9A6` → white point light at the
 centre, on while hashes arrive. Per-instance emission through a shader patch
 (`aLit` attribute: 0 dark glass, 1 lit cyan, 2 active magenta-white) — one
 material, one draw call per instanced mesh. Post: `Bloom` (threshold 0.55,
@@ -375,3 +375,27 @@ recorded on first run, ≈ 4 s):
 * `@react-three/drei` `Html` labels (channel percentages, tx, lineage) need a DOM; the headless render test covers stages 2 and 6 and the field, not those labels.
 * Sound requires a user gesture to start an `AudioContext`; the panel toggle provides it.
 * No GPU in the build container: the real-GPU gate must be run on a machine with one.
+
+---
+
+## 10. The home-page quantum stack (`@qsd/scene/stack`)
+
+`<StackScene />` is the one mechanical object that carries the home page in
+the manner of animejs.com: a dilution-fridge "chandelier" built from three
+primitives (`render/stack/parts.ts`, ≈ 24 k triangles, one fill draw and
+one edge draw per part), drawn solid with a hard peach rim band on dark
+sections and as grey line-art on paper sections (`render/stack/StackScene.tsx`).
+
+It is **illustrative**: unlike every other scene in this package nothing in
+it is driven by protocol events, and no part encodes live data. Its pose is
+a pure function of the host's scroll progress (`render/stack/timeline.ts`:
+explode, tilt, offset, dark→paper mode, callout strength) plus one
+documented ambient item, a slow idle spin in the hero that encodes nothing
+and is off under `prefers-reduced-motion`. Each part is named after the
+real launch step it stands for (QRNG draw, witness signature, WOTS+ chains,
+Merkle root, superposition ranges, launch identity, decay clock,
+measurement, daughter coin, holder share, attested bytes) so the host can
+label the exploded view honestly, and the host marks the whole drawing
+"illustration · not live data". Every frame the host receives the projected
+screen position of each part's callout anchor and of the object's centre
+(`onAnchors`), from which it draws the leader lines and places the hero dial.
