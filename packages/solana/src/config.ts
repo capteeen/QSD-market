@@ -1,3 +1,4 @@
+import { inspect } from 'node:util';
 import { ChainConfigError } from './errors.js';
 
 export type Cluster = 'devnet' | 'mainnet-beta';
@@ -32,6 +33,8 @@ export type EnvLike = Record<string, string | undefined>;
 export interface ChainConfig {
   cluster: Cluster;
   isMainnet: boolean;
+  /** True only when the environment said QSD_MAINNET_ENABLED=true. Checked again by createChain. */
+  mainnetEnabled: boolean;
   rpcUrl: string;
   /** Helius API key. Optional on devnet (snapshot falls back to getProgramAccounts). */
   heliusApiKey?: string;
@@ -95,29 +98,53 @@ export function loadChainConfig(env: EnvLike = process.env): ChainConfig {
   const cfg: ChainConfig = {
     cluster,
     isMainnet,
+    mainnetEnabled: isMainnet, // only reachable with the flag
     rpcUrl,
     pumpPortalApiUrl: opt(env, ENV.PUMPPORTAL_API_URL) ?? DEFAULT_PUMPPORTAL_API_URL,
     jupiterApiUrl: opt(env, ENV.JUPITER_API_URL) ?? DEFAULT_JUPITER_API_URL,
     keyEncryptionKey,
   };
-  if (heliusApiKey) cfg.heliusApiKey = heliusApiKey;
-  const pinata = opt(env, ENV.PINATA_JWT);
-  if (pinata) cfg.pinataJwt = pinata;
-  const jk = opt(env, ENV.JUPITER_API_KEY);
-  if (jk) cfg.jupiterApiKey = jk;
-  const cs = opt(env, ENV.PROTOCOL_CREATOR_SECRET);
-  if (cs) cfg.protocolCreatorSecret = cs;
   const mint = opt(env, ENV.TOKEN_MINT);
   if (mint) cfg.qsdTokenMint = mint;
   const fw = opt(env, ENV.FEE_WALLET);
   if (fw) cfg.feeWallet = fw;
-  const ws = opt(env, ENV.WEBHOOK_SECRET);
-  if (ws) cfg.webhookSecret = ws;
   const kp = opt(env, ENV.KEYSTORE_PATH);
   if (kp) cfg.keystorePath = kp;
   const jd = opt(env, ENV.JOURNAL_DIR);
   if (jd) cfg.journalDir = jd;
+  // Secrets are non-enumerable: readable by name, invisible to JSON.stringify, util.inspect and object spread.
+  hideSecret(cfg, 'keyEncryptionKey', keyEncryptionKey);
+  hideSecret(cfg, 'heliusApiKey', heliusApiKey);
+  hideSecret(cfg, 'pinataJwt', opt(env, ENV.PINATA_JWT));
+  hideSecret(cfg, 'jupiterApiKey', opt(env, ENV.JUPITER_API_KEY));
+  hideSecret(cfg, 'protocolCreatorSecret', opt(env, ENV.PROTOCOL_CREATOR_SECRET));
+  hideSecret(cfg, 'webhookSecret', opt(env, ENV.WEBHOOK_SECRET));
+  Object.defineProperty(cfg, 'toJSON', { value: () => describeConfig(cfg), enumerable: false });
+  Object.defineProperty(cfg, inspect.custom, { value: () => `ChainConfig ${JSON.stringify(describeConfig(cfg))}`, enumerable: false });
   return cfg;
+}
+
+/** The secret-bearing fields of ChainConfig (kept non-enumerable by loadChainConfig). */
+export const SECRET_CONFIG_FIELDS = ['keyEncryptionKey', 'heliusApiKey', 'pinataJwt', 'jupiterApiKey', 'protocolCreatorSecret', 'webhookSecret'] as const;
+
+function hideSecret<K extends (typeof SECRET_CONFIG_FIELDS)[number]>(cfg: ChainConfig, key: K, value: ChainConfig[K] | undefined): void {
+  if (value === undefined) return;
+  Object.defineProperty(cfg, key, { value, enumerable: false, writable: true, configurable: true });
+}
+
+/**
+ * The cluster guard every entry point applies (loadChainConfig, createChain):
+ * mainnet is reachable only with cluster, isMainnet and mainnetEnabled all
+ * agreeing, and a devnet config may not point at a mainnet RPC.
+ */
+export function assertClusterAllowed(cfg: Pick<ChainConfig, 'cluster' | 'isMainnet' | 'mainnetEnabled' | 'rpcUrl'>): void {
+  const wantsMainnet = cfg.cluster === 'mainnet-beta' || cfg.isMainnet === true || /mainnet/i.test(cfg.rpcUrl);
+  if (!wantsMainnet) return;
+  if (cfg.cluster !== 'mainnet-beta' || cfg.isMainnet !== true || cfg.mainnetEnabled !== true) {
+    throw new ChainConfigError(
+      `mainnet is reachable only through loadChainConfig with ${ENV.CLUSTER}=mainnet-beta and the explicit integrator flag ${ENV.MAINNET_ENABLED}=true (cluster=${cfg.cluster}, isMainnet=${String(cfg.isMainnet)}, mainnetEnabled=${String(cfg.mainnetEnabled)})`,
+    );
+  }
 }
 
 /** Helius RPC URL for the cluster, or undefined when no key is configured. */

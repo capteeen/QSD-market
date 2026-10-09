@@ -10,7 +10,8 @@ import path from 'node:path';
 import { anchorWith, type AnchorFn } from './anchor.js';
 import { web3TransferSender, type TransferSender, FileAirdropJournal } from './airdrop.js';
 import { Web3FeeLedger, type FeeLedger } from './burn.js';
-import { heliusRpcUrl, type ChainConfig } from './config.js';
+import { assertClusterAllowed, describeConfig, heliusRpcUrl, type ChainConfig } from './config.js';
+import { inspect } from 'node:util';
 import { ChainConfigError } from './errors.js';
 import { FileJournalStore, MemoryJournalStore, type JournalStore } from './journal.js';
 import { FileKeyStore, KeyVault, MemoryKeyStore, loadCreatorKeypair } from './keys.js';
@@ -36,6 +37,10 @@ export interface Chain {
 }
 
 export function createChain(config: ChainConfig): Chain {
+  assertClusterAllowed(config); // the flag is enforced here too, not only in loadChainConfig
+  if (!(config.keyEncryptionKey instanceof Uint8Array) || config.keyEncryptionKey.length !== 32) {
+    throw new ChainConfigError('ChainConfig has no 32-byte keyEncryptionKey (secrets are non-enumerable: do not spread a ChainConfig; pass the object loadChainConfig returned)');
+  }
   const connection = createConnection(config.rpcUrl);
   const keyStore = config.keystorePath ? new FileKeyStore(config.keystorePath) : new MemoryKeyStore();
   const vault = new KeyVault(config.keyEncryptionKey, keyStore);
@@ -56,7 +61,7 @@ export function createChain(config: ChainConfig): Chain {
   let creatorPromise: Promise<Keypair> | undefined;
   const creator = () => (creatorPromise ??= loadCreatorKeypair(vault, config.protocolCreatorSecret));
 
-  return {
+  const chain: Chain = {
     config,
     connection,
     vault,
@@ -82,4 +87,9 @@ export function createChain(config: ChainConfig): Chain {
       return new FileAirdropJournal(path.join(journalDir, `airdrop-${daughterCa}.json`));
     },
   };
+  // Never print the connection (RPC URL may carry an api-key) or anything behind it.
+  Object.defineProperty(chain, 'connection', { value: connection, enumerable: false });
+  Object.defineProperty(chain, 'toJSON', { value: () => ({ config: describeConfig(config) }), enumerable: false });
+  Object.defineProperty(chain, inspect.custom, { value: () => `Chain ${JSON.stringify(describeConfig(config))}`, enumerable: false });
+  return chain;
 }

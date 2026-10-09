@@ -71,9 +71,9 @@ describe('executeCollapse', () => {
       sleep: async () => undefined,
     });
 
-    // First attempt: crash the airdrop after its first batch by making the second submit transient forever
-    chain.submitBehaviours = ['ok', 'transient', 'transient', 'transient', 'transient', 'transient', 'transient', 'transient', 'transient'];
-    await expect(executeCollapse(mother, { ...deps(), log: () => undefined })).rejects.toThrow(/fake: rpc 503 before submit/);
+    // First attempt: the airdrop's second batch never gets through (transient submit errors until the attempt budget is spent)
+    chain.submitBehaviours = Array.from({ length: 12 }, (_, i) => (i === 0 ? 'ok' : 'transient'));
+    await expect(executeCollapse(mother, { ...deps(), log: () => undefined })).rejects.toThrow(/airdrop: .* attempted/);
     const partial = (await journal.load())!;
     expect(Object.keys(partial.steps)).toEqual(['snapshot', 'rewards', 'daughter-key', 'daughter-identity', 'daughter-launch', 'allocation']);
     const sendsBefore = chain.sendCalls;

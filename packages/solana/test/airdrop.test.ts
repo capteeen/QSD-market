@@ -157,7 +157,9 @@ describe('runAirdrop', () => {
     const s = setup(2);
     await s.run();
     const doc = (await s.journal.reopen().load()) as AirdropJournalDoc;
-    expect(doc.version).toBe(1);
+    expect(doc.mint).toBe(s.mint.toBase58());
+    expect(doc.lease).toBeUndefined(); // released at the end of the run
+    expect(Object.values(doc.batches ?? {}).every((b) => b.status === 'confirmed')).toBe(true);
     expect(doc.rootAnchor?.txSignature).toBeTruthy();
     for (const e of s.t.entries) expect(doc.entries[e.wallet]?.units).toBe(e.units.toString());
   });

@@ -41,6 +41,19 @@ malformed. **Mainnet requires the explicit integrator flag**:
 `describeConfig(cfg)` returns a loggable copy with every secret replaced by
 `[set]`/`[unset]`; `redactSecrets()` is applied to every error message that
 embeds upstream text (hex keys, bearer tokens, `api-key=` query params).
+The secret fields of the returned `ChainConfig` (`keyEncryptionKey`,
+`heliusApiKey`, `pinataJwt`, `jupiterApiKey`, `protocolCreatorSecret`,
+`webhookSecret`) are **non-enumerable**: readable by name, invisible to
+`JSON.stringify`, `util.inspect` and object spread — so pass the object
+`loadChainConfig` returned, never `{ ...cfg }`. `toJSON`/`inspect` of the
+config, of `createChain()`'s result and of every sender/reader print only
+cluster and payer. The payer keypair lives in `#private` fields.
+
+The mainnet flag is enforced at every entry point: `loadChainConfig` (env),
+and `createChain` → `assertClusterAllowed(cfg)`, which refuses any config
+whose `cluster`, `isMainnet` and `mainnetEnabled` (set only when the env
+said `true`) do not all agree, and a devnet config whose RPC URL names
+mainnet. Mainnet also refuses memory-only key stores.
 
 ### Devnet / mainnet split — what is NOT possible from devnet
 
@@ -206,7 +219,8 @@ carries no binding, and is only constructible with `NODE_ENV=test` or
 ## 7. Collapse (`executeCollapse`) and the journals
 
 Steps, each journalled as `done` with its result (bigint-safe JSON) and
-skipped on resume: `snapshot` (holders at the collapse slot, *before* any
+skipped on resume (and each transaction inside a step journalled by
+signature, see below): `snapshot` (holders at the collapse slot, *before* any
 token moves) → `rewards` (`collapseRewards`: burn + measurer transfer from
 the treasury's mother holdings; the auto-measurer's share is burned) →
 `daughter-key` (mint keypair into the vault) → `daughter-identity`
@@ -216,28 +230,63 @@ the chain) → `allocation` (`deriveDaughterParams`, `resolvePoolUnits`,
 The treasury must hold the reward units and the resolved pool; otherwise
 the collapse stops with `ChainUnavailableError` rather than paying less.
 
-### Airdrop crash-resume guarantee
+### Airdrop crash-resume guarantee (and in-process retry)
 
 A Solana signature is a deterministic function of the signed transaction,
-so every batch is journalled `sent { txSignature, lastValidBlockHeight }`
-**before** it is submitted. On resume a `sent` entry is decided by the
-chain: confirmed/finalized → `confirmed` (never re-sent); failed or expired
-(block height past `lastValidBlockHeight`, so it can never land) → back to
-`pending`; still pending → wait. `confirmed` entries are never touched. The
-allocation Merkle root is anchored once and journalled. Batches hold at most
+so every batch is journalled — `entries[w] = sent { txSignature,
+lastValidBlockHeight }` and `batches[sig] = { wallets, status: 'sent' }` —
+**before** it is submitted. From then on the invariant is: *an entry
+journalled `sent` under signature S is moved only by the chain's verdict on
+S.* `confirmed`/`finalized` → `confirmed` (never re-sent); `failed` or
+`expired` (signature not found **and** block height past
+`lastValidBlockHeight`, so it can never land) → back to `pending`;
+`pending` → wait (`confirm()` polls until the blockhash expires). A thrown
+`submit()`, a `confirm()` timeout, a transient status error, a crash: none
+of them move an entry, and the loop always re-reads the journal rather than
+re-using records captured in a closure. On every start the run first
+reconciles every batch record in the journal (including signatures no entry
+points at any more) before preparing anything new. The allocation Merkle
+root is anchored once and journalled. Batches hold at most
 `computeMaxTransfersPerTx()` transfers — computed by serialising a real v0
 transaction against the 1232-byte packet limit (≈ 9–10 ATA-create +
-transfer pairs), not guessed. Transient RPC errors retry with exponential
-backoff; an on-chain failure throws (no blind retry) and the next run
-resumes from `pending`. Journals: `AirdropJournal` (memory / file),
+transfer pairs), not guessed. The retry budget (`maxAttemptsPerBatch`) is
+per run; when it is spent the run throws `ChainUnavailableError` and a
+later run resumes with a fresh budget. An on-chain failure throws (no
+blind retry) and the next run re-sends that batch only.
+
+**Lease.** The airdrop and collapse journals are `Leasable`: a run takes a
+lease (`{ owner, expiresAt }`, TTL `leaseTtlMs`, default 30 s) with a
+compare-and-swap on the document's version counter, and every save re-checks
+the version and the owner (`LeasedJournal`). A second worker that finds a
+live lease waits for it to be released or to expire; the lease is released
+in `finally`, so a worker that exits by exception frees it at once and only
+a hard kill leaves it to expire. Journals: `AirdropJournal` (memory / file),
 `CollapseJournal`, `BurnJournal`, `MeasurementJournalDoc` — all atomic
 writes (tmp + rename).
 
-Tested with a fault-injecting `TransferSender` fake over an in-memory ledger
-that executes the real instructions: crash after journal-sent/before submit,
-crash after submit/before confirm, duplicate resume, transient + expired +
-applied-then-connection-dropped, on-chain failure; in every case Σ
-transferred == table total exactly and no wallet is paid twice.
+**Inside collapse steps.** `rewards` (burn, measurer transfer),
+`daughter-launch` and `dust-burn` journal each transaction under
+`sends['<step>.<name>']` as soon as its signature is known — before
+submission when the sender implements `prepare()` (the real
+`Web3TransactionSender` does), otherwise right after `send()` returns and
+before confirmation (`sendTracked`). On resume a `sent` record is settled by
+status before anything is re-sent. The daughter launch is additionally
+idempotent from the mint itself: if `getTokenSupply(mint)` succeeds the
+launch happened and the journalled signature is reused; a mint that exists
+with no journalled signature stops the collapse with a clear error instead
+of guessing one. The allocation-root anchor carries no tokens; a crash while
+it confirms re-anchors the same root (duplicate memo, harmless).
+
+Tested in this package (fault-injecting `TransferSender` fake over an
+in-memory ledger that executes the real instructions) and independently by
+`/tests/solana` (Agent H's own ledger): crash after journal-sent/before
+submit, crash after submit/before confirm, submit that throws after the RPC
+accepted the transaction (lands later), confirm timeout with the batch in
+flight, dropped/rejected/failed/expired batches, two workers resuming the
+same journal concurrently, crashes inside the reward burn, the dust burn and
+the daughter launch, plus a random-fault property; in every case Σ
+transferred == table total exactly, no wallet is paid twice, every burn and
+the launch happen exactly once.
 
 ## 8. Buy-and-burn (`hourlyBuyAndBurn`)
 
@@ -253,8 +302,16 @@ burning).
 
 Neither DAS nor `getProgramAccounts` serves historical state; both return
 the ledger at their `observedSlot`. The collapse worker takes the snapshot
-at the collapse moment and the result records `requestedSlot` and
-`observedSlot`; data observed before the collapse slot is refused.
+at the collapse moment and the result records `requestedSlot`,
+`observedSlot` and `slotLag = observedSlot − requestedSlot` (the UI should
+show the lag); data observed before the collapse slot is refused. Pass
+`collapseSlot` (the slot of the collapse measurement's proof-anchor
+transaction, from the measurement journal) to `executeCollapse` so the
+requested slot is the collapse itself; without it the orchestration start
+slot is used and journalled as `collapseSlotSource: 'orchestration-start'`.
+Trades between the proof anchor and the worker's first run are inside the
+lag either way, because no public source serves slot-pinned balances today
+(Helius DAS does not).
 `firstAcquiredAt`, measurements held through and the quiet-period flag come
 only from the app's `HoldingHistory` (its trade DB fed by the webhooks);
 without one `holderSnapshotAtSlot` throws `NotImplementedError` — it never

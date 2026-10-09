@@ -36,13 +36,14 @@ import { runAirdrop, type AirdropJournal, type AirdropReport, type TransferSende
 import type { AnchorFn } from './anchor.js';
 import type { Cluster } from './config.js';
 import { ChainConfigError, ChainUnavailableError, InvalidCollapseError } from './errors.js';
-import type { JournalStore, Sleep } from './journal.js';
+import { LeasedJournal, type JournalStore, type Leasable, type Sleep } from './journal.js';
 import type { KeyVault } from './keys.js';
 import { launchDaughter, type LaunchDeps, type LaunchResult } from './launch.js';
 import type { ChainObserver } from './observer.js';
 import type { IdentityReserve } from './reserve.js';
 import { holderSnapshotAtSlot, type SnapshotDeps, type SnapshotResult } from './snapshot.js';
-import type { ChainReader, TransactionSender } from './sender.js';
+import { sendTracked, settle, type ChainReader, type SentTransaction, type TransactionSender } from './sender.js';
+import type { TransactionInstruction } from '@solana/web3.js';
 
 export type CollapseStep = 'rewards' | 'snapshot' | 'daughter-key' | 'daughter-identity' | 'daughter-launch' | 'allocation' | 'airdrop' | 'dust-burn';
 export const COLLAPSE_STEPS: readonly CollapseStep[] = ['snapshot', 'rewards', 'daughter-key', 'daughter-identity', 'daughter-launch', 'allocation', 'airdrop', 'dust-burn'];
@@ -62,12 +63,23 @@ export interface RewardsResult {
   measurer: string;
 }
 
-export interface CollapseJournalDoc {
-  version: 1;
+/** A single transaction inside a step, journalled as soon as its signature is known and decided by the chain on resume. */
+export interface TrackedSend {
+  signature: string;
+  lastValidBlockHeight: number;
+  status: 'sent' | 'confirmed' | 'failed' | 'expired';
+  at: string;
+}
+
+export interface CollapseJournalDoc extends Leasable {
   motherCa: string;
   collapseAt: UnixSeconds;
+  /** The slot the snapshot is taken for: the proof anchor's slot when the caller knows it, else the orchestration start slot. */
   collapseSlot: number;
+  collapseSlotSource: 'proof-anchor' | 'orchestration-start';
   startedAt: string;
+  /** Per-transaction records inside steps, keyed by `<step>.<name>`. */
+  sends: Record<string, TrackedSend>;
   steps: {
     rewards?: StepRecord<RewardsResult>;
     snapshot?: StepRecord<SnapshotResult>;
@@ -100,6 +112,13 @@ export interface CollapseDeps {
   devBuySol: number;
   /** Devnet only: daughter supply to mint. */
   devnetSupply?: { units: bigint; decimals: number };
+  /**
+   * Slot of the collapse measurement's proof-anchor transaction (from the
+   * measurement journal). The snapshot is taken for this slot; without it the
+   * orchestration start slot is used and recorded as such (README §9, H-S6).
+   */
+  collapseSlot?: number;
+  leaseTtlMs?: number;
   /** Wallets excluded from the snapshot besides the treasury (bonding curve, pools). */
   excludeOwners?: string[];
   observer?: ChainObserver;
@@ -118,36 +137,89 @@ export interface CollapseOutcome {
   airdrop: AirdropReport;
   dustBurnTx?: string;
   resumed: boolean;
+  /** How many slots after the collapse slot the holder data was observed. */
+  snapshotSlotLag: number;
 }
 
 const mintKeyLabel = (ca: string) => `qsd/mint/${ca}`;
-
-async function confirmOrThrow(sender: TransactionSender, sig: string, lvbh: number, what: string): Promise<void> {
-  const s = await sender.confirm(sig, lvbh);
-  if (s === 'failed' || s === 'expired') throw new ChainUnavailableError(`${what} transaction ${sig} ${s}`);
-}
 
 /** Execute (or resume) the collapse of a `collapsed` mother coin. */
 export async function executeCollapse(mother: Coin, deps: CollapseDeps): Promise<CollapseOutcome> {
   if (mother.state !== 'collapsed' || mother.collapsedAt === undefined) {
     throw new InvalidCollapseError(`coin ${mother.ca} is '${mother.state}', not collapsed`);
   }
-  const last = collapseMeasurement(mother);
   const collapseAt = mother.collapsedAt;
+
+  const leased = new LeasedJournal<CollapseJournalDoc>(deps.journal, { ...(deps.sleep ? { sleep: deps.sleep } : {}), ...(deps.leaseTtlMs !== undefined ? { ttlMs: deps.leaseTtlMs } : {}) });
+  const resumed = (await deps.journal.load()) !== undefined;
+  const startSlot = resumed ? 0 : deps.collapseSlot ?? (await deps.reader.getSlot());
+  const d = await leased.acquire(() => ({
+    motherCa: mother.ca,
+    collapseAt,
+    collapseSlot: startSlot,
+    collapseSlotSource: deps.collapseSlot !== undefined ? 'proof-anchor' : 'orchestration-start',
+    startedAt: new Date().toISOString(),
+    sends: {},
+    steps: {},
+  }));
+  try {
+    return await executeCollapseLeased(mother, deps, d, leased, resumed);
+  } finally {
+    await leased.release(d).catch(() => undefined);
+  }
+}
+
+async function executeCollapseLeased(mother: Coin, deps: CollapseDeps, d: CollapseJournalDoc, leased: LeasedJournal<CollapseJournalDoc>, resumed: boolean): Promise<CollapseOutcome> {
+  const last = collapseMeasurement(mother);
+  const collapseAt = mother.collapsedAt as UnixSeconds;
   const log = deps.log ?? (() => undefined);
   const treasury = deps.sender.payer;
   const motherMint = new PublicKey(mother.ca);
-
-  let doc = await deps.journal.load();
-  const resumed = doc !== undefined;
-  if (!doc) {
-    doc = { version: 1, motherCa: mother.ca, collapseAt, collapseSlot: await deps.reader.getSlot(), startedAt: new Date().toISOString(), steps: {} };
-    await deps.journal.save(doc);
-  } else if (doc.motherCa !== mother.ca || doc.collapseAt !== collapseAt) {
-    throw new InvalidCollapseError(`collapse journal is for ${doc.motherCa}@${doc.collapseAt}, not ${mother.ca}@${collapseAt}`);
+  if (d.motherCa !== mother.ca || d.collapseAt !== collapseAt) {
+    throw new InvalidCollapseError(`collapse journal is for ${d.motherCa}@${d.collapseAt}, not ${mother.ca}@${collapseAt}`);
   }
-  const d = doc;
-  const save = () => deps.journal.save(d);
+  d.sends ??= {};
+  const save = () => leased.save(d);
+
+  /**
+   * Exactly-once send inside a step: the signature is journalled before
+   * submission (when the sender can prepare) or right after `send()`; on
+   * resume a journalled signature is decided by the chain, never re-sent
+   * while it could still land.
+   */
+  const sendOnce = async (key: string, build: () => TransactionInstruction[], opts: Parameters<TransactionSender['send']>[1] = {}): Promise<TrackedSend> => {
+    const rec = d.sends[key];
+    if (rec) {
+      if (rec.status === 'confirmed') return rec;
+      if (rec.status === 'sent') {
+        const s = await settle(deps.sender, rec.signature, rec.lastValidBlockHeight);
+        if (s === 'confirmed' || s === 'finalized') {
+          rec.status = 'confirmed';
+          await save();
+          log(`resume: ${key} ${rec.signature} confirmed`);
+          return rec;
+        }
+        rec.status = s;
+        await save();
+        log(`resume: ${key} ${rec.signature} ${s}; re-sending`);
+      }
+      // failed / expired: fall through and send again under a new key version
+    }
+    const sent: SentTransaction = await sendTracked(deps.sender, build(), opts, async (st) => {
+      d.sends[key] = { signature: st.signature, lastValidBlockHeight: st.lastValidBlockHeight, status: 'sent', at: new Date().toISOString() };
+      await save();
+    });
+    const s = await settle(deps.sender, sent.signature, sent.lastValidBlockHeight);
+    const cur = d.sends[key] as TrackedSend;
+    if (s === 'confirmed' || s === 'finalized') {
+      cur.status = 'confirmed';
+      await save();
+      return cur;
+    }
+    cur.status = s;
+    await save();
+    throw new ChainUnavailableError(`${key} transaction ${sent.signature} ${s}`);
+  };
   const step = async <K extends CollapseStep>(name: K, run: () => Promise<NonNullable<CollapseJournalDoc['steps'][K]>['result']>): Promise<NonNullable<CollapseJournalDoc['steps'][K]>['result']> => {
     const existing = d.steps[name];
     if (existing) {
@@ -183,26 +255,26 @@ export async function executeCollapse(mother: Coin, deps: CollapseDeps): Promise
   // 2. rewards (after the snapshot, so the measurer's reward is not part of the holder set)
   const rewards = await step('rewards', async () => {
     const r = collapseRewards(mother.supply.remainingUnits);
-    const held = await deps.reader.getTokenBalance(treasury, motherMint);
-    if (held < r.removedUnits) {
-      throw new ChainUnavailableError(`treasury holds ${held} mother units but the collapse reward removes ${r.removedUnits}; cannot execute rewards honestly`);
+    if (!d.sends['rewards.burn']) {
+      const held = await deps.reader.getTokenBalance(treasury, motherMint);
+      if (held < r.removedUnits) {
+        throw new ChainUnavailableError(`treasury holds ${held} mother units but the collapse reward removes ${r.removedUnits}; cannot execute rewards honestly`);
+      }
     }
     const ata = getAssociatedTokenAddressSync(motherMint, treasury);
     const measurer = last.by;
     const payMeasurer = measurer !== PROTOCOL_PARAMS.AUTO_MEASURER_ID && r.measurerUnits > 0n;
     const burnUnits = payMeasurer ? r.burnedUnits : r.removedUnits;
-    const burn = await deps.sender.send([createBurnInstruction(ata, motherMint, treasury, burnUnits)]);
-    await confirmOrThrow(deps.sender, burn.signature, burn.lastValidBlockHeight, 'reward burn');
+    const burn = await sendOnce('rewards.burn', () => [createBurnInstruction(ata, motherMint, treasury, burnUnits)]);
     deps.observer?.emit({ type: 'burnSent', txSignature: burn.signature, mint: mother.ca, units: burnUnits.toString() });
     const out: RewardsResult = { ...r, burnTx: burn.signature, measurer };
     if (payMeasurer) {
       const to = new PublicKey(measurer);
       const toAta = getAssociatedTokenAddressSync(motherMint, to, true);
-      const tx = await deps.sender.send([
+      const tx = await sendOnce('rewards.measurer', () => [
         createAssociatedTokenAccountIdempotentInstruction(treasury, toAta, to, motherMint),
         createTransferInstruction(ata, toAta, treasury, r.measurerUnits),
       ]);
-      await confirmOrThrow(deps.sender, tx.signature, tx.lastValidBlockHeight, 'measurer reward');
       out.measurerTx = tx.signature;
     }
     return out;
@@ -229,6 +301,39 @@ export async function executeCollapse(mother: Coin, deps: CollapseDeps): Promise
   const params = deriveDaughterParams(mother, collapseAt);
   const launch = await step('daughter-launch', async () => {
     const mintKp = await deps.vault.loadKeypair(key.vaultLabel);
+    const launchKey = 'daughter-launch.create';
+    const rec = d.sends[launchKey];
+    // Idempotency from the mint itself: if the mint exists on-chain the launch happened.
+    let existing: { amount: bigint; decimals: number } | undefined;
+    try {
+      existing = await deps.reader.getTokenSupply(mintKp.publicKey);
+    } catch {
+      existing = undefined;
+    }
+    if (existing && existing.amount > 0n) {
+      if (!rec) throw new ChainUnavailableError(`daughter mint ${daughterCa} exists on-chain but its launch signature was never journalled; record it under sends['${launchKey}'] to resume`);
+      if (rec.status === 'sent') {
+        const s = await settle(deps.sender, rec.signature, rec.lastValidBlockHeight);
+        rec.status = s === 'finalized' ? 'confirmed' : s;
+        await save();
+      }
+      const res: LaunchResult = { ca: daughterCa, txSignature: rec.signature, supply: { totalUnits: existing.amount, decimals: existing.decimals }, path: deps.cluster === 'mainnet-beta' ? 'pump.fun' : 'devnet-spl' };
+      log(`resume: daughter ${daughterCa} already launched in ${rec.signature}`);
+      deps.observer?.emit({ type: 'daughterLaunched', ca: res.ca, txSignature: res.txSignature });
+      return res;
+    }
+    if (rec && rec.status === 'sent') {
+      // Journalled but the mint does not exist yet: it may still land. Decide first.
+      const s = await settle(deps.sender, rec.signature, rec.lastValidBlockHeight);
+      rec.status = s === 'finalized' ? 'confirmed' : s;
+      await save();
+      if (s === 'confirmed' || s === 'finalized') {
+        const supply = await deps.reader.getTokenSupply(mintKp.publicKey);
+        const res: LaunchResult = { ca: daughterCa, txSignature: rec.signature, supply: { totalUnits: supply.amount, decimals: supply.decimals }, path: deps.cluster === 'mainnet-beta' ? 'pump.fun' : 'devnet-spl' };
+        deps.observer?.emit({ type: 'daughterLaunched', ca: res.ca, txSignature: res.txSignature });
+        return res;
+      }
+    }
     const plan = {
       name: params.name,
       symbol: mother.ticker,
@@ -238,7 +343,18 @@ export async function executeCollapse(mother: Coin, deps: CollapseDeps): Promise
       mint: mintKp,
       ...(deps.devnetSupply ? { devnetSupplyUnits: deps.devnetSupply.units, devnetDecimals: deps.devnetSupply.decimals } : {}),
     };
-    const res = await launchDaughter(plan, { ...deps.launch, cluster: deps.cluster, sender: deps.sender, reader: deps.reader });
+    const res = await launchDaughter(plan, {
+      ...deps.launch,
+      cluster: deps.cluster,
+      sender: deps.sender,
+      reader: deps.reader,
+      onSent: async (st) => {
+        d.sends[launchKey] = { signature: st.signature, lastValidBlockHeight: st.lastValidBlockHeight, status: 'sent', at: new Date().toISOString() };
+        await save();
+      },
+    });
+    const sentRec = d.sends[launchKey];
+    if (sentRec) sentRec.status = 'confirmed';
     deps.observer?.emit({ type: 'daughterLaunched', ca: res.ca, txSignature: res.txSignature });
     return res;
   });
@@ -279,6 +395,7 @@ export async function executeCollapse(mother: Coin, deps: CollapseDeps): Promise
       anchor: deps.anchor,
       ...(deps.observer ? { observer: deps.observer } : {}),
       ...(deps.sleep ? { sleep: deps.sleep } : {}),
+      ...(deps.leaseTtlMs !== undefined ? { leaseTtlMs: deps.leaseTtlMs } : {}),
       log,
     }),
   );
@@ -289,8 +406,7 @@ export async function executeCollapse(mother: Coin, deps: CollapseDeps): Promise
     if (dustUnits <= 0n) return { dustUnits };
     const mint = new PublicKey(daughterCa);
     const ata = getAssociatedTokenAddressSync(mint, treasury);
-    const tx = await deps.sender.send([createBurnInstruction(ata, mint, treasury, dustUnits)]);
-    await confirmOrThrow(deps.sender, tx.signature, tx.lastValidBlockHeight, 'dust burn');
+    const tx = await sendOnce('dust-burn.burn', () => [createBurnInstruction(ata, mint, treasury, dustUnits)]);
     deps.observer?.emit({ type: 'burnSent', txSignature: tx.signature, mint: daughterCa, units: dustUnits.toString() });
     return { dustUnits, burnTx: tx.signature };
   });
@@ -307,7 +423,7 @@ export async function executeCollapse(mother: Coin, deps: CollapseDeps): Promise
     daughterCa,
     supply: { ...mother.supply, remainingUnits: mother.supply.remainingUnits - rewards.burnedUnits - (rewards.measurerTx ? 0n : rewards.measurerUnits) },
   };
-  const out: CollapseOutcome = { mother: motherOut, daughter, table: alloc.table, rewards, snapshot, launch, airdrop, resumed };
+  const out: CollapseOutcome = { mother: motherOut, daughter, table: alloc.table, rewards, snapshot, launch, airdrop, resumed, snapshotSlotLag: snapshot.observedSlot - snapshot.requestedSlot };
   if (dust.burnTx) out.dustBurnTx = dust.burnTx;
   return out;
 }

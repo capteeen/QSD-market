@@ -20,10 +20,11 @@ import {
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
 import bs58 from 'bs58';
+import { inspect } from 'node:util';
 import type { AllocationTable } from '@qsd/protocol';
 import type { AnchorFn } from './anchor.js';
 import { ChainError, ChainUnavailableError, JournalError, errorMessage, isTransient } from './errors.js';
-import { FileJournalStore, MemoryJournalStore, realSleep, withRetry, type JournalStore, type Sleep } from './journal.js';
+import { FileJournalStore, LeasedJournal, MemoryJournalStore, realSleep, type JournalStore, type Leasable, type Sleep } from './journal.js';
 import type { ChainObserver } from './observer.js';
 import type { SentTransaction, TransactionSender, TxStatus } from './sender.js';
 
@@ -93,17 +94,32 @@ export function computeMaxTransfersPerTx(payer: PublicKey, mint: PublicKey, extr
 export class Web3TransferSender implements TransferSender {
   readonly cluster: string;
   readonly payer: PublicKey;
-  private readonly sizes = new Map<string, number>();
-  constructor(private readonly sender: TransactionSender, private readonly connectionLatestBlockhash: () => Promise<{ blockhash: string; lastValidBlockHeight: number }>, private readonly sign: (tx: VersionedTransaction) => void, private readonly submitRaw: (bytes: Uint8Array) => Promise<string>) {
+  readonly #sizes = new Map<string, number>();
+  readonly #sender: TransactionSender;
+  readonly #latestBlockhash: () => Promise<{ blockhash: string; lastValidBlockHeight: number }>;
+  readonly #sign: (tx: VersionedTransaction) => void;
+  readonly #submitRaw: (bytes: Uint8Array) => Promise<string>;
+  constructor(sender: TransactionSender, latestBlockhash: () => Promise<{ blockhash: string; lastValidBlockHeight: number }>, sign: (tx: VersionedTransaction) => void, submitRaw: (bytes: Uint8Array) => Promise<string>) {
+    this.#sender = sender;
+    this.#latestBlockhash = latestBlockhash;
+    this.#sign = sign;
+    this.#submitRaw = submitRaw;
     this.cluster = sender.cluster;
     this.payer = sender.payer;
   }
 
+  toJSON(): { cluster: string; payer: string } {
+    return { cluster: this.cluster, payer: this.payer.toBase58() };
+  }
+  [inspect.custom](): string {
+    return `Web3TransferSender { cluster: '${this.cluster}', payer: '${this.payer.toBase58()}' }`;
+  }
+
   async maxTransfersPerTx(mint: string): Promise<number> {
-    let n = this.sizes.get(mint);
+    let n = this.#sizes.get(mint);
     if (n === undefined) {
       n = computeMaxTransfersPerTx(this.payer, new PublicKey(mint));
-      this.sizes.set(mint, n);
+      this.#sizes.set(mint, n);
     }
     return n;
   }
@@ -112,18 +128,18 @@ export class Web3TransferSender implements TransferSender {
     const ixs = buildTransferInstructions(this.payer, new PublicKey(mint), transfers);
     let bh: { blockhash: string; lastValidBlockHeight: number };
     try {
-      bh = await this.connectionLatestBlockhash();
+      bh = await this.#latestBlockhash();
     } catch (e) {
       throw new ChainUnavailableError(`getLatestBlockhash: ${errorMessage(e)}`, { cause: e });
     }
     const msg = new TransactionMessage({ payerKey: this.payer, recentBlockhash: bh.blockhash, instructions: ixs }).compileToV0Message();
     const tx = new VersionedTransaction(msg);
-    this.sign(tx);
+    this.#sign(tx);
     const bytes = tx.serialize();
     const sigBytes = tx.signatures[0];
     if (!sigBytes) throw new ChainError('transaction has no signature after signing');
     const signature = base58(sigBytes);
-    const submitRaw = this.submitRaw;
+    const submitRaw = this.#submitRaw;
     return {
       signature,
       lastValidBlockHeight: bh.lastValidBlockHeight,
@@ -135,10 +151,10 @@ export class Web3TransferSender implements TransferSender {
   }
 
   status(signature: string, lastValidBlockHeight: number): Promise<TxStatus> {
-    return this.sender.status(signature, lastValidBlockHeight);
+    return this.#sender.status(signature, lastValidBlockHeight);
   }
   confirm(signature: string, lastValidBlockHeight: number): Promise<TxStatus> {
-    return this.sender.confirm(signature, lastValidBlockHeight);
+    return this.#sender.confirm(signature, lastValidBlockHeight);
   }
 }
 
@@ -171,16 +187,30 @@ export interface AirdropEntryRecord {
   confirmedAt?: string;
 }
 
-export interface AirdropJournalDoc {
-  version: 1;
+export type BatchStatus = 'sent' | 'confirmed' | 'failed' | 'expired';
+
+/** One transaction ever prepared for this airdrop, journalled BEFORE submission. */
+export interface AirdropBatchRecord {
+  signature: string;
+  lastValidBlockHeight: number;
+  wallets: string[];
+  status: BatchStatus;
+  preparedAt: string;
+  decidedAt?: string;
+}
+
+export interface AirdropJournalDoc extends Leasable {
+  version?: number;
   mint: string;
   merkleRoot: string;
   totalUnits: string;
   createdAt: string;
   rootAnchor?: { txSignature: string; at: string };
   entries: Record<string, AirdropEntryRecord>;
-  /** Every transaction signature ever journalled, in order. */
+  /** Every transaction signature ever journalled, in order (audit; superset of `batches`). */
   signatures: string[];
+  /** Per-signature batch records; every signature in `signatures` has one. */
+  batches?: Record<string, AirdropBatchRecord>;
 }
 
 export type AirdropJournal = JournalStore<AirdropJournalDoc>;
@@ -203,7 +233,10 @@ export interface RunAirdropArgs {
   anchor: AnchorFn;
   observer?: ChainObserver;
   sleep?: Sleep;
+  /** Give up (throw ChainUnavailableError) once any wallet has been attempted this many times IN THIS RUN; a later run gets a fresh budget. */
   maxAttemptsPerBatch?: number;
+  /** Lease time-to-live for the journal (ms); a second worker waits for it. */
+  leaseTtlMs?: number;
   hooks?: AirdropHooks;
   log?: (line: string) => void;
 }
@@ -227,13 +260,13 @@ function initDoc(table: AllocationTable, mint: string): AirdropJournalDoc {
     entries[e.wallet] = { wallet: e.wallet, units: e.units.toString(), status: 'pending', attempts: 0 };
   }
   return {
-    version: 1,
     mint,
     merkleRoot: table.merkleRoot,
     totalUnits: table.allocatedUnits.toString(),
     createdAt: new Date().toISOString(),
     entries,
     signatures: [],
+    batches: {},
   };
 }
 
@@ -241,158 +274,215 @@ function initDoc(table: AllocationTable, mint: string): AirdropJournalDoc {
  * Run (or resume) the airdrop. Idempotent: calling it again after success
  * does nothing but return the report; calling it after any crash finishes
  * the job without re-paying a confirmed wallet.
+ *
+ * Invariant: an entry journalled `sent` under signature S is only ever
+ * moved by the chain's verdict on S — `confirmed`/`finalized` → confirmed,
+ * `failed`/`expired` → pending again. A transient error, a timeout, a
+ * thrown submit, a crash: none of them move an entry. Every decision is
+ * taken from the journal, never from records captured in a closure.
  */
 export async function runAirdrop(args: RunAirdropArgs): Promise<AirdropReport> {
-  const { table, mint, sender, journal, observer } = args;
+  const { table, mint, sender, observer } = args;
   const sleep = args.sleep ?? realSleep;
   const log = args.log ?? (() => undefined);
   const maxAttempts = args.maxAttemptsPerBatch ?? 8;
+  const leased = new LeasedJournal<AirdropJournalDoc>(args.journal, { sleep, ...(args.leaseTtlMs !== undefined ? { ttlMs: args.leaseTtlMs } : {}) });
 
-  let doc = await journal.load();
-  const resumed = doc !== undefined;
-  if (!doc) {
-    doc = initDoc(table, mint);
-    await journal.save(doc);
-  } else {
-    if (doc.mint !== mint || doc.merkleRoot !== table.merkleRoot) {
-      throw new JournalError(`airdrop journal belongs to mint ${doc.mint} / root ${doc.merkleRoot.slice(0, 16)}…, not this allocation`);
-    }
-    for (const e of table.entries) {
-      if (e.units <= 0n) continue;
-      const rec = doc.entries[e.wallet];
-      if (!rec || rec.units !== e.units.toString()) throw new JournalError(`airdrop journal disagrees with the table for ${e.wallet}`);
-    }
-  }
-  const save = async () => {
-    await journal.save(doc as AirdropJournalDoc);
-  };
-
-  // 1. Anchor the allocation root exactly once.
-  if (!doc.rootAnchor) {
-    const a = await args.anchor(table.merkleRoot, 'allocation-root');
-    doc.rootAnchor = { txSignature: a.txSignature, at: new Date().toISOString() };
-    await save();
-    log(`anchored allocation root ${table.merkleRoot} in ${a.txSignature}`);
-  }
-
-  // 2. Reconcile every `sent` entry with the chain before sending anything.
-  const sentGroups = new Map<string, AirdropEntryRecord[]>();
-  for (const rec of Object.values(doc.entries)) {
-    if (rec.status === 'sent' && rec.txSignature) {
-      const g = sentGroups.get(rec.txSignature) ?? [];
-      g.push(rec);
-      sentGroups.set(rec.txSignature, g);
-    }
-  }
-  for (const [sig, recs] of sentGroups) {
-    const lvbh = recs[0]?.lastValidBlockHeight ?? 0;
-    let s = await sender.status(sig, lvbh);
-    if (s === 'pending') s = await sender.confirm(sig, lvbh);
-    if (s === 'confirmed' || s === 'finalized') {
-      for (const r of recs) {
-        r.status = 'confirmed';
-        r.confirmedAt = new Date().toISOString();
+  const existed = (await args.journal.load()) !== undefined;
+  const doc = await leased.acquire(() => initDoc(table, mint));
+  try {
+    doc.batches ??= {};
+    if (existed) {
+      if (doc.mint !== mint || doc.merkleRoot !== table.merkleRoot) {
+        throw new JournalError(`airdrop journal belongs to mint ${doc.mint} / root ${doc.merkleRoot.slice(0, 16)}…, not this allocation`);
       }
-      observer?.emit({ type: 'airdropBatchConfirmed', txSignature: sig, wallets: recs.map((r) => r.wallet) });
-      log(`resume: ${sig} confirmed (${recs.length} wallets)`);
-    } else {
-      for (const r of recs) {
-        r.status = 'pending';
-        r.lastError = `previous transaction ${sig} ${s}`;
-        delete r.txSignature;
-        delete r.lastValidBlockHeight;
+      for (const e of table.entries) {
+        if (e.units <= 0n) continue;
+        const rec = doc.entries[e.wallet];
+        if (!rec || rec.units !== e.units.toString()) throw new JournalError(`airdrop journal disagrees with the table for ${e.wallet}`);
       }
-      log(`resume: ${sig} ${s}; ${recs.length} wallets back to pending`);
+      if (Object.keys(doc.entries).length !== table.entries.filter((e) => e.units > 0n).length) throw new JournalError('airdrop journal has entries the table does not');
     }
-    await save();
-  }
+    const save = () => leased.save(doc);
 
-  // 3. Send the pending entries in batches.
-  const batchSize = await sender.maxTransfersPerTx(mint);
-  if (batchSize < 1) throw new ChainError('sender reports a batch size below 1');
-  for (;;) {
-    const pending = Object.values(doc.entries)
-      .filter((r) => r.status === 'pending')
-      .sort((a, b) => (a.wallet < b.wallet ? -1 : 1))
-      .slice(0, batchSize);
-    if (pending.length === 0) break;
-    const transfers: Transfer[] = pending.map((r) => ({ wallet: r.wallet, units: BigInt(r.units) }));
+    // 1. Anchor the allocation root exactly once.
+    if (!doc.rootAnchor) {
+      const a = await args.anchor(table.merkleRoot, 'allocation-root');
+      doc.rootAnchor = { txSignature: a.txSignature, at: new Date().toISOString() };
+      await save();
+      log(`anchored allocation root ${table.merkleRoot} in ${a.txSignature}`);
+    }
 
-    await withRetry(
-      async (attempt) => {
-        for (const r of pending) r.attempts++;
-        const prepared = await sender.prepareTransfers(mint, transfers);
-        for (const r of pending) {
-          r.status = 'sent';
-          r.txSignature = prepared.signature;
-          r.lastValidBlockHeight = prepared.lastValidBlockHeight;
-        }
-        (doc as AirdropJournalDoc).signatures.push(prepared.signature);
-        await save(); // journalled BEFORE submission
-        await args.hooks?.afterJournalSent?.(prepared.signature);
-        try {
-          await prepared.submit();
-        } catch (e) {
-          // Submission failed: the signature cannot have landed unless the RPC lied; verify by status.
-          const s = await sender.status(prepared.signature, prepared.lastValidBlockHeight);
-          if (s !== 'confirmed' && s !== 'finalized') {
-            for (const r of pending) {
-              r.status = 'pending';
-              r.lastError = `attempt ${attempt}: ${errorMessage(e)}`;
-              delete r.txSignature;
-              delete r.lastValidBlockHeight;
-            }
-            await save();
-            throw e;
-          }
-        }
-        observer?.emit({ type: 'airdropBatchSent', txSignature: prepared.signature, wallets: pending.map((r) => r.wallet), units: transfers.reduce((a, t) => a + t.units, 0n).toString() });
-        await args.hooks?.afterSubmit?.(prepared.signature);
-        const s = await sender.confirm(prepared.signature, prepared.lastValidBlockHeight);
-        if (s === 'confirmed' || s === 'finalized') {
-          for (const r of pending) {
+    const batches = doc.batches;
+    const markBatch = (sig: string, status: Exclude<BatchStatus, 'sent'>) => {
+      const b = batches[sig];
+      if (!b) return;
+      b.status = status;
+      b.decidedAt = new Date().toISOString();
+      const wallets = b.wallets;
+      if (status === 'confirmed') {
+        for (const w of wallets) {
+          const r = doc.entries[w];
+          if (r && r.status !== 'confirmed') {
             r.status = 'confirmed';
-            r.confirmedAt = new Date().toISOString();
+            r.txSignature = sig;
+            r.lastValidBlockHeight = b.lastValidBlockHeight;
+            r.confirmedAt = b.decidedAt;
           }
-          await save();
-          observer?.emit({ type: 'airdropBatchConfirmed', txSignature: prepared.signature, wallets: pending.map((r) => r.wallet) });
-          log(`batch ${prepared.signature} confirmed (${pending.length} wallets)`);
-          return;
         }
+        observer?.emit({ type: 'airdropBatchConfirmed', txSignature: sig, wallets });
+      } else {
+        for (const w of wallets) {
+          const r = doc.entries[w];
+          if (r && r.status === 'sent' && r.txSignature === sig) {
+            r.status = 'pending';
+            r.lastError = `transaction ${sig} ${status}`;
+            delete r.txSignature;
+            delete r.lastValidBlockHeight;
+          }
+        }
+      }
+    };
+
+    /**
+     * Decide every undecided signature from the chain. Returns the number of
+     * signatures still pending (a transient status error leaves them undecided).
+     */
+    const reconcile = async (): Promise<{ undecided: number; failed: string[] }> => {
+      let undecided = 0;
+      const failed: string[] = [];
+      for (const b of Object.values(batches)) {
+        if (b.status !== 'sent') continue;
+        let s: TxStatus;
+        try {
+          s = await sender.status(b.signature, b.lastValidBlockHeight);
+          if (s === 'pending') s = await sender.confirm(b.signature, b.lastValidBlockHeight);
+        } catch (e) {
+          if (!isTransient(e)) throw e; // a real failure (or a process death) propagates; the journal still says `sent`
+          // Unknown is unknown: leave the batch `sent` and look again later.
+          undecided++;
+          log(`status of ${b.signature} unknown (${errorMessage(e)}); will re-check`);
+          continue;
+        }
+        if (s === 'confirmed' || s === 'finalized') markBatch(b.signature, 'confirmed');
+        else if (s === 'failed') {
+          markBatch(b.signature, 'failed');
+          failed.push(b.signature);
+        } else if (s === 'expired') markBatch(b.signature, 'expired');
+        else undecided++;
+        await save();
+        if (s !== 'pending') log(`${b.signature}: ${s} (${b.wallets.length} wallets)`);
+      }
+      return { undecided, failed };
+    };
+
+    // 2. Reconcile anything journalled by an earlier run (including orphans not attached to an entry).
+    {
+      const r = await reconcile();
+      if (r.failed.length > 0) throw new ChainUnavailableError(`airdrop batch ${r.failed[0]} failed on-chain; entries returned to pending`);
+    }
+
+    // 3. Send the pending entries in batches, deciding every signature from the chain.
+    const batchSize = await sender.maxTransfersPerTx(mint);
+    if (batchSize < 1) throw new ChainError('sender reports a batch size below 1');
+    const attemptsThisRun = new Map<string, number>(); // the budget is per run; `entry.attempts` in the journal is the lifetime audit count
+    const bump = (wallet: string) => attemptsThisRun.set(wallet, (attemptsThisRun.get(wallet) ?? 0) + 1);
+    let backoff = 0;
+    for (;;) {
+      const inFlight = Object.values(batches).some((b) => b.status === 'sent');
+      if (inFlight) {
+        if (backoff > 0) await sleep(Math.min(15_000, 500 * 2 ** (backoff - 1)));
+        backoff++;
+        if (backoff > maxAttempts * 4) throw new ChainUnavailableError('airdrop: in-flight transactions could not be decided; resume later');
+        const r = await reconcile();
+        if (r.failed.length > 0) throw new ChainUnavailableError(`airdrop batch ${r.failed[0]} failed on-chain; entries returned to pending`);
+        continue;
+      }
+      backoff = 0;
+      const pending = Object.values(doc.entries)
+        .filter((r) => r.status === 'pending')
+        .sort((a, b) => (a.wallet < b.wallet ? -1 : 1))
+        .slice(0, batchSize);
+      if (pending.length === 0) break;
+      const exhausted = pending.find((r) => (attemptsThisRun.get(r.wallet) ?? 0) >= maxAttempts);
+      if (exhausted) throw new ChainUnavailableError(`airdrop: ${exhausted.wallet} attempted ${attemptsThisRun.get(exhausted.wallet)} times in this run without a confirmed transaction (${exhausted.lastError ?? 'no error recorded'}); resume later`);
+
+      const transfers: Transfer[] = pending.map((r) => ({ wallet: r.wallet, units: BigInt(r.units) }));
+      let prepared: PreparedTransfer;
+      try {
+        prepared = await sender.prepareTransfers(mint, transfers);
+      } catch (e) {
+        if (!isTransient(e)) throw e;
         for (const r of pending) {
-          r.status = 'pending';
-          r.lastError = `attempt ${attempt}: transaction ${prepared.signature} ${s}`;
-          delete r.txSignature;
-          delete r.lastValidBlockHeight;
+          r.attempts++;
+          bump(r.wallet);
+          r.lastError = `prepare: ${errorMessage(e)}`;
         }
         await save();
-        if (s === 'failed') throw new ChainUnavailableError(`airdrop batch ${prepared.signature} failed on-chain`);
-        throw new ChainUnavailableError(`airdrop batch ${prepared.signature} expired`);
-      },
-      {
-        attempts: maxAttempts,
-        baseMs: 500,
-        maxMs: 15_000,
-        sleep,
-        retryIf: (e) => isTransient(e) || /expired/.test(errorMessage(e)),
-        onRetry: (attempt, e) => log(`batch retry ${attempt}: ${errorMessage(e)}`),
-      },
-    );
-  }
+        await sleep(500);
+        continue;
+      }
+      for (const r of pending) {
+        r.attempts++;
+        bump(r.wallet);
+        r.status = 'sent';
+        r.txSignature = prepared.signature;
+        r.lastValidBlockHeight = prepared.lastValidBlockHeight;
+      }
+      doc.signatures.push(prepared.signature);
+      batches[prepared.signature] = { signature: prepared.signature, lastValidBlockHeight: prepared.lastValidBlockHeight, wallets: pending.map((r) => r.wallet), status: 'sent', preparedAt: new Date().toISOString() };
+      await save(); // journalled BEFORE submission
+      await args.hooks?.afterJournalSent?.(prepared.signature);
+      try {
+        await prepared.submit();
+      } catch (e) {
+        // The RPC may have accepted it anyway. Nothing moves: the chain decides on the next reconcile.
+        for (const r of pending) r.lastError = `submit: ${errorMessage(e)}`;
+        await save();
+        log(`submit of ${prepared.signature} threw (${errorMessage(e)}); deciding by status`);
+        continue;
+      }
+      observer?.emit({ type: 'airdropBatchSent', txSignature: prepared.signature, wallets: pending.map((r) => r.wallet), units: transfers.reduce((a, t) => a + t.units, 0n).toString() });
+      await args.hooks?.afterSubmit?.(prepared.signature);
+      // Decide now when possible; a thrown confirm (timeout) leaves the batch `sent` for reconcile.
+      let s: TxStatus | undefined;
+      try {
+        s = await sender.confirm(prepared.signature, prepared.lastValidBlockHeight);
+      } catch (e) {
+        if (!isTransient(e)) throw e; // the batch stays `sent`; the next run decides it by status
+        log(`confirm of ${prepared.signature} threw (${errorMessage(e)}); deciding by status`);
+      }
+      if (s === 'confirmed' || s === 'finalized') {
+        markBatch(prepared.signature, 'confirmed');
+        await save();
+        log(`batch ${prepared.signature} confirmed (${pending.length} wallets)`);
+      } else if (s === 'failed') {
+        markBatch(prepared.signature, 'failed');
+        await save();
+        throw new ChainUnavailableError(`airdrop batch ${prepared.signature} failed on-chain; entries returned to pending`);
+      } else if (s === 'expired') {
+        markBatch(prepared.signature, 'expired');
+        await save();
+        log(`batch ${prepared.signature} expired; will re-send`);
+      }
+    }
 
-  const confirmed = Object.values(doc.entries).filter((r) => r.status === 'confirmed');
-  const confirmedUnits = confirmed.reduce((a, r) => a + BigInt(r.units), 0n);
-  if (confirmedUnits !== table.allocatedUnits) {
-    throw new ChainError(`airdrop finished with ${confirmedUnits} units confirmed but the table allocates ${table.allocatedUnits}`);
+    const confirmed = Object.values(doc.entries).filter((r) => r.status === 'confirmed');
+    const confirmedUnits = confirmed.reduce((a, r) => a + BigInt(r.units), 0n);
+    if (confirmedUnits !== table.allocatedUnits) {
+      throw new ChainError(`airdrop finished with ${confirmedUnits} units confirmed but the table allocates ${table.allocatedUnits}`);
+    }
+    return {
+      mint,
+      merkleRoot: table.merkleRoot,
+      rootAnchorSignature: doc.rootAnchor?.txSignature ?? '',
+      wallets: Object.keys(doc.entries).length,
+      confirmedWallets: confirmed.length,
+      confirmedUnits,
+      signatures: [...doc.signatures],
+      resumed: existed,
+    };
+  } finally {
+    await leased.release(doc).catch(() => undefined);
   }
-  return {
-    mint,
-    merkleRoot: table.merkleRoot,
-    rootAnchorSignature: doc.rootAnchor?.txSignature ?? '',
-    wallets: Object.keys(doc.entries).length,
-    confirmedWallets: confirmed.length,
-    confirmedUnits,
-    signatures: [...doc.signatures],
-    resumed,
-  };
 }

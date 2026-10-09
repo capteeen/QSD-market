@@ -37,7 +37,7 @@ import {
 } from '@solana/spl-token';
 import type { Cluster } from './config.js';
 import { ChainConfigError, ChainUnavailableError, TransientChainError, errorMessage, isTransient } from './errors.js';
-import type { ChainReader, TransactionSender } from './sender.js';
+import { sendTracked, type ChainReader, type SentTransaction, type TransactionSender } from './sender.js';
 
 export const PINATA_UPLOAD_URL = 'https://uploads.pinata.cloud/v3/files';
 export const IPFS_GATEWAY = 'https://ipfs.io/ipfs/';
@@ -176,6 +176,8 @@ export interface LaunchDeps {
   pumpPortalApiUrl: string;
   pinataJwt?: string;
   fetchImpl?: FetchLike;
+  /** Called with the signature as soon as it is known (before confirmation) so the caller can journal it. */
+  onSent?: (sent: SentTransaction, mint: string) => Promise<void> | void;
 }
 
 export async function launchOnPumpFun(args: PumpFunLaunchArgs, deps: LaunchDeps): Promise<LaunchResult> {
@@ -223,6 +225,7 @@ export async function launchOnPumpFun(args: PumpFunLaunchArgs, deps: LaunchDeps)
     throw new ChainUnavailableError(`PumpPortal returned a body that is not a VersionedTransaction: ${errorMessage(e)}`, { cause: e });
   }
   const sent = await deps.sender.sendVersioned(tx, [mint]);
+  await deps.onSent?.(sent, mint.publicKey.toBase58());
   const status = await deps.sender.confirm(sent.signature, sent.lastValidBlockHeight);
   if (status === 'failed' || status === 'expired') {
     throw new ChainUnavailableError(`pump.fun create transaction ${sent.signature} ${status}`);
@@ -269,6 +272,8 @@ export interface DevnetLaunchDeps {
   reader: ChainReader;
   /** Rent exemption for MINT_SIZE bytes; from connection.getMinimumBalanceForRentExemption(MINT_SIZE). */
   getMintRentLamports: () => Promise<number>;
+  /** Called with the signature as soon as it is known (before submission when the sender can prepare). */
+  onSent?: (sent: SentTransaction, mint: string) => Promise<void> | void;
 }
 
 export async function launchDevnetSplToken(args: DevnetSplLaunchArgs, deps: DevnetLaunchDeps): Promise<LaunchResult> {
@@ -280,9 +285,9 @@ export async function launchDevnetSplToken(args: DevnetSplLaunchArgs, deps: Devn
   const mint = args.mint ?? Keypair.generate();
   const rent = args.rentLamports ?? (await deps.getMintRentLamports());
   const ixs = buildDevnetSplMintInstructions(deps.sender.payer, mint.publicKey, args.decimals, args.supplyUnits, rent);
-  let sent;
+  let sent: SentTransaction;
   try {
-    sent = await deps.sender.send(ixs, { signers: [mint] });
+    sent = await sendTracked(deps.sender, ixs, { signers: [mint] }, (st) => deps.onSent?.(st, mint.publicKey.toBase58()));
   } catch (e) {
     if (isTransient(e)) throw new TransientChainError(`devnet mint: ${errorMessage(e)}`, { cause: e });
     throw e;

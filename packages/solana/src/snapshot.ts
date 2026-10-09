@@ -174,6 +174,8 @@ export interface SnapshotResult {
   holders: HolderSnapshot[];
   requestedSlot: number;
   observedSlot: number;
+  /** observedSlot − requestedSlot: how far after the collapse slot the ledger was read (show it in the UI). */
+  slotLag: number;
   source: TokenAccountPage['source'];
   tokenAccounts: number;
 }
@@ -228,5 +230,5 @@ export async function holderSnapshotAtSlot(req: SnapshotRequest, deps: SnapshotD
       heldThroughQuietPeriod: f.heldThroughQuietPeriod && f.firstAcquiredAt <= req.quietPeriodStart,
     });
   }
-  return { holders, requestedSlot: req.collapseSlot, observedSlot: page.observedSlot, source: page.source, tokenAccounts: page.rows.length };
+  return { holders, requestedSlot: req.collapseSlot, observedSlot: page.observedSlot, slotLag: page.observedSlot - req.collapseSlot, source: page.source, tokenAccounts: page.rows.length };
 }
