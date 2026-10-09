@@ -1,5 +1,6 @@
 import 'server-only';
 import { createChain, loadChainConfig, type Chain } from '@qsd/solana';
+import { chainStorageFromEnv } from './chainStorage';
 
 /**
  * The chain layer from env, created once per process. `chainStatus()` never
@@ -10,7 +11,7 @@ const g = globalThis as unknown as { __qsdChain?: { chain?: Chain; error?: strin
 function init(): { chain?: Chain; error?: string } {
   if (!g.__qsdChain) {
     try {
-      g.__qsdChain = { chain: createChain(loadChainConfig(process.env)) };
+      g.__qsdChain = { chain: createChain(loadChainConfig(process.env), chainStorageFromEnv()) };
     } catch (e) {
       g.__qsdChain = { error: e instanceof Error ? e.message : String(e) };
     }
@@ -33,5 +34,5 @@ export function chainStatus(): { configured: boolean; cluster: 'devnet' | 'mainn
 export function serverCluster(): 'devnet' | 'mainnet-beta' {
   const s = init();
   if (s.chain) return s.chain.config.cluster;
-  return process.env.SOLANA_CLUSTER === 'mainnet-beta' ? 'mainnet-beta' : 'devnet';
+  return process.env.SOLANA_CLUSTER === 'devnet' ? 'devnet' : 'mainnet-beta';
 }

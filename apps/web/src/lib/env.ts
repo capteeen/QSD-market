@@ -1,9 +1,10 @@
 /** Public (NEXT_PUBLIC_*) configuration. Read at call time; never defaulted to a made-up value. */
 export type Cluster = 'devnet' | 'mainnet-beta';
 
+/** mainnet-beta unless NEXT_PUBLIC_SOLANA_CLUSTER=devnet (testing only). */
 export function publicCluster(): Cluster {
   const v = process.env.NEXT_PUBLIC_SOLANA_CLUSTER;
-  return v === 'mainnet-beta' ? 'mainnet-beta' : 'devnet';
+  return v === 'devnet' ? 'devnet' : 'mainnet-beta';
 }
 
 export function publicWitnessKeys(): string[] {
