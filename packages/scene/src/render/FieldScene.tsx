@@ -12,7 +12,10 @@
  * but its AMPLITUDE is the `drift` parameter (untouched, near-collapse coins
  * drift; traded coins sit still).
  *
- * Empty `coins` → an empty chamber floor and an honest EmptyState.
+ * Empty `coins` → the glass chamber from launch stage 1 (vessel and nested
+ * rings, the rings' slow rotation being the only motion, documented ambient
+ * that encodes no data), no coin sphere since no coin exists, framed by the
+ * stage-1 camera, with an honest EmptyState below it.
  */
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactElement } from 'react';
@@ -21,9 +24,10 @@ import { EmptyState, colors } from '@qsd/ui-tokens';
 import { vesselParams, vesselPosition, type FieldCoin, type LiveMeasurement } from '../model/field.js';
 import { createSceneStore } from '../model/store.js';
 import type { Observable } from '../model/types.js';
+import { Chamber } from './Chamber.js';
 import { SceneCanvas } from './SceneCanvas.js';
 import { useQualityProfile } from './context.js';
-import type { CameraPose } from './layout.js';
+import { CAMERA_BY_STAGE, type CameraPose } from './layout.js';
 import { CYAN, WHITE, approach, glassMaterial, litInstancedGlass } from './materials.js';
 import type { QualityController, QualityLevel } from './quality.js';
 
@@ -37,6 +41,13 @@ export interface FieldSceneProps {
   /** Distance beyond which clouds are not drawn (LOD). Default 26. */
   lodDistance?: number;
   onFrame?: (dt: number) => void;
+  /**
+   * Render the built-in "no coins" card when `coins` is empty. Default true.
+   * Pass false when the host page shows its own empty or unavailable state:
+   * an empty `coins` array may mean "the data could not be loaded", and only
+   * the host knows which.
+   */
+  showEmptyState?: boolean;
   className?: string;
   style?: CSSProperties;
 }
@@ -148,25 +159,27 @@ export function FieldVessels({ coins, liveMeasurements, radius, lodDistance = 26
   );
 }
 
-export function FieldScene({ coins, liveMeasurements, quality = 'auto', qualityController, radius, lodDistance, onFrame, className, style }: FieldSceneProps): ReactElement {
+export function FieldScene({ coins, liveMeasurements, quality = 'auto', qualityController, radius, lodDistance, onFrame, showEmptyState = true, className, style }: FieldSceneProps): ReactElement {
   const store = useMemo(() => createSceneStore(), []);
+  const empty = coins.length === 0;
   return (
     <SceneCanvas
       store={store}
       quality={quality}
-      pose={FIELD_POSE}
+      pose={empty ? CAMERA_BY_STAGE[1] : FIELD_POSE}
       {...(qualityController ? { qualityController } : {})}
       {...(onFrame ? { onFrame } : {})}
       {...(className ? { className } : {})}
       {...(style ? { style } : {})}
       overlay={
-        coins.length === 0 ? (
-          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', pointerEvents: 'auto' }}>
+        empty && showEmptyState ? (
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 24, display: 'grid', placeItems: 'center', pointerEvents: 'auto' }}>
             <EmptyState eyebrow="FIELD" sentence="No coins exist yet. The chamber is empty." />
           </div>
         ) : null
       }
     >
+      {empty ? <Chamber /> : null}
       <FieldVessels coins={coins} {...(liveMeasurements ? { liveMeasurements } : {})} {...(radius !== undefined ? { radius } : {})} {...(lodDistance !== undefined ? { lodDistance } : {})} />
     </SceneCanvas>
   );
