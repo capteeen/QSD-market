@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import { PublicKey, SystemProgram, Transaction, type Connection } from '@solana/web3.js';
 import { DataRow, Panel } from '@qsd/ui-tokens';
 import { HALF_LIFE_PRESETS } from '@qsd/protocol';
 import { createSceneStore, decodeCryptoEvents, type ChainEvent, type LineageInput, type SceneStore, type SuperpositionInput } from '@qsd/scene/model';
@@ -55,6 +55,18 @@ function hexToBytes(hex: string): Uint8Array {
   return Uint8Array.from(hex.match(/.{2}/g) ?? [], (h) => parseInt(h, 16));
 }
 
+/** Poll the signature (no websocket: the /api/rpc relay is HTTP only) until it is confirmed, fails, or ~90 s pass. */
+async function waitForConfirmation(connection: Connection, signature: string): Promise<void> {
+  for (let i = 0; i < 45; i++) {
+    const { value } = await connection.getSignatureStatuses([signature]);
+    const st = value[0];
+    if (st?.err) throw new Error(`payment transaction failed: ${JSON.stringify(st.err)}`);
+    if (st && (st.confirmationStatus === 'confirmed' || st.confirmationStatus === 'finalized')) return;
+    await new Promise((r) => setTimeout(r, 2_000));
+  }
+  throw new Error(`payment ${signature} was not confirmed in time; check it in your wallet before trying again`);
+}
+
 export function LaunchView() {
   const quote = useLaunchQuote();
   const { publicKey, sendTransaction } = useWallet();
@@ -93,8 +105,7 @@ export function LaunchView() {
     try {
       const tx = new Transaction().add(SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(q.payTo), lamports: total }));
       paymentSignature = await sendTransaction(tx, connection);
-      const latest = await connection.getLatestBlockhash();
-      await connection.confirmTransaction({ signature: paymentSignature, ...latest }, 'confirmed');
+      await waitForConfirmation(connection, paymentSignature);
     } catch (e) {
       setPhase('failed');
       setError(e instanceof Error ? e.message : String(e));
