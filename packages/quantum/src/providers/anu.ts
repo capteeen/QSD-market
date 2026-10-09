@@ -11,7 +11,8 @@ import type { CapturedHttpResponse, Draw, DrawBinding, DrawObserver, QrngProvide
  * detectors.
  *
  * Documented API (https://quantumnumbers.anu.edu.au/documentation):
- *   GET https://api.quantumnumbers.com.au?length=N&type=hex8&size=K
+ *   GET https://api.quantumnumbers.anu.edu.au?length=N&type=hex8&size=K
+ *   (older docs name api.quantumnumbers.com.au; it is tried when the first host cannot be reached)
  *   header: x-api-key: <key>
  *   200: { "success": true, "type": "hex8", "length": "N", "data": ["ab", ...] }
  *   403: { "message": "Forbidden" }           (missing/invalid key)
@@ -28,7 +29,9 @@ import type { CapturedHttpResponse, Draw, DrawBinding, DrawObserver, QrngProvide
  * when one is supplied. See README "What the attestation proves".
  */
 export const ANU_PROVIDER_ID = 'anu-quantum-numbers' as const;
-export const ANU_DEFAULT_ENDPOINT = 'https://api.quantumnumbers.com.au';
+export const ANU_DEFAULT_ENDPOINT = 'https://api.quantumnumbers.anu.edu.au';
+/** Tried, in order, after ANU_DEFAULT_ENDPOINT when no endpoint is configured and the host cannot be reached. */
+export const ANU_FALLBACK_ENDPOINTS = ['https://api.quantumnumbers.com.au'] as const;
 export const ANU_MAX_BYTES_PER_REQUEST = 1024;
 
 /** Response headers captured into the attestation. Never Authorization or anything key-like. */
@@ -142,6 +145,8 @@ export class AnuQuantumNumbersProvider implements QrngProvider {
   readonly attestationKind = 'witness-signed' as const;
   readonly endpoint: string;
   readonly timeoutMs: number;
+  /** endpoint first, then the fallbacks (only when no endpoint was configured). */
+  readonly #endpoints: string[];
   // ES private fields: invisible to JSON.stringify, util.inspect, Object.keys and reflection.
   readonly #apiKey: string;
   readonly #witness: Ed25519Signer;
@@ -157,6 +162,7 @@ export class AnuQuantumNumbersProvider implements QrngProvider {
     this.#apiKey = opts.apiKey;
     this.#witness = opts.witness;
     this.endpoint = (opts.endpoint ?? ANU_DEFAULT_ENDPOINT).replace(/\/+$/, '');
+    this.#endpoints = opts.endpoint ? [this.endpoint] : [this.endpoint, ...ANU_FALLBACK_ENDPOINTS];
     const f = opts.fetch ?? globalThis.fetch;
     if (typeof f !== 'function') {
       throw new QuantumConfigError('AnuQuantumNumbersProvider: no fetch implementation available');
@@ -186,32 +192,37 @@ export class AnuQuantumNumbersProvider implements QrngProvider {
         `ANU provider: nBytes must be an integer in 1..${ANU_MAX_BYTES_PER_REQUEST}, got ${String(nBytes)}`,
       );
     }
-    const url = `${this.endpoint}?length=${nBytes}&type=hex8&size=1`;
     const requestedAt = nowIso();
     observer?.emit({ type: 'entropyRequested', providerId: this.id, nBytes, requestedAt });
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    let res: Response;
-    try {
-      res = await this.#fetch(url, {
-        method: 'GET',
-        headers: { 'x-api-key': this.#apiKey, accept: 'application/json' },
-        signal: controller.signal,
-      });
-    } catch (cause) {
-      clearTimeout(timer);
-      const timedOut = controller.signal.aborted;
-      throw new MeasurementUnavailableError(
-        this.id,
-        'network',
-        timedOut
-          ? `Measurement unavailable: the quantum provider did not respond within ${this.timeoutMs / 1000}s.`
-          : 'Measurement unavailable: the quantum provider could not be reached.',
-        { cause: scrubCause(cause, this.#apiKey) },
-      );
+    // Only an unreachable host moves on to the next endpoint; any HTTP answer (even an error) is final.
+    let res: Response | undefined;
+    let url = '';
+    for (let i = 0; !res; i++) {
+      url = `${this.#endpoints[i]}?length=${nBytes}&type=hex8&size=1`;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
+        res = await this.#fetch(url, {
+          method: 'GET',
+          headers: { 'x-api-key': this.#apiKey, accept: 'application/json' },
+          signal: controller.signal,
+        });
+      } catch (cause) {
+        const timedOut = controller.signal.aborted;
+        if (i + 1 < this.#endpoints.length) continue;
+        throw new MeasurementUnavailableError(
+          this.id,
+          'network',
+          timedOut
+            ? `Measurement unavailable: the quantum provider did not respond within ${this.timeoutMs / 1000}s.`
+            : `Measurement unavailable: the quantum provider could not be reached (${this.#endpoints.map((e) => new URL(e).host).join(', ')}: ${networkReason(cause)}).`,
+          { cause: scrubCause(cause, this.#apiKey) },
+        );
+      } finally {
+        clearTimeout(timer);
+      }
     }
-    clearTimeout(timer);
 
     let body: string;
     try {
@@ -286,4 +297,13 @@ function scrubCause(cause: unknown, apiKey: string): unknown {
   }
   if (typeof cause === 'string') return cause.split(apiKey).join('[redacted]');
   return undefined;
+}
+
+/** A short, key-free reason for a failed fetch (e.g. ENOTFOUND), from undici's nested cause. */
+function networkReason(cause: unknown): string {
+  const inner = (cause as { cause?: { code?: unknown } } | undefined)?.cause;
+  if (inner && typeof inner.code === 'string') return inner.code;
+  const code = (cause as { code?: unknown } | undefined)?.code;
+  if (typeof code === 'string') return code;
+  return cause instanceof Error ? cause.name : 'network error';
 }

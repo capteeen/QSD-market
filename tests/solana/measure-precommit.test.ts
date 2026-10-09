@@ -9,7 +9,7 @@ import { Keypair } from '@solana/web3.js';
 import { createHash } from 'node:crypto';
 import { measurementResolver, type Coin } from '@qsd/protocol';
 import { QuantumEventBus, UnsafeDevRandomProvider, createQrngClient, type QrngProvider, type QuantumEvent } from '@qsd/quantum';
-import { ChainObserver, ChainUnavailableError, anchorWith, decodeAnchorMemo, measureCoin, productionVerifyOptions, type ChainEvent, type JournalStore, type MeasurementJournalDoc } from '@qsd/solana';
+import { ANCHOR_ATTEMPTS, ChainObserver, ChainUnavailableError, anchorWith, decodeAnchorMemo, measureCoin, productionVerifyOptions, type ChainEvent, type JournalStore, type MeasurementJournalDoc } from '@qsd/solana';
 import { Ledger } from './ledger.js';
 
 /** Agent H's own canonical JSON (sorted keys, recursive) and inputs hash. */
@@ -139,9 +139,9 @@ describe('measureCoin: precommit before draw; no anchor ⇒ no draw', () => {
     expect(h.journal.doc?.bundleHash).toBeUndefined();
     expect(c.measurements.length).toBe(0);
     expect(c.state).toBe('superposed');
-    // and a dropped (expired) anchor transaction likewise
+    // and an anchor dropped on every attempt (each re-sent with a fresh blockhash) likewise
     const h2 = harness();
-    h2.ledger.sendFaults = ['dropped'];
+    h2.ledger.sendFaults = Array(ANCHOR_ATTEMPTS).fill('dropped');
     await expect(measureCoin(c, { by: 'protocol', at: c.lastActivityAt + 1800 }, { client: h2.client, anchor: h2.anchor, verify: { allowUnsafeDev: true } })).rejects.toBeInstanceOf(ChainUnavailableError);
     expect(h2.draws()).toBe(0);
   });
