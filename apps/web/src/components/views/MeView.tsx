@@ -5,6 +5,7 @@ import { ME } from '@/copy';
 import { isUnavailable } from '@/lib/api';
 import { formatPercent, formatUnits, formatUnix } from '@/lib/format';
 import { useMe } from '@/hooks/useApi';
+import { MeTerminal } from '@/components/terminal/pages';
 import { CoinLink, Empty, LoadingPanel, Page, PageHeader, StateLabel, UnavailablePanel } from '@/components/common';
 
 export function MeView() {
@@ -15,6 +16,8 @@ export function MeView() {
     return (
       <Page>
         <PageHeader eyebrow={ME.eyebrow} title={ME.title} />
+        <MeTerminal wallet={null} q={q} />
+        <div className="mb-6" />
         <Empty eyebrow={ME.connectEyebrow} sentence={ME.connectSentence} />
       </Page>
     );
@@ -23,6 +26,8 @@ export function MeView() {
   return (
     <Page>
       <PageHeader eyebrow={`${ME.eyebrow} · ${wallet}`} title={ME.title} />
+      <MeTerminal wallet={wallet} q={q} />
+      <div className="mb-6" />
       {q.isPending ? (
         <LoadingPanel eyebrow={ME.eyebrow} />
       ) : !data || isUnavailable(data) ? (

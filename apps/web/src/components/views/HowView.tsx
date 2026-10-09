@@ -6,6 +6,7 @@ import { HOW } from '@/copy';
 import { isUnavailable } from '@/lib/api';
 import { useHow } from '@/hooks/useApi';
 import { LoadingPanel, Page, PageHeader, UnavailablePanel } from '@/components/common';
+import { XmssVerifyTerminal } from '@/components/terminal/XmssVerifyTerminal';
 
 /** /docs/physics.md and /docs/economics.md rendered verbatim (no sanitiser, no rewriting: these are our own files). */
 export function HowView() {
@@ -24,6 +25,7 @@ export function HowView() {
           </button>
         </div>
       </PageHeader>
+      <XmssVerifyTerminal className="mb-8" />
       {q.isPending ? (
         <LoadingPanel eyebrow={HOW.eyebrow} />
       ) : !data || isUnavailable(data) ? (

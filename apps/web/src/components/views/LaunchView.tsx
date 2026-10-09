@@ -3,17 +3,17 @@ import Link from 'next/link';
 import { useMemo, useRef, useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
-import { DataRow, Panel } from '@qsd/ui-tokens';
+import { Panel } from '@qsd/ui-tokens';
 import { HALF_LIFE_PRESETS } from '@qsd/protocol';
 import { createSceneStore, decodeCryptoEvents, type ChainEvent, type LineageInput, type SceneStore, type SuperpositionInput } from '@qsd/scene/model';
 import type { QuantumEvent } from '@qsd/quantum';
 import { LAUNCH } from '@/copy';
 import { isUnavailable } from '@/lib/api';
-import { formatLamports } from '@/lib/format';
 import { routes } from '@/lib/links';
 import { useLaunchQuote } from '@/hooks/useApi';
 import { LaunchSequence } from '@/components/scenes';
 import { Empty, LoadingPanel, Page, PageHeader, UnavailablePanel } from '@/components/common';
+import { LaunchPreflightTerminal, LaunchStreamTerminal, cryptoStreamLines, type StreamLine } from '@/components/terminal/pages';
 
 type Phase = 'form' | 'paying' | 'launching' | 'done' | 'failed';
 
@@ -63,6 +63,9 @@ export function LaunchView() {
   const storeRef = useRef<SceneStore | null>(null);
   if (!storeRef.current) storeRef.current = createSceneStore();
   const store = storeRef.current;
+  const [lines, setLines] = useState<StreamLine[]>([]);
+  const lineId = useRef(0);
+  const print = (...ls: Omit<StreamLine, 'id'>[]) => setLines((xs) => [...xs, ...ls.map((l) => ({ ...l, id: lineId.current++ }))].slice(-400));
   const [sources, setSources] = useState<{ superposition?: SuperpositionInput; lineage?: LineageInput }>({});
 
   const [name, setName] = useState('');
@@ -126,28 +129,50 @@ export function LaunchView() {
         switch (f.event) {
           case 'status':
             setStatus((JSON.parse(f.data) as { message: string }).message);
+            print({ channel: 'status', text: (JSON.parse(f.data) as { message: string }).message });
             break;
           case 'crypto':
-            store.dispatchMany(decodeCryptoEvents(base64ToBytes(f.data)));
+          {
+            const events = decodeCryptoEvents(base64ToBytes(f.data));
+            store.dispatchMany(events);
+            print(...cryptoStreamLines(events));
             break;
+          }
           case 'superposition': {
             const s = JSON.parse(f.data) as { supplyMin: string; supplyMax: string; halfLifeSec: number; decayChannels: SuperpositionInput['decayChannels'] };
             const input: SuperpositionInput = { supplyMin: BigInt(s.supplyMin), supplyMax: BigInt(s.supplyMax), halfLifeSec: s.halfLifeSec, decayChannels: s.decayChannels };
             setSources((x) => ({ ...x, superposition: input }));
             store.dispatch({ type: 'superposition', input });
+            print({ channel: 'state', text: `superposition supply ${s.supplyMin}…${s.supplyMax} · half-life ${s.halfLifeSec}s · ${s.decayChannels.length} decay channels` });
             break;
           }
           case 'quantum': {
             const e = JSON.parse(f.data) as QuantumEvent | (Omit<Extract<QuantumEvent, { type: 'entropyArrived' }>, 'bytes'> & { bytes: string });
             const ev: QuantumEvent = e.type === 'entropyArrived' ? { ...e, bytes: hexToBytes(e.bytes as string) } : (e as QuantumEvent);
             store.dispatch(ev);
+            print({
+              channel: 'qrng',
+              text:
+                ev.type === 'entropyRequested'
+                  ? `entropyRequested provider=${ev.providerId} bytes=${ev.nBytes}`
+                  : ev.type === 'entropyArrived'
+                    ? `entropyArrived ${Array.from(ev.bytes.slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join('')}… attestation=${ev.attestation.kind}`
+                    : ev.type === 'commitmentComputed'
+                      ? `commitment ${ev.hash}`
+                      : `outcome ${ev.outcomeLabel}`,
+              ...(ev.type === 'outcomeResolved' ? { tone: 'ok' as const } : {}),
+            });
             break;
           }
-          case 'chain':
-            store.dispatch(JSON.parse(f.data) as ChainEvent);
+          case 'chain': {
+            const ev = JSON.parse(f.data) as ChainEvent;
+            store.dispatch(ev);
+            print({ channel: 'chain', text: ev.type === 'anchored' ? `anchored ${ev.txSignature}${ev.slot !== undefined ? ` slot ${ev.slot}` : ''}` : `anchorSubmitted ${ev.txSignature ?? ''}`, ...(ev.type === 'anchored' ? { tone: 'ok' as const } : {}) });
             break;
+          }
           case 'launch':
             setCa((JSON.parse(f.data) as { ca: string }).ca);
+            print({ channel: 'launch', text: `coin address ${(JSON.parse(f.data) as { ca: string }).ca}`, tone: 'ok' });
             break;
           case 'lineage': {
             const input = JSON.parse(f.data) as LineageInput;
@@ -158,10 +183,12 @@ export function LaunchView() {
           case 'done':
             setPhase('done');
             setStatus(LAUNCH.done);
+            print({ channel: 'done', text: LAUNCH.done, tone: 'ok' });
             break;
           case 'error':
             setPhase('failed');
             setError((JSON.parse(f.data) as { message: string }).message);
+            print({ channel: 'error', text: (JSON.parse(f.data) as { message: string }).message, tone: 'fail' });
             break;
           default:
             break;
@@ -178,7 +205,10 @@ export function LaunchView() {
     return (
       <div className="relative h-[calc(100vh-56px)] w-full">
         <LaunchSequence store={store} sources={sources} className="h-full w-full" />
-        <div className="qsd-glass absolute bottom-4 left-4 max-w-md p-4 text-xs">
+        <div className="absolute bottom-4 left-4 right-4 max-w-2xl sm:right-auto">
+          <LaunchStreamTerminal lines={lines} running={phase === 'launching'} className="max-h-[45vh] overflow-y-auto" />
+        </div>
+        <div className="qsd-glass absolute right-4 top-4 max-w-sm p-4 text-xs">
           <p>{status}</p>
           {error ? <p className="mt-1 text-collapse">{error}</p> : null}
           {ca ? (
@@ -245,14 +275,10 @@ export function LaunchView() {
               ) : null}
             </form>
           </Panel>
-          <Panel eyebrow={LAUNCH.costEyebrow}>
-            <DataRow label={LAUNCH.cost.launch} {...(q?.launchCostLamports !== null && q ? { value: formatLamports(BigInt(q.launchCostLamports)) } : { unavailable: { reason: q?.reasons.launchCost ?? LAUNCH.cost.unavailableReason } })} />
-            <DataRow label={LAUNCH.cost.identity} {...(q?.identityReserveLamports !== null && q ? { value: formatLamports(BigInt(q.identityReserveLamports)) } : { unavailable: { reason: q?.reasons.identityReserve ?? LAUNCH.cost.unavailableReason } })} />
-            <DataRow label={LAUNCH.cost.devBuy} {...(devBuyLamports !== null ? { value: formatLamports(devBuyLamports) } : { unavailable: { reason: 'enter a number of SOL' } })} />
-            <DataRow label={LAUNCH.cost.total} {...(total !== null ? { value: formatLamports(total) } : { unavailable: { reason: LAUNCH.cost.unavailableReason } })} />
-            <DataRow label={LAUNCH.cost.payTo} {...(q?.payTo ? { value: q.payTo } : { unavailable: { reason: q?.reasons.payTo ?? LAUNCH.cost.unavailableReason } })} />
+          <div>
+            <LaunchPreflightTerminal quote={q!} wallet={publicKey?.toBase58() ?? null} name={name} ticker={ticker} image={image} devBuyLamports={devBuyLamports} total={total} />
             <p className="mt-4 text-xs text-muted">{LAUNCH.identityNote}</p>
-          </Panel>
+          </div>
         </div>
       )}
     </Page>
