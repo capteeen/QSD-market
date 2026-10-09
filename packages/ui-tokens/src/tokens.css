@@ -4,37 +4,45 @@
  * data-theme="brightfield" on <html> for the optional light mode.
  */
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 :root {
   color-scheme: dark;
 
   /* ── colour ─────────────────────────────────────────────────────── */
-  --qsd-void: #06080A;
-  --qsd-panel: #0D1117;
-  --qsd-border: #1C2430;
-  --qsd-probability: #4DD0E1;
-  --qsd-collapse: #E91E63;
-  --qsd-decay: #FFB300;
-  --qsd-tunnel: #F0F4F8;
-  --qsd-dead: #3A4049;
-  --qsd-text: #D7DEE6;
-  --qsd-muted: #6B7684;
+  --qsd-void: #252423;
+  --qsd-panel: #2E2D2C;
+  --qsd-border: #3D3B39;
+  --qsd-probability: #BFEF5A;
+  --qsd-collapse: #FF6B5E;
+  --qsd-decay: #F5B04B;
+  --qsd-tunnel: #F5F2EC;
+  --qsd-dead: #57544F;
+  --qsd-text: #F2EFE9;
+  --qsd-muted: #9A958D;
+  --qsd-gold: #F0A845;
+  --qsd-ice: #6FA2FF;
+  --qsd-paper: #D9D7D2;
+  --qsd-ink: #262524;
+  --qsd-line: #8A8781;
+  --qsd-rim: #F6C9A6;
+  --qsd-teal: #5CDFB4;
+  --qsd-violet: #B18BFF;
 
   /* translucent panel surface + refractive edge */
-  --qsd-glass: rgba(13, 17, 23, 0.72);
-  --qsd-glass-edge: rgba(77,208,225,0.35);
+  --qsd-glass: rgba(46, 45, 44, 0.78);
+  --qsd-glass-edge: rgba(245,242,236,0.06);
   --qsd-glass-blur: 12px;
 
-  /* magenta-white computation glow */
-  --qsd-glow-inner: #FF5CD6;
+  /* peach-white computation glow */
+  --qsd-glow-inner: #F6C9A6;
   --qsd-glow-outer: #FFFFFF;
   --glow-compute:
     0 0 2px #FFFFFF,
-    0 0 8px rgba(255, 92, 214, 0.9),
-    0 0 24px rgba(255, 92, 214, 0.55),
-    0 0 64px rgba(255, 92, 214, 0.25);
-  --glow-compute-radial: radial-gradient(circle, #FFFFFF 0%, #FF5CD6 18%, rgba(255, 92, 214, 0) 70%);
+    0 0 8px rgba(246,201,166,0.9),
+    0 0 24px rgba(246,201,166,0.55),
+    0 0 64px rgba(246,201,166,0.25);
+  --glow-compute-radial: radial-gradient(circle, #FFFFFF 0%, #F6C9A6 18%, rgba(246, 201, 166, 0) 70%);
 
   /* ── type ───────────────────────────────────────────────────────── */
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -56,25 +64,27 @@
   --dur-collapse: 120ms;
 
   /* ── shape ──────────────────────────────────────────────────────── */
-  --radius-card: 0px;
+  --radius-card: 8px;
   --radius-quantum: 9999px;
-  --border-card: 2px;
+  --border-card: 1px;
   --border-rule: 1px;
 }
 
-/* Optional light "brightfield" mode. Same hues, inverted field. */
-:root[data-theme="brightfield"] {
+/* Light "brightfield" mode: the warm paper sections. Set data-theme="brightfield" on <html> or on any section. */
+:root[data-theme="brightfield"], [data-theme="brightfield"] {
   color-scheme: light;
-  --qsd-void: #F0F4F8;
-  --qsd-panel: #FFFFFF;
-  --qsd-border: #C9D3DE;
-  --qsd-tunnel: #06080A;
-  --qsd-dead: #9AA3AE;
-  --qsd-text: #0D1117;
-  --qsd-muted: #5A6675;
-  --qsd-glass: rgba(255, 255, 255, 0.72);
-  --qsd-glass-edge: rgba(0, 151, 167, 0.45);
-  --qsd-probability: #0097A7;
+  --qsd-void: #D9D7D2;
+  --qsd-panel: #E4E2DD;
+  --qsd-border: #BDBAB4;
+  --qsd-tunnel: #262524;
+  --qsd-dead: #A9A5A0;
+  --qsd-text: #262524;
+  --qsd-muted: #6E6B66;
+  --qsd-glass: rgba(228, 226, 221, 0.78);
+  --qsd-glass-edge: rgba(38, 37, 36, 0.06);
+  --qsd-probability: #5E9A1E;
+  --qsd-collapse: #D9483C;
+  --qsd-decay: #B77A17;
 }
 
 /* ── base ───────────────────────────────────────────────────────────── */

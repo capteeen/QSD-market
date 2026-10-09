@@ -1,9 +1,10 @@
 /**
  * QSD design tokens — the single typed source of truth.
  *
- * Aesthetic: a quantum computer rendered as light in a void. Dark-field
- * laboratory. Glass and refraction. Clinical restraint in the chrome,
- * spectacle in the chamber.
+ * Aesthetic (2026-10, modelled on animejs.com): a warm near-black machine
+ * room, off-white type, one mechanical object drawn solid with a peach rim
+ * light on dark sections and as grey line-art on warm paper sections. Mono
+ * for every number, big sans headlines with one accent per section.
  *
  * `tokens.css` mirrors these values as CSS custom properties and
  * `tailwind.preset.ts` exposes them as Tailwind theme entries. If you change
@@ -12,43 +13,59 @@
  */
 
 export const colors = {
-  /** Page background. The void the chamber sits in. */
-  void: '#06080A',
-  /** Raised surface for panels and cards. */
-  panel: '#0D1117',
-  /** 1px rules and 2px card borders. */
-  border: '#1C2430',
-  /** Cyan. Superposition, probability, verified proofs, "alive". */
-  probability: '#4DD0E1',
-  /** Magenta. Collapse, invalid proofs, the one thing that snaps. */
-  collapse: '#E91E63',
+  /** Page background. A warm near-black, never blue. */
+  void: '#252423',
+  /** Raised surface for panels, cards and terminals. */
+  panel: '#2E2D2C',
+  /** 1px rules and card borders. */
+  border: '#3D3B39',
+  /** Lime. Superposition, probability, verified proofs, "alive", the live dot. */
+  probability: '#BFEF5A',
+  /** Coral red. Collapse, invalid proofs, the one thing that snaps. */
+  collapse: '#FF6B5E',
   /** Amber. Decay in progress, pending, warnings. */
-  decay: '#FFB300',
+  decay: '#F5B04B',
   /** Near-white. Tunnelling — the coin that came back as itself. */
-  tunnel: '#F0F4F8',
+  tunnel: '#F5F2EC',
   /** Grey. Dead, unavailable, disabled. */
-  dead: '#3A4049',
-  /** Body text. */
-  text: '#D7DEE6',
-  /** Secondary text, eyebrows, labels. */
-  muted: '#6B7684',
+  dead: '#57544F',
+  /** Body text. Off-white, not pure white. */
+  text: '#F2EFE9',
+  /** Secondary text, eyebrows, labels. Quiet warm grey. */
+  muted: '#9A958D',
+  /** Warm gold. The glowing core of the quantum stack (3D scene). */
+  gold: '#F0A845',
+  /** Cool blue. The qubit at the centre of the core; the fifth dial arc. */
+  ice: '#6FA2FF',
+  /** Light-section background: warm paper grey. */
+  paper: '#D9D7D2',
+  /** Text on paper. */
+  ink: '#262524',
+  /** Line-art strokes on paper (the exploded blueprint). */
+  line: '#8A8781',
+  /** Peach rim light on the dark machine. */
+  rim: '#F6C9A6',
+  /** Teal. The fourth dial arc; measurement in flight. */
+  teal: '#5CDFB4',
+  /** Violet. The sixth dial arc; lineage. */
+  violet: '#B18BFF',
 } as const;
 
 export type ColorToken = keyof typeof colors;
 
-/** Translucent cyan used for the refractive edge of glass panels. */
-export const glassEdge = 'rgba(77,208,225,0.35)' as const;
+/** Faint warm-white hairline used for the inner edge of panels. */
+export const glassEdge = 'rgba(245,242,236,0.06)' as const;
 
 /**
- * The computation glow: magenta → white. Applied as a box-shadow stack while
+ * The computation glow: peach → white. Applied as a box-shadow stack while
  * a real operation (hash chain, QRNG draw, signature) is in flight.
  */
 export const glow = {
-  computeInner: '#FF5CD6',
+  computeInner: '#F6C9A6',
   computeOuter: '#FFFFFF',
   /** Full box-shadow value. Mirrors `--glow-compute` in tokens.css. */
   compute:
-    '0 0 2px #FFFFFF, 0 0 8px rgba(255,92,214,0.9), 0 0 24px rgba(255,92,214,0.55), 0 0 64px rgba(255,92,214,0.25)',
+    '0 0 2px #FFFFFF, 0 0 8px rgba(246,201,166,0.9), 0 0 24px rgba(246,201,166,0.55), 0 0 64px rgba(246,201,166,0.25)',
 } as const;
 
 export const fonts = {
@@ -84,9 +101,9 @@ export const motion = {
 } as const;
 
 export const shape = {
-  /** Data cards are square-cornered, slide-mount framed. */
-  cardRadius: '0px',
-  cardBorderWidth: '2px',
+  /** Cards, terminals and buttons share one soft radius. */
+  cardRadius: '8px',
+  cardBorderWidth: '1px',
   ruleWidth: '1px',
   /** Quantum objects are circles and ellipses. */
   quantumRadius: '9999px',
@@ -143,4 +160,12 @@ export const specHexes: readonly string[] = [
   colors.dead,
   colors.text,
   colors.muted,
+  colors.gold,
+  colors.ice,
+  colors.paper,
+  colors.ink,
+  colors.line,
+  colors.rim,
+  colors.teal,
+  colors.violet,
 ];

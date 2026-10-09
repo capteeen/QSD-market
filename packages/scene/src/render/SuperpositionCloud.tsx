@@ -21,7 +21,7 @@ import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef, type ReactElement } from 'react';
 import * as THREE from 'three';
-import { fonts } from '@qsd/ui-tokens';
+import { colors, fonts } from '@qsd/ui-tokens';
 import type { CloudState, DrawPhase } from '../model/types.js';
 import { useSceneStore } from './context.js';
 import { COIN_RADIUS } from './layout.js';
@@ -166,8 +166,8 @@ function labelStyle(ghost: boolean): React.CSSProperties {
     fontFamily: fonts.mono,
     fontSize: 11,
     whiteSpace: 'nowrap',
-    color: ghost ? 'rgba(77,208,225,0.55)' : '#D7DEE6',
-    textShadow: '0 0 6px rgba(77,208,225,0.6)',
+    color: ghost ? 'rgba(191,239,90,0.55)' : colors.text,
+    textShadow: '0 0 6px rgba(191,239,90,0.6)',
     pointerEvents: 'none',
     userSelect: 'none',
   };
