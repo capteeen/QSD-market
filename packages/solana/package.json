@@ -14,7 +14,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json",
-    "devnet-e2e": "tsx scripts/devnet-e2e.ts"
+    "devnet-e2e": "tsx scripts/devnet-e2e.ts",
+    "generate-secrets": "tsx scripts/generate-secrets.ts"
   },
   "dependencies": {
     "@qsd/crypto": "workspace:*",
