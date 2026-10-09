@@ -57,7 +57,7 @@ describe('honest unavailable state against { unavailable }', () => {
       if (p.name !== '/me') expect(txt).toContain(UNAVAILABLE.unavailable.reason);
       // No digit anywhere except the structural copy listed here.
       const allowed = [
-        /0[1-4](?=[A-Z])/g, // the "01 … 04" step numbers on the home page
+        /0[1-5] \/ 05(?=[a-zA-Z])/g, // the "01 / 05" chapter numbers of the home scroll story
         /auto-measurement after \d+ h/g, // half-life preset labels on /launch (protocol constants, not data)
         /1\.0 and 1\.5/g, // the entanglement weight bounds quoted from economics.md in copy
         /SHA-256/g,

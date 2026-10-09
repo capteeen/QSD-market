@@ -46,3 +46,6 @@ export { CameraRig, type CameraRigProps } from './render/CameraRig.js';
 export { Warmup } from './render/Warmup.js';
 
 export { createSoundEngine, type SoundEngine } from './sound/engine.js';
+
+// the scroll story: an illustration driven by scroll and pointer, not by protocol events
+export { StoryScene, STORY_CHAPTERS, type StoryInput, type StorySceneProps } from './render/story/StoryScene.js';

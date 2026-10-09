@@ -10,7 +10,7 @@ import React from 'react';
 vi.mock('@/components/scenes', () => {
   const Placeholder = (props: { coins?: unknown[] }) =>
     React.createElement('div', { 'data-testid': 'scene', 'data-coins': Array.isArray(props.coins) ? String(props.coins.length) : undefined });
-  return { FieldScene: Placeholder, LaunchSequence: Placeholder, MeasurementScene: Placeholder, CollapseScene: Placeholder };
+  return { FieldScene: Placeholder, LaunchSequence: Placeholder, MeasurementScene: Placeholder, CollapseScene: Placeholder, StoryScene: Placeholder };
 });
 
 vi.mock('@solana/wallet-adapter-react', () => ({

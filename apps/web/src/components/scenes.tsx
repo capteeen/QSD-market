@@ -15,3 +15,4 @@ export const FieldScene = dynamic(() => import('@qsd/scene').then((m) => m.Field
 export const LaunchSequence = dynamic(() => import('@qsd/scene').then((m) => m.LaunchSequence), { ssr: false, loading: Loading });
 export const MeasurementScene = dynamic(() => import('@qsd/scene').then((m) => m.MeasurementScene), { ssr: false, loading: Loading });
 export const CollapseScene = dynamic(() => import('@qsd/scene').then((m) => m.CollapseScene), { ssr: false, loading: Loading });
+export const StoryScene = dynamic(() => import('@qsd/scene').then((m) => m.StoryScene), { ssr: false, loading: Loading });

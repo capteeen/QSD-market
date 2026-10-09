@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useMemo } from 'react';
-import { Countdown, Panel } from '@qsd/ui-tokens';
+import { Countdown } from '@qsd/ui-tokens';
 import { FIELD, HOME } from '@/copy';
 import { isUnavailable } from '@/lib/api';
 import { fieldCoin } from '@/lib/coin';
@@ -10,6 +10,7 @@ import { useCoins, useStats } from '@/hooks/useApi';
 import { useNow } from '@/hooks/useNow';
 import { liveMeasurements } from '@/store/live';
 import { FieldScene } from '@/components/scenes';
+import { HowStory } from '@/components/HowStory';
 import { Counters } from '@/components/Counters';
 import { LogList } from '@/components/LogList';
 import { Empty, Page, UnavailablePanel } from '@/components/common';
@@ -55,19 +56,9 @@ export function HomeView() {
           </div>
         ) : null}
       </section>
+      <HowStory />
       <Page>
-        <Panel eyebrow={HOME.stepsEyebrow}>
-          <ol className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {HOME.steps.map((s, i) => (
-              <li key={s.title}>
-                <span className="text-xs text-muted">{String(i + 1).padStart(2, '0')}</span>
-                <h3 className="mt-1 text-lg">{s.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted">{s.body}</p>
-              </li>
-            ))}
-          </ol>
-        </Panel>
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_2fr]">
+        <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
           <Counters />
           <LogList />
         </div>

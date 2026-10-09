@@ -82,6 +82,52 @@ export const HOME = {
   fieldEmptySentence: 'No coin has launched yet. The first coin that exists will be the first real launch.',
 } as const;
 
+// ───────────────────────────── home: scroll story ─────────────────────────────
+/**
+ * The scroll story under the hero. The visual is an illustration driven by
+ * scroll and pointer only; `label` says so on screen. Mechanic wording follows
+ * physics.md and HOME.steps.
+ */
+export const STORY = {
+  eyebrow: 'HOW IT WORKS',
+  title: 'Follow one coin from launch to its daughter',
+  label: 'illustration · not live data',
+  jumpLabel: 'jump to chapter',
+  chapters: [
+    {
+      key: 'launch',
+      title: 'Launch',
+      body: 'A coin launches on pump.fun in the game state “superposed”: some of its parameters are published as ranges rather than single numbers, and the decision that resolves them has not been made yet.',
+      visual: 'The point is the coin. The cloud around it is its published ranges.',
+    },
+    {
+      key: 'decay',
+      title: 'Decay',
+      body: 'Its decay progress rises with time since its last trade, according to a half-life published at launch. Every buy partially resets it: the Zeno mechanic, named after the quantum Zeno effect; the resemblance is in the shape only.',
+      visual: 'The ring is the life left. Tap the chamber, or press the button, to buy and watch it refill.',
+      action: 'Buy',
+    },
+    {
+      key: 'measure',
+      title: 'Measure',
+      body: 'Anyone can measure a superposed coin. Bytes from a hardware quantum random number generator go through a public, deterministic resolver: survive, collapse, or tunnel. Every outcome ships with a proof bundle anyone can verify.',
+      visual: 'Bytes fall in from above. The three rings below are the outcomes, left to right: survive, tunnel, collapse. Here the draw lands on collapse; it could as well have been survive or tunnel.',
+    },
+    {
+      key: 'collapse',
+      title: 'Collapse',
+      body: 'On collapse the mother is finished and a daughter coin is born. The daughter’s half-life and ranges are a fixed public function of how the mother died, so the daughter starts superposed again.',
+      visual: 'The mother dims; its cloud flows into the daughter and becomes a new set of ranges.',
+    },
+    {
+      key: 'share',
+      title: 'Your share',
+      body: 'Every holder of the mother receives a share of the daughter at birth: their bag fraction times an entanglement weight computed from how they held, verifiable by recomputation. The coin is new and can fail; the position carries over.',
+      visual: 'Each holder sends a stream to its place around the daughter. Bigger bags and steadier holding make bigger shares.',
+    },
+  ],
+} as const;
+
 // ───────────────────────────── field ─────────────────────────────
 export const FIELD = {
   title: 'The field',

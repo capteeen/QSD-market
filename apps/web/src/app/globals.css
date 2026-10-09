@@ -113,3 +113,40 @@ a {
 .qsd-markdown a { text-decoration: underline; text-underline-offset: 3px; }
 .qsd-markdown strong { color: var(--qsd-tunnel); }
 .qsd-markdown blockquote { border-left: 2px solid var(--qsd-border); padding-left: 1rem; color: var(--qsd-muted); }
+
+/* home scroll story */
+.qsd-story-screen {
+  height: 100vh;
+  height: 100svh;
+}
+.qsd-story-card {
+  opacity: 0.25;
+  transform: translateY(12px);
+  transition: opacity var(--dur-slow) var(--ease-viscous), transform var(--dur-slow) var(--ease-viscous);
+}
+.qsd-story-card[data-active='true'] {
+  opacity: 1;
+  transform: none;
+}
+.qsd-story-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--qsd-muted);
+  background: transparent;
+  transition: background-color var(--dur-slow) var(--ease-viscous), border-color var(--dur-slow) var(--ease-viscous);
+}
+.qsd-story-dot[data-active='true'] {
+  background: var(--qsd-probability);
+  border-color: var(--qsd-probability);
+}
+.qsd-story-dot:focus-visible {
+  outline: 1px solid var(--qsd-probability);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .qsd-story-card {
+    transition: none;
+    transform: none;
+  }
+}
