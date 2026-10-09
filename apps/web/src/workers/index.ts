@@ -2,7 +2,7 @@
  * BullMQ workers: `pnpm --filter web worker`.
  *
  *   ingest-trades  buys queued by the webhook when the database was unreachable
- *   auto-measure   every minute: measure every coin whose window elapsed (by = 'protocol')
+ *   auto-measure   every minute (10 s in the launch phase): measure every coin whose window elapsed (by = 'protocol')
  *   collapse       execute / resume a collapse (snapshot → rewards → daughter → allocation → airdrop)
  *   hourly-burn    cron at minute 0: tally fees, buy $QSD, burn
  *   snapshot       refresh a coin's identity-reserve mirror
@@ -86,7 +86,9 @@ async function main(): Promise<void> {
 
   // Repeatable jobs.
   const auto = new Queue(QUEUES.autoMeasure, { connection });
-  await auto.add('tick', {}, { repeat: { every: 60_000 }, jobId: 'auto-measure-tick', removeOnComplete: 10, removeOnFail: 50 });
+  // The launch phase's 30-second half-life is auto-measured after 60 quiet seconds, so check every 10 s instead of every minute.
+  const autoEvery = process.env.QSD_FAST_LAUNCH_PHASE?.trim() === 'true' ? 10_000 : 60_000;
+  await auto.add('tick', {}, { repeat: { every: autoEvery }, jobId: `auto-measure-tick-${autoEvery}`, removeOnComplete: 10, removeOnFail: 50 });
   if (process.env.QSD_TOKEN_MINT) {
     const burn = new Queue(QUEUES.hourlyBurn, { connection });
     await burn.add('hourly', {}, { repeat: { pattern: '0 * * * *' }, jobId: 'hourly-burn-cron', removeOnComplete: 10, removeOnFail: 50 });

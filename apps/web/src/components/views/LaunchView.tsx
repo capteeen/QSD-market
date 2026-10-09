@@ -258,7 +258,7 @@ export function LaunchView() {
                 <select className="qsd-input" value={preset} onChange={(e) => setPreset(e.target.value)}>
                   {presets.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.label} (auto-measurement after {p.maxWindowSec >= 3600 ? `${p.maxWindowSec / 3600} h` : `${p.maxWindowSec / 60} min`})
+                      {p.label} (auto-measurement after {p.maxWindowSec >= 3600 ? `${p.maxWindowSec / 3600} h` : p.maxWindowSec >= 120 ? `${p.maxWindowSec / 60} min` : `${p.maxWindowSec} s`})
                     </option>
                   ))}
                 </select>

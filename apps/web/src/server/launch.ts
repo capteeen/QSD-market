@@ -85,12 +85,12 @@ export interface LaunchPreset {
   maxWindowSec: number;
 }
 
-/** Launch-phase preset: a 5-minute half-life, auto-measured after 10 quiet minutes, so a coin with no trading collapses within minutes. */
-export const FAST_LAUNCH_PRESET: LaunchPreset = { id: '5m', label: '5 minutes (launch phase)', halfLifeSec: 300, maxWindowSec: maxWindowSec(300) };
+/** Launch-phase preset: a 30-second half-life, auto-measured after 60 quiet seconds, so a coin with no trading collapses within minutes. */
+export const FAST_LAUNCH_PRESET: LaunchPreset = { id: '30s', label: '30 seconds (launch phase)', halfLifeSec: 30, maxWindowSec: maxWindowSec(30) };
 
 /**
  * The half-life presets /launch offers. With QSD_FAST_LAUNCH_PHASE=true every
- * generation-1 coin gets the 5-minute preset; daughters still take their
+ * generation-1 coin gets the 30-second preset; daughters still take their
  * half-life from the genesis channel table (1 hour or more), so only the
  * first generation is fast.
  */

@@ -63,7 +63,7 @@ QSD_GENESIS_CONFIG={"supplyUnits":"1000000000000000","decimals":6,"poolUnits":{"
 
 Launch fees leave only about 0.02 SOL each after costs (estimate), so expect to fund collapses yourself (about 0.1 SOL each). `QSD_MAX_COLLAPSES_PER_DAY` (default `3` on mainnet) caps how many collapses run in any 24 hours; extra ones wait their turn.
 
-**Launch phase.** With `QSD_FAST_LAUNCH_PHASE=true`, every new coin gets a 5-minute half-life and the worker measures it after 10 quiet minutes, so with no trading it usually collapses within 10 to 30 minutes and its daughter appears. Daughters keep the genesis half-lives (1 hour or more), so only the first generation is fast. This needs the worker running.
+**Launch phase.** With `QSD_FAST_LAUNCH_PHASE=true`, every new coin gets a 30-second half-life and the worker measures it after 60 quiet seconds, so with no trading it usually collapses within a minute or two and its daughter appears a few minutes later (the launch and airdrop transactions take that long). Daughters keep the genesis half-lives (1 hour or more), so only the first generation is fast. This needs the worker running.
 
 ## 4. Launch the $QSD coin
 

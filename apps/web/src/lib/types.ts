@@ -211,7 +211,7 @@ export interface LaunchQuoteResponse {
   identityReserveLamports: string | null;
   /** Fixed dev buy every launch pays for. */
   devBuyLamports: string | null;
-  /** Half-life presets this deployment offers (only the 5-minute one during the launch phase). */
+  /** Half-life presets this deployment offers (only the 30-second one during the launch phase). */
   presets: { id: string; label: string; maxWindowSec: number }[];
   payTo: string | null;
   reasons: { launchCost?: string; identityReserve?: string; devBuy?: string; payTo?: string };
