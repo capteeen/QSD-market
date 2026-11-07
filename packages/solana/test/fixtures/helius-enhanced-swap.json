@@ -1,0 +1,72 @@
+{
+  "_note": "DOCUMENTED EXAMPLE, not live data. Field names follow Helius's enhanced-transaction webhook docs (https://www.helius.dev/docs/webhooks, fetched 2026-10-09): signature, slot, timestamp, type, source, fee, feePayer, nativeTransfers, tokenTransfers, accountData. events.swap follows the Helius SDK SwapEvent shape. Addresses and amounts are illustrative.",
+  "payload": [
+    {
+      "description": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU swapped 0.5 SOL for 1234567.890123 tokens",
+      "type": "SWAP",
+      "source": "JUPITER",
+      "fee": 5000,
+      "feePayer": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+      "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
+      "slot": 287654321,
+      "timestamp": 1759987200,
+      "nativeTransfers": [
+        { "amount": 500000000, "fromUserAccount": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU", "toUserAccount": "CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM" }
+      ],
+      "tokenTransfers": [
+        {
+          "fromTokenAccount": "25DTUAd1roBFoUQaxJQByL6Qy2cKQCBp4bK9sgfy9UiM",
+          "toTokenAccount": "DTYuh7gAGGZg2okM7hdFfU1yMY9LUemCiPyD5Z5GCs6Z",
+          "fromUserAccount": "CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM",
+          "toUserAccount": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+          "tokenAmount": 1234567.890123,
+          "mint": "DUSTawucrTsGU8hcqRdHDCbuYhCPADMLM2VcCb8VnFnQ",
+          "tokenStandard": "Fungible"
+        }
+      ],
+      "accountData": [
+        { "account": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU", "nativeBalanceChange": -500005000, "tokenBalanceChanges": [] }
+      ],
+      "events": {
+        "swap": {
+          "nativeInput": { "account": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU", "amount": "500000000" },
+          "nativeOutput": null,
+          "tokenInputs": [],
+          "tokenOutputs": [
+            {
+              "userAccount": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+              "tokenAccount": "DTYuh7gAGGZg2okM7hdFfU1yMY9LUemCiPyD5Z5GCs6Z",
+              "mint": "DUSTawucrTsGU8hcqRdHDCbuYhCPADMLM2VcCb8VnFnQ",
+              "rawTokenAmount": { "tokenAmount": "1234567890123", "decimals": 6 }
+            }
+          ],
+          "tokenFees": [],
+          "nativeFees": [],
+          "innerSwaps": []
+        }
+      }
+    },
+    {
+      "description": "plain token transfer, not a buy",
+      "type": "TRANSFER",
+      "source": "SYSTEM_PROGRAM",
+      "fee": 5000,
+      "feePayer": "CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM",
+      "signature": "2v1QXyQW4T6GBe2kmGUjFw9jTjQ2A1z6Dk2xp1Q9Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1Q1",
+      "slot": 287654322,
+      "timestamp": 1759987260,
+      "nativeTransfers": [],
+      "tokenTransfers": [
+        {
+          "fromUserAccount": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+          "toUserAccount": "CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM",
+          "tokenAmount": 10,
+          "mint": "DUSTawucrTsGU8hcqRdHDCbuYhCPADMLM2VcCb8VnFnQ",
+          "tokenStandard": "Fungible"
+        }
+      ],
+      "accountData": [],
+      "events": {}
+    }
+  ]
+}

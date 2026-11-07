@@ -1,0 +1,111 @@
+/*
+ * Inner pages in the same manner as the home page: a page hero (mono eyebrow,
+ * big accent headline, a short body, arrow list) with the dial at the right,
+ * then content in panels and terminals. A page or a section flips to paper
+ * with data-theme="brightfield". Every colour is a ui-tokens variable.
+ */
+
+/* ── page shell ──────────────────────────────────────── */
+.qsd-page { position: relative; background: var(--qsd-void); color: var(--qsd-text); }
+.qsd-page[data-theme='brightfield'] { color: var(--qsd-ink); }
+.qsd-page__inner { max-width: 1440px; margin: 0 auto; padding: 3rem 1.25rem 5rem; }
+@media (min-width: 900px) { .qsd-page__inner { padding: 4rem 2.5rem 6rem; } }
+
+/* ── page hero ───────────────────────────────────────── */
+.qsd-phero { display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: center; margin-bottom: 2.5rem; }
+@media (min-width: 900px) { .qsd-phero { grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem); gap: 3rem; margin-bottom: 3.5rem; } }
+.qsd-phero[data-dial='false'] { grid-template-columns: 1fr; }
+.qsd-phero__copy { min-width: 0; }
+.qsd-phero__title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(2.2rem, 5vw, 4.4rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  color: var(--accent, var(--qsd-text));
+  margin: 0.6rem 0 1rem;
+  overflow-wrap: anywhere;
+}
+.qsd-page[data-theme='brightfield'] .qsd-phero__title { color: var(--accent, var(--qsd-ink)); }
+.qsd-phero__body { font-family: var(--font-heading); font-weight: 400; font-size: clamp(1rem, 1.3vw, 1.15rem); line-height: 1.5; max-width: 34rem; margin: 0; }
+.qsd-phero__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.25rem; margin-top: 1.5rem; }
+.qsd-phero__dial { width: min(52vmin, 100%); max-width: 22rem; margin: 0 auto; }
+@media (max-width: 899px) { .qsd-phero__dial { display: none; } }
+.qsd-phero .qsd-arrows { margin-top: 1.4rem; }
+
+/* ── content layout ──────────────────────────────────── */
+.qsd-pgrid { display: grid; gap: 1.5rem; }
+.qsd-pgrid + .qsd-pgrid, .qsd-pgrid + .qsd-pblock, .qsd-pblock + .qsd-pgrid, .qsd-pblock + .qsd-pblock { margin-top: 1.5rem; }
+@media (min-width: 1024px) {
+  .qsd-pgrid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .qsd-pgrid--12 { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+  .qsd-pgrid--21 { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  .qsd-pgrid--32 { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+}
+.qsd-pgrid > * { min-width: 0; }
+.qsd-pblock { min-width: 0; }
+.qsd-pscene { position: relative; height: 50vh; min-height: 360px; border: var(--border-rule) solid var(--qsd-border); border-radius: var(--radius-card); overflow: hidden; background: var(--qsd-void); }
+
+/* ── panels (ui-tokens primitives, flat in this design) ── */
+.qsd-panel { background: var(--qsd-panel); backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; padding: 1.1rem 1.25rem 1.25rem; }
+.qsd-panel .qsd-eyebrow { display: block; }
+.qsd-panel > .qsd-heading { font-size: var(--text-xl) !important; letter-spacing: -0.03em; margin: 0.35rem 0 0.9rem !important; }
+.qsd-panel[data-unavailable='true'] { background: transparent; }
+.qsd-empty { background: transparent; }
+.qsd-datarow { font-size: var(--text-sm); }
+.qsd-datarow__label { letter-spacing: 0.02em; }
+
+/* ── filters / selects ───────────────────────────────── */
+.qsd-filters { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; font-size: var(--text-xs); letter-spacing: 0.12em; text-transform: uppercase; color: var(--qsd-muted); }
+.qsd-filters label { display: inline-flex; align-items: center; gap: 0.6rem; }
+.qsd-filters select { width: auto; font-size: var(--text-xs); letter-spacing: 0.1em; text-transform: uppercase; padding: 0.5rem 0.7rem; background: var(--qsd-panel); }
+.qsd-input { background: var(--qsd-panel); }
+.qsd-input:focus { border-color: var(--qsd-muted); }
+
+/* ── tables ──────────────────────────────────────────── */
+.qsd-table { font-family: var(--font-mono); }
+.qsd-table th { letter-spacing: 0.14em; padding: 0.6rem 0.75rem; color: var(--qsd-muted); }
+.qsd-table td { padding: 0.65rem 0.75rem; }
+.qsd-table tbody tr:hover td { background: color-mix(in srgb, var(--qsd-text) 4%, transparent); }
+
+/* ── forms ───────────────────────────────────────────── */
+.qsd-form { display: flex; flex-direction: column; gap: 1rem; }
+.qsd-form label { display: block; font-size: var(--text-xs); letter-spacing: 0.12em; text-transform: uppercase; color: var(--qsd-muted); }
+.qsd-form label > input, .qsd-form label > select, .qsd-form label > textarea { margin-top: 0.4rem; text-transform: none; letter-spacing: 0; }
+.qsd-form__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-top: 0.5rem; }
+.qsd-form__error { font-size: var(--text-xs); color: var(--qsd-collapse); }
+.qsd-note { font-size: var(--text-xs); color: var(--qsd-muted); line-height: 1.6; }
+
+/* ── tabs (the /how documents) ───────────────────────── */
+.qsd-tabs { display: inline-flex; gap: 0.5rem; }
+
+/* ── paper pages ─────────────────────────────────────── */
+.qsd-page[data-theme='brightfield'] .qsd-markdown h2 { color: var(--qsd-collapse); }
+.qsd-page[data-theme='brightfield'] .qsd-markdown code { color: var(--qsd-ink); background: color-mix(in srgb, var(--qsd-ink) 7%, transparent); padding: 0 0.25em; border-radius: 3px; }
+.qsd-page[data-theme='brightfield'] .qsd-markdown pre code { background: transparent; padding: 0; }
+.qsd-page[data-theme='brightfield'] .qsd-markdown strong { color: var(--qsd-ink); }
+.qsd-page[data-theme='brightfield'] .qsd-markdown p, .qsd-page[data-theme='brightfield'] .qsd-markdown li { font-family: var(--font-heading); font-size: var(--text-base); line-height: 1.6; }
+.qsd-page[data-theme='brightfield'] .qsd-term { border-color: var(--qsd-border); }
+.qsd-page[data-theme='brightfield'] .qsd-btn { background: var(--qsd-panel); color: var(--qsd-ink); border-color: var(--qsd-border); }
+.qsd-page[data-theme='brightfield'] .qsd-btn[data-primary='true'] { background: var(--qsd-ink); color: var(--qsd-paper); border-color: var(--qsd-ink); }
+.qsd-docs { max-width: 52rem; }
+.qsd-docs__source { font-size: var(--text-xs); color: var(--qsd-muted); margin: 0 0 1rem; }
+
+/* ── coin page extras ────────────────────────────────── */
+.qsd-state { display: inline-flex; align-items: center; gap: 0.5rem; font-size: var(--text-xs); letter-spacing: 0.12em; text-transform: uppercase; }
+.qsd-state i { width: 0.55rem; height: 0.55rem; border-radius: 999px; }
+.qsd-measurement { border: var(--border-rule) solid var(--qsd-border); border-radius: var(--radius-card); padding: 1rem 1.1rem; background: var(--qsd-panel); }
+.qsd-measurement + .qsd-measurement { margin-top: 1rem; }
+.qsd-measurement__head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+.qsd-measurement__actions { margin-left: auto; display: flex; gap: 0.5rem; }
+.qsd-bar { position: relative; height: 0.5rem; width: 100%; background: var(--qsd-border); border-radius: 2px; overflow: hidden; margin-top: 0.75rem; }
+.qsd-bar > i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--qsd-decay); border-radius: 2px; transition: width var(--dur-slow) var(--ease-viscous); }
+.qsd-bar--band > i { background: color-mix(in srgb, var(--qsd-probability) 55%, transparent); }
+.qsd-pcols { display: grid; gap: 0 2rem; }
+@media (min-width: 1024px) { .qsd-pcols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ── launch stage (full-bleed scene while launching) ──── */
+.qsd-stagepage { position: relative; height: calc(100vh - 64px); width: 100%; }
+.qsd-stagepage__term { position: absolute; left: 1rem; right: 1rem; bottom: 1rem; max-width: 44rem; }
+@media (min-width: 640px) { .qsd-stagepage__term { right: auto; } }
+.qsd-stagepage__status { position: absolute; right: 1rem; top: 1rem; max-width: 22rem; padding: 1rem; font-size: var(--text-xs); background: color-mix(in srgb, var(--qsd-panel) 86%, transparent); border: var(--border-rule) solid var(--qsd-border); border-radius: var(--radius-card); backdrop-filter: blur(12px); }

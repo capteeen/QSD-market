@@ -1,0 +1,28 @@
+{
+  "_comment": "DOCUMENTED EXAMPLE, NOT LIVE DATA. Shape of a successful response from GET https://api.quantumnumbers.com.au?length=8&type=hex8&size=1 as described at https://quantumnumbers.anu.edu.au/documentation (fields: success, type, length, data). The `length` field is a string in the documented example. The bytes below were typed by hand for the parser test and are not quantum output.",
+  "request": {
+    "url": "https://api.quantumnumbers.com.au?length=8&type=hex8&size=1",
+    "headers": { "x-api-key": "<redacted>" }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "date": "Thu, 09 Oct 2026 07:40:52 GMT",
+      "x-amzn-requestid": "00000000-0000-4000-8000-000000000000"
+    },
+    "body": { "success": true, "type": "hex8", "length": "8", "data": ["2f", "24", "97", "d2", "07", "a3", "9d", "67"] }
+  },
+  "responseUint8": {
+    "status": 200,
+    "body": { "success": true, "type": "uint8", "length": "4", "data": [224, 0, 255, 17] }
+  },
+  "responseForbidden": {
+    "status": 403,
+    "body": { "message": "Forbidden" }
+  },
+  "responseRateLimited": {
+    "status": 429,
+    "body": { "message": "Limit Exceeded" }
+  }
+}
