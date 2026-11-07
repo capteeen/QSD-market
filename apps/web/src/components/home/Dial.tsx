@@ -15,7 +15,7 @@ const ARCS: { from: number; to: number; color: string }[] = [
   { from: 182, to: 268, color: 'var(--qsd-violet)' },
 ];
 
-const TICK_OUTER = 'var(--qsd-collapse)';
+const TICK_OUTER = 'var(--qsd-probability)';
 const TICK_INNER = 'var(--qsd-muted)';
 const TICK_DOTS = 'var(--qsd-dead)';
 

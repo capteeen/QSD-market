@@ -279,7 +279,7 @@ describe('LineageBreadcrumb', () => {
     expect(screen.getByRole('link', { name: /M/ })).toHaveAttribute('href', '/m');
     const dots = screen.getAllByRole('img');
     expect(dots[0]).toHaveStyle({ background: '#FF6B5E' });
-    expect(dots[1]).toHaveStyle({ background: '#BFEF5A' });
+    expect(dots[1]).toHaveStyle({ background: '#AFF902' });
   });
   it('uses a custom link renderer', () => {
     render(

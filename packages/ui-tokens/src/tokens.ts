@@ -1,10 +1,10 @@
 /**
  * QSD design tokens — the single typed source of truth.
  *
- * Aesthetic (2026-10, modelled on animejs.com): a warm near-black machine
- * room, off-white type, one mechanical object drawn solid with a peach rim
- * light on dark sections and as grey line-art on warm paper sections. Mono
- * for every number, big sans headlines with one accent per section.
+ * Aesthetic: a warm near-black machine room, off-white type, one mechanical
+ * object drawn solid with a neon-green rim light on dark sections and as grey
+ * line-art on warm paper sections. Mono for every number, big sans headlines
+ * with one accent per section. The green is the mark's own (#AFF902).
  *
  * `tokens.css` mirrors these values as CSS custom properties and
  * `tailwind.preset.ts` exposes them as Tailwind theme entries. If you change
@@ -19,12 +19,12 @@ export const colors = {
   panel: '#2E2D2C',
   /** 1px rules and card borders. */
   border: '#3D3B39',
-  /** Lime. Superposition, probability, verified proofs, "alive", the live dot. */
-  probability: '#BFEF5A',
+  /** Neon green from the mark. Superposition, verified proofs, "alive", the live dot. */
+  probability: '#AFF902',
   /** Coral red. Collapse, invalid proofs, the one thing that snaps. */
   collapse: '#FF6B5E',
-  /** Amber. Decay in progress, pending, warnings. */
-  decay: '#F5B04B',
+  /** Same green, a step deeper. Decay in progress, pending, warnings. */
+  decay: '#8ED600',
   /** Near-white. Tunnelling — the coin that came back as itself. */
   tunnel: '#F5F2EC',
   /** Grey. Dead, unavailable, disabled. */
@@ -33,8 +33,8 @@ export const colors = {
   text: '#F2EFE9',
   /** Secondary text, eyebrows, labels. Quiet warm grey. */
   muted: '#9A958D',
-  /** Warm gold. The glowing core of the quantum stack (3D scene). */
-  gold: '#F0A845',
+  /** Neon green. The glowing core of the stack (3D scene), matched to the mark. */
+  gold: '#AFF902',
   /** Cool blue. The qubit at the centre of the core; the fifth dial arc. */
   ice: '#6FA2FF',
   /** Light-section background: warm paper grey. */
@@ -43,8 +43,8 @@ export const colors = {
   ink: '#262524',
   /** Line-art strokes on paper (the exploded blueprint). */
   line: '#8A8781',
-  /** Peach rim light on the dark machine. */
-  rim: '#F6C9A6',
+  /** Pale green rim light on the dark machine. */
+  rim: '#E7FF9C',
   /** Teal. The fourth dial arc; measurement in flight. */
   teal: '#5CDFB4',
   /** Violet. The sixth dial arc; lineage. */
@@ -57,15 +57,15 @@ export type ColorToken = keyof typeof colors;
 export const glassEdge = 'rgba(245,242,236,0.06)' as const;
 
 /**
- * The computation glow: peach → white. Applied as a box-shadow stack while
+ * The computation glow: neon green → white. Applied as a box-shadow stack while
  * a real operation (hash chain, QRNG draw, signature) is in flight.
  */
 export const glow = {
-  computeInner: '#F6C9A6',
+  computeInner: '#E7FF9C',
   computeOuter: '#FFFFFF',
   /** Full box-shadow value. Mirrors `--glow-compute` in tokens.css. */
   compute:
-    '0 0 2px #FFFFFF, 0 0 8px rgba(246,201,166,0.9), 0 0 24px rgba(246,201,166,0.55), 0 0 64px rgba(246,201,166,0.25)',
+    '0 0 2px #FFFFFF, 0 0 8px rgba(175,249,2,0.9), 0 0 24px rgba(175,249,2,0.55), 0 0 64px rgba(175,249,2,0.25)',
 } as const;
 
 export const fonts = {

@@ -264,7 +264,7 @@ export function LaunchView() {
 
   return (
     <PageShell>
-      <PageHero accent={ACCENT.collapse} eyebrow={LAUNCH.eyebrow} title={LAUNCH.title} body={PAGES.launch.body} arrows={PAGES.launch.arrows} figure={<RangesFigure />} />
+      <PageHero accent={ACCENT.probability} eyebrow={LAUNCH.eyebrow} title={LAUNCH.title} body={PAGES.launch.body} arrows={PAGES.launch.arrows} figure={<RangesFigure />} />
       {quote.isPending ? (
         <LoadingPanel eyebrow={LAUNCH.costEyebrow} />
       ) : !quote.data || isUnavailable(quote.data) ? (

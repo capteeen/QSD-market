@@ -250,7 +250,7 @@ Pure geometry and light: no textures, no skybox, no environment map.
 `MeshPhysicalMaterial` with `transmission: 1`, `thickness`, `ior 1.45`,
 `iridescence: 1`, `iridescenceIOR 1.3`, `iridescenceThicknessRange [100, 400]`
 (three's built-in thin-film). Rim light: directional, probability cyan
-`#BFEF5A` (lime). Computation light: peach `#F6C9A6` → white point light at the
+`#AFF902` (the mark's green). Computation light: `#E7FF9C` → white point light at the
 centre, on while hashes arrive. Per-instance emission through a shader patch
 (`aLit` attribute: 0 dark glass, 1 lit cyan, 2 active magenta-white) — one
 material, one draw call per instanced mesh. Post: `Bloom` (threshold 0.55,

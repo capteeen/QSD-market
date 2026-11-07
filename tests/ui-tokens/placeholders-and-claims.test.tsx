@@ -119,9 +119,9 @@ describe('source scan: no hard-coded numeric copy in components; stories label e
 describe('tokens match the 2026-10 redesign palette exactly (jafar replaced spec §6’s cold palette with the animejs.com-style warm one)', () => {
   it('colour hexes', () => {
     expect(colors).toEqual({
-      void: '#252423', panel: '#2E2D2C', border: '#3D3B39', probability: '#BFEF5A', collapse: '#FF6B5E',
-      decay: '#F5B04B', tunnel: '#F5F2EC', dead: '#57544F', text: '#F2EFE9', muted: '#9A958D',
-      gold: '#F0A845', ice: '#6FA2FF', paper: '#D9D7D2', ink: '#262524', line: '#8A8781', rim: '#F6C9A6', teal: '#5CDFB4', violet: '#B18BFF',
+      void: '#252423', panel: '#2E2D2C', border: '#3D3B39', probability: '#AFF902', collapse: '#FF6B5E',
+      decay: '#8ED600', tunnel: '#F5F2EC', dead: '#57544F', text: '#F2EFE9', muted: '#9A958D',
+      gold: '#AFF902', ice: '#6FA2FF', paper: '#D9D7D2', ink: '#262524', line: '#8A8781', rim: '#E7FF9C', teal: '#5CDFB4', violet: '#B18BFF',
     });
     expect(glassEdge).toBe('rgba(245,242,236,0.06)');
   });

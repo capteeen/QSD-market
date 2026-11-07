@@ -22,7 +22,6 @@ import { MerkleTerminal } from '@/components/terminal/MerkleTerminal';
 
 /** Per-section accent, as the `--accent` custom property (ui-tokens variables). */
 const ACCENT = {
-  collapse: { ['--accent' as string]: 'var(--qsd-collapse)' } as CSSProperties,
   decay: { ['--accent' as string]: 'var(--qsd-decay)' } as CSSProperties,
   probability: { ['--accent' as string]: 'var(--qsd-probability)' } as CSSProperties,
   teal: { ['--accent' as string]: 'var(--qsd-teal)' } as CSSProperties,
@@ -42,7 +41,7 @@ export function HomeView() {
     <>
       <StackStory nextBurn={nextBurn} burnReason={burnReason} />
 
-      <FeatureSection id="launch" accent={ACCENT.collapse} eyebrow={F.launch.eyebrow} title={F.launch.title} body={steps[0].body} arrows={F.launch.arrows} centre={<RangesFigure />} terminal={<XmssVerifyTerminal />} />
+      <FeatureSection id="launch" accent={ACCENT.probability} eyebrow={F.launch.eyebrow} title={F.launch.title} body={steps[0].body} arrows={F.launch.arrows} centre={<RangesFigure />} terminal={<XmssVerifyTerminal />} />
       <FeatureSection id="decay" accent={ACCENT.decay} eyebrow={F.decay.eyebrow} title={F.decay.title} body={steps[1].body} arrows={F.decay.arrows} centre={<HalfLifeFigure />} terminal={<DecayTerminal />} />
       <FeatureSection id="measure" accent={ACCENT.probability} eyebrow={F.measure.eyebrow} title={F.measure.title} body={steps[2].body} arrows={F.measure.arrows} centre={<DotGridFigure />} terminal={<ResolverTerminal />} />
       <FeatureSection id="daughter" accent={ACCENT.teal} eyebrow={F.daughter.eyebrow} title={F.daughter.title} body={steps[3].body} arrows={F.daughter.arrows} centre={<DaughterFigure />} terminal={<MerkleTerminal />} />

@@ -35,11 +35,11 @@ export interface VesselParams {
 }
 
 export const STATE_HEX: Readonly<Record<QuantumState, string>> = {
-  superposed: '#BFEF5A',
-  'measured-alive': '#BFEF5A',
+  superposed: '#AFF902',
+  'measured-alive': '#AFF902',
   collapsed: '#FF6B5E',
   tunnelled: '#F5F2EC',
-  decaying: '#F5B04B',
+  decaying: '#8ED600',
   dead: '#57544F',
 };
 

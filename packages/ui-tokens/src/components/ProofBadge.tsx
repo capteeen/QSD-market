@@ -48,7 +48,7 @@ export const attestationKindLabel: Record<AttestationKind, string> = {
 export const UNSAFE_DEV_WARNING = 'dev randomness, not a quantum draw';
 
 /**
- * Proof status pill. Colours: probability cyan for verified, decay amber
+ * Proof status pill. Colours: probability green for verified, decay green
  * for pending, collapse magenta for invalid, dead grey for unavailable,
  * muted for unverified. The circle is a quantum object; the pill is a card.
  */

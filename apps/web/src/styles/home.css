@@ -26,7 +26,7 @@
   .qsd-header__inner { padding: 1.1rem 2.5rem; }
 }
 .qsd-logo { display: inline-flex; align-items: center; text-decoration: none; }
-.qsd-logo__mark { display: block; height: 2rem; width: auto; }
+.qsd-logo__mark { display: block; height: 2.5rem; width: auto; }
 .qsd-nav { display: none; gap: 1.6rem; margin-left: auto; font-size: var(--text-xs); letter-spacing: 0.14em; text-transform: uppercase; color: var(--qsd-muted); }
 .qsd-nav a { text-decoration: none; transition: color var(--dur-slow) var(--ease-viscous); }
 .qsd-nav a:hover { color: var(--qsd-text); }
@@ -58,8 +58,8 @@
 .qsd-btn:hover:not(:disabled) { border-color: var(--qsd-muted); }
 .qsd-btn[data-primary='true'] { background: var(--qsd-text); color: var(--qsd-void); border-color: var(--qsd-text); }
 .qsd-btn[data-primary='true']:hover:not(:disabled) { background: var(--qsd-tunnel); border-color: var(--qsd-tunnel); }
-.qsd-btn--accent[data-primary='true'] { background: var(--qsd-collapse); border-color: var(--qsd-collapse); color: var(--qsd-void); }
-.qsd-btn--accent[data-primary='true']:hover:not(:disabled) { background: color-mix(in srgb, var(--qsd-collapse) 85%, white); border-color: transparent; }
+.qsd-btn--accent[data-primary='true'] { background: var(--qsd-probability); border-color: var(--qsd-probability); color: var(--qsd-void); }
+.qsd-btn--accent[data-primary='true']:hover:not(:disabled) { background: color-mix(in srgb, var(--qsd-probability) 85%, white); border-color: transparent; }
 .qsd-btn:disabled { color: var(--qsd-muted); border-color: var(--qsd-dead); cursor: not-allowed; background: transparent; }
 
 /* ── the story ───────────────────────────────────────── */
@@ -209,8 +209,8 @@
   height: 1.3rem;
   margin-left: -1.5px;
   transform: translateY(-50%);
-  background: var(--qsd-collapse);
-  box-shadow: 0 0 10px var(--qsd-collapse);
+  background: var(--qsd-probability);
+  box-shadow: 0 0 10px var(--qsd-probability);
   border-radius: 1px;
 }
 
