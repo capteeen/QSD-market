@@ -175,15 +175,12 @@ export function launchCosts(): LaunchCosts {
   return { launchCostLamports: read('QSD_LAUNCH_COST_LAMPORTS'), identityReserveLamports: read('QSD_IDENTITY_RESERVE_LAMPORTS'), devBuyLamports: read('QSD_LAUNCH_DEV_BUY_LAMPORTS') };
 }
 
-/** HYPE deposited into a pool at launch. Zero means the coin starts at a price of zero and the creator adds liquidity in any pool. */
+/** HYPE deposited into the opening pool. The Uniswap v3 open deposits none. */
 export const DEFAULT_POOL_SEED_WEI = 0n;
 
-/** Pool seed in wei. Empty is a price of zero. A positive `POOL_SEED_WEI` deposits that much HYPE from the protocol wallet and locks a Uniswap v2 pool. */
-export function poolSeedWei(env: NodeJS.ProcessEnv = process.env): bigint {
-  const v = env.POOL_SEED_WEI?.trim();
-  if (!v) return DEFAULT_POOL_SEED_WEI;
-  if (!/^\d+$/.test(v)) throw new Error('POOL_SEED_WEI must be an integer number of wei');
-  return BigInt(v);
+/** HYPE deposited when a coin opens. The Uniswap v3 open deposits none: the supply sits on the token side of the range. */
+export function poolSeedWei(): bigint {
+  return DEFAULT_POOL_SEED_WEI;
 }
 
 /** The wallet pays only the first buy it chose. A launch with no first buy sends no HYPE. */
@@ -312,10 +309,7 @@ export async function launchPreflight(): Promise<LaunchPreflight> {
     check('protocol wallet', async () => {
       const chain = getChain();
       const wei = await chain.creatorBalance();
-      const seed = chain.network === 'mainnet' ? poolSeedWei() : 0n;
-      const min = seed + PREFLIGHT_MIN_CREATOR_WEI;
-      const reason = seed === 0n ? 'pay network fees' : 'seed the pool and pay network fees';
-      if (wei < min) throw new Error(`holds ${wei} wei of HYPE, needs at least ${min} wei to ${reason}`);
+      if (wei < PREFLIGHT_MIN_CREATOR_WEI) throw new Error(`holds ${wei} wei of HYPE, needs at least ${PREFLIGHT_MIN_CREATOR_WEI} wei to pay network fees`);
       await chain.publicClient.getBlockNumber();
     }),
     check('quantum provider', () => qrngProbe()),
@@ -348,10 +342,6 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
       throw new LaunchValidationError(e instanceof AuthError ? e.message : e instanceof Error ? e.message : String(e));
     }
 
-    if (chain.network === 'mainnet' && poolSeedWei() === 0n && BigInt(form.devBuyWei) > 0n) {
-      throw new LaunchValidationError('a first buy needs HYPE in a pool, and this coin opens at a price of zero');
-    }
-
     push('status', { step: 'payment', message: 'verifying payment' });
     yield* drain();
     await verifyPayment(form, chain.creatorAddress());
@@ -372,9 +362,7 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     if (chain.network === 'mainnet') {
       if (!session.launcher || !session.openPool) throw new Error('the pool launcher is not configured');
       salt = keccak256(toHex0x(crypto.getRandomValues(new Uint8Array(32))));
-      const seedForAddress = poolSeedWei();
-      const recipient = seedForAddress === 0n ? (form.wallet as Address) : session.launcher;
-      ca = predictedPoolTokenAddress(session.launcher, salt, { name: form.name.trim(), symbol: form.ticker, supply: minted, recipient });
+      ca = predictedPoolTokenAddress(session.launcher, salt, { name: form.name.trim(), symbol: form.ticker, supply: minted, recipient: session.launcher });
     } else {
       ca = session.predictedCa;
     }
@@ -459,20 +447,17 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     yield* drain();
     timer.mark('signature + proof anchor');
 
-    // 7. On mainnet with no seed, mint the supply to the creator. A positive seed opens a locked Uniswap v2 pool.
+    // 7. On mainnet, open a one-sided Uniswap v3 pool. No HYPE is deposited. The optional first buy is swapped in the same transaction.
     //    On testnet there is no Uniswap deployment, so the coin is the ERC-20 only.
-    const openingSeed = chain.network === 'mainnet' ? poolSeedWei() : 0n;
-    push('status', { step: 'launch', message: openingSeed === 0n ? 'deploying the coin on Elysium' : 'opening the HYPE pool on Elysium' });
+    push('status', { step: 'launch', message: chain.network === 'mainnet' ? 'opening the HYPE pool on Elysium' : 'deploying the coin on Elysium' });
     yield* drain();
     const launch =
       chain.network === 'mainnet'
         ? await (async () => {
-            const seed = poolSeedWei();
             const firstBuy = BigInt(form.devBuyWei);
             const bal = await session.balanceWei();
-            const reason = seed === 0n ? 'pay network fees' : 'seed the pool and fill the first buy';
-            if (bal < seed + firstBuy) throw new Error(`protocol wallet holds ${bal} wei of HYPE, needs ${seed + firstBuy} wei to ${reason}`);
-            return session.openPool!({ name: form.name.trim(), symbol: form.ticker, supply: minted, creator: form.wallet as Address, firstBuyWei: firstBuy, seedWei: seed, salt: salt! });
+            if (bal < firstBuy) throw new Error(`protocol wallet holds ${bal} wei of HYPE, needs ${firstBuy} wei to fill the first buy`);
+            return session.openPool!({ name: form.name.trim(), symbol: form.ticker, supply: minted, creator: form.wallet as Address, firstBuyWei: firstBuy, seedWei: 0n, salt: salt! });
           })()
         : await session.deployToken({ name: form.name.trim(), symbol: form.ticker, supply: minted, recipient: address });
     if (launch.ca.toLowerCase() !== ca.toLowerCase()) throw new Error(`deployed ${launch.ca} does not match the reserved ${ca}`);

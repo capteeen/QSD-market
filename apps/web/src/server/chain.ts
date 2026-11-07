@@ -7,14 +7,15 @@ import {
   ELYSIUM_MAINNET_PUBLIC_RPC,
   ELYSIUM_TESTNET_ALCHEMY_RPC,
   ELYSIUM_TESTNET_RPC,
-  UNISWAP_V2_ROUTER_MAINNET,
+  UNISWAP_V3_POSITION_MANAGER_MAINNET,
+  UNISWAP_V3_ROUTER_MAINNET,
   WHYPE_MAINNET,
   WHYPE_TESTNET,
   deployInfinitwapToken,
-  deployLauncher,
+  deployLauncherV3,
   elysiumMainnet,
   elysiumTestnet,
-  launchWithPool,
+  launchWithV3,
   predictedTokenAddress,
   sendAnchor,
   type PooledLaunch,
@@ -65,7 +66,7 @@ export interface ElysiumChain {
     /** Testnet CREATE address. Mainnet predicts with `predictedPoolTokenAddress` instead. */
     predictedCa: Address;
     deployNonce: bigint;
-    /** Set on mainnet: the launcher that opens the Uniswap v2 pool. */
+    /** Set on mainnet: the launcher that opens the one-sided Uniswap v3 pool. */
     launcher?: Address;
     deployToken: (args: { name: string; symbol: string; supply: bigint; recipient: Address }) => Promise<{ ca: Address; txHash: Hash; supply: bigint; path: 'elysium-erc20' }>;
     openPool?: (args: PoolOpenArgs) => Promise<PooledLaunch>;
@@ -110,25 +111,23 @@ export function networkFromEnv(env: NodeJS.ProcessEnv): ElysiumNetwork {
   return network;
 }
 
-const LAUNCHER_KEY = 'elysium/launcher/v2';
-const launcherMemo = globalThis as unknown as { __qsdLauncher?: Promise<Address> };
+const LAUNCHER_KEY = 'elysium/launcher/v3';
+const launcherMemo = globalThis as unknown as { __qsdLauncherV3?: Promise<Address> };
 
 async function ensureLauncher(
   clients: { publicClient: PublicClient; walletClient: WalletClient; account: Address },
-  router: Address,
 ): Promise<Address> {
-  if (!launcherMemo.__qsdLauncher) {
-    launcherMemo.__qsdLauncher = loadOrDeployLauncher(clients, router).catch((e: unknown) => {
-      delete launcherMemo.__qsdLauncher;
+  if (!launcherMemo.__qsdLauncherV3) {
+    launcherMemo.__qsdLauncherV3 = loadOrDeployLauncher(clients).catch((e: unknown) => {
+      delete launcherMemo.__qsdLauncherV3;
       throw e;
     });
   }
-  return launcherMemo.__qsdLauncher;
+  return launcherMemo.__qsdLauncherV3;
 }
 
 async function loadOrDeployLauncher(
   clients: { publicClient: PublicClient; walletClient: WalletClient; account: Address },
-  router: Address,
 ): Promise<Address> {
   const fromEnv = process.env.INFINITWAP_LAUNCHER?.trim();
   const stored = fromEnv && isAddress(fromEnv) ? getAddress(fromEnv) : await readStoredLauncher();
@@ -138,7 +137,7 @@ async function loadOrDeployLauncher(
     if (code && code !== '0x') return stored;
     if (fromEnv) throw new Error('INFINITWAP_LAUNCHER has no contract code on this chain');
   }
-  const deployed = await deployLauncher(clients, router);
+  const deployed = await deployLauncherV3(clients, UNISWAP_V3_POSITION_MANAGER_MAINNET, UNISWAP_V3_ROUTER_MAINNET);
   await rememberLauncher(deployed);
   return deployed;
 }
@@ -195,7 +194,7 @@ function build(env: NodeJS.ProcessEnv): ElysiumChain {
     creatorAddress: () => account.address,
     creatorBalance: () => publicClient.getBalance({ address: account.address }),
     async withCreator() {
-      const launcher = network === 'mainnet' ? await ensureLauncher(clients, UNISWAP_V2_ROUTER_MAINNET) : undefined;
+      const launcher = network === 'mainnet' ? await ensureLauncher(clients) : undefined;
       const startNonce = BigInt(await publicClient.getTransactionCount({ address: account.address, blockTag: 'pending' }));
       const deployNonce = startNonce + ANCHORS_BEFORE_DEPLOY;
       const anchor: AnchorFn = async (hashHex, kind, nonceHex) => {
@@ -215,7 +214,16 @@ function build(env: NodeJS.ProcessEnv): ElysiumChain {
         deployToken: (args) => deployInfinitwapToken(clients, { ...args, nonce: deployNonce }),
         ...(launcher
           ? {
-              openPool: (args: PoolOpenArgs) => launchWithPool(clients, { ...args, launcher }),
+              openPool: (args: PoolOpenArgs) =>
+                launchWithV3(clients, {
+                  launcher,
+                  name: args.name,
+                  symbol: args.symbol,
+                  supply: args.supply,
+                  creator: args.creator,
+                  firstBuyWei: args.firstBuyWei,
+                  salt: args.salt,
+                }),
             }
           : {}),
         balanceWei: () => publicClient.getBalance({ address: account.address }),

@@ -2,7 +2,7 @@
 
 An Elysium launchpad. The same pages as before — home, launch, coin, field, measure, burns, how, me, lineage — now settle a coin as an ERC-20 on Elysium testnet and take payment in HYPE.
 
-This is not an official Kinetiq or Hyperliquid product. A launch on Elysium mainnet (chain ID 99901) deploys an ERC-20 and mints the whole supply to the creator at a price of zero. The creator adds liquidity in any pool. Set `POOL_SEED_WEI` to a positive wei amount to instead deposit that HYPE from the protocol wallet and lock a Uniswap v2 pool. Kinetiq's own public mainnet RPC and block explorer are not published yet; the app uses a public relay for chain 99901 until they are. Set `ELYSIUM_NETWORK=testnet` to deploy an ERC-20 on testnet (chain ID 99801) with no pool.
+This is not an official Kinetiq or Hyperliquid product. A launch on Elysium mainnet (chain ID 99901) deploys an ERC-20 and opens it in an official Uniswap v3 pool against WHYPE. No HYPE is deposited: the supply sits on the token side of a one-sided range, the position NFT is locked, and the first buyer supplies the first HYPE. An optional first buy can be included in the launch. Kinetiq's own public mainnet RPC and block explorer are not published yet; the app uses a public relay for chain 99901 until they are. Set `ELYSIUM_NETWORK=testnet` to deploy an ERC-20 on testnet (chain ID 99801) with no pool.
 
 ## Run
 

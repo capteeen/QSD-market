@@ -24,7 +24,7 @@ export function launcherArtifact(): TokenArtifact {
   return { abi: json.abi, bytecode: json.bytecode.object };
 }
 
-/** CREATE2 address of the token `launch` deploys. The init-code recipient is the creator when the seed is zero, and the launcher when the seed is added as liquidity. */
+/** CREATE2 address of the token a launcher deploys. The v3 open mints to the launcher so it can deposit the supply. */
 export function predictedPoolTokenAddress(launcher: Address, salt: Hex, args: DeployArgs): Address {
   return getContractAddress({
     bytecode: tokenInitCode(args),
@@ -52,7 +52,7 @@ export interface PooledLaunch {
   supply: bigint;
   pair: Address;
   tokensOut: bigint;
-  path: 'elysium-v2';
+  path: 'elysium-v2' | 'elysium-v3';
 }
 
 export interface PoolLaunchArgs {
@@ -112,4 +112,78 @@ export async function launchWithPool(clients: DeployClients, args: PoolLaunchArg
   if (!pair) throw new Error('pool launch did not report a pair');
   if (args.seedWei > 0n && pair === '0x0000000000000000000000000000000000000000') throw new Error('pool launch did not open a pair');
   return { ca: token, txHash: hash, supply: args.supply, pair, tokensOut, path: 'elysium-v2' };
+}
+
+export function launcherV3Artifact(): TokenArtifact {
+  const file = path.resolve(here, '../artifacts/InfinitwapLauncherV3.json');
+  const json = JSON.parse(readFileSync(file, 'utf8')) as { abi: Abi; bytecode: { object: Hex } };
+  if (!json.bytecode?.object || json.bytecode.object === '0x') throw new Error('InfinitwapLauncherV3 bytecode is missing; run forge build in packages/elysium/contracts');
+  return { abi: json.abi, bytecode: json.bytecode.object };
+}
+
+export async function deployLauncherV3(clients: DeployClients, positionManager: Address, swapRouter: Address): Promise<Address> {
+  const art = launcherV3Artifact();
+  const hash = await clients.walletClient.sendTransaction({
+    account: clients.walletClient.account ?? clients.account,
+    chain: clients.walletClient.chain,
+    data: encodeDeployData({ abi: art.abi, bytecode: art.bytecode, args: [positionManager, swapRouter] }),
+  } as Parameters<DeployClients['walletClient']['sendTransaction']>[0]);
+  const receipt = await clients.publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== 'success' || !receipt.contractAddress) throw new Error(`launcher deploy reverted: ${hash}`);
+  return getAddress(receipt.contractAddress);
+}
+
+export interface V3LaunchArgs {
+  launcher: Address;
+  name: string;
+  symbol: string;
+  supply: bigint;
+  creator: Address;
+  firstBuyWei: bigint;
+  salt: Hex;
+}
+
+/** One transaction: deploy the token, open a one-sided Uniswap v3 range with 0 WHYPE, lock the position, fill the optional first buy. */
+export async function launchWithV3(clients: DeployClients, args: V3LaunchArgs): Promise<PooledLaunch> {
+  const art = launcherV3Artifact();
+  const expected = predictedPoolTokenAddress(args.launcher, args.salt, {
+    name: args.name,
+    symbol: args.symbol,
+    supply: args.supply,
+    recipient: args.launcher,
+  });
+  const data = encodeFunctionData({
+    abi: art.abi,
+    functionName: 'launch',
+    args: [args.name, args.symbol, args.supply, args.creator, args.firstBuyWei, args.salt],
+  });
+  const hash = await clients.walletClient.sendTransaction({
+    account: clients.walletClient.account ?? clients.account,
+    chain: clients.walletClient.chain,
+    to: args.launcher,
+    data,
+    value: args.firstBuyWei,
+  } as Parameters<DeployClients['walletClient']['sendTransaction']>[0]);
+  const receipt = await clients.publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== 'success') throw new Error(`pool launch reverted: ${hash}`);
+
+  let token: Address | null = null;
+  let pool: Address | null = null;
+  let tokensOut = 0n;
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== args.launcher.toLowerCase()) continue;
+    try {
+      const decoded = decodeEventLog({ abi: art.abi, data: log.data, topics: log.topics });
+      if (decoded.eventName !== 'Launched') continue;
+      const launched = decoded.args as unknown as { token: Address; pool: Address; tokensOut: bigint };
+      token = getAddress(launched.token);
+      pool = getAddress(launched.pool);
+      tokensOut = launched.tokensOut;
+    } catch {
+      // not this event
+    }
+  }
+  if (!token || token.toLowerCase() !== expected.toLowerCase()) throw new Error(`deployed ${token ?? 'missing'} is not the predicted ${expected}`);
+  if (!pool || pool === '0x0000000000000000000000000000000000000000') throw new Error('pool launch did not open a pool');
+  return { ca: token, txHash: hash, supply: args.supply, pair: pool, tokensOut, path: 'elysium-v3' };
 }

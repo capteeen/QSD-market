@@ -10,8 +10,8 @@ export {
   elysiumMainnet,
   elysiumTestnet,
 } from './chain.js';
-export { MULTICALL3_TESTNET, UNISWAP_V2_FACTORY_MAINNET, UNISWAP_V2_ROUTER_MAINNET, USDC_TESTNET, WHYPE_MAINNET, WHYPE_TESTNET } from './addresses.js';
+export { MULTICALL3_TESTNET, UNISWAP_V2_FACTORY_MAINNET, UNISWAP_V2_ROUTER_MAINNET, UNISWAP_V3_FACTORY_MAINNET, UNISWAP_V3_POSITION_MANAGER_MAINNET, UNISWAP_V3_ROUTER_MAINNET, USDC_TESTNET, WHYPE_MAINNET, WHYPE_TESTNET } from './addresses.js';
 export { PaymentReadError, readNativeTransfer, type NativeTransfer } from './payment.js';
 export { infinitwapTokenArtifact, predictedTokenAddress, tokenInitCode, type DeployArgs, type TokenArtifact } from './token.js';
 export { anchorCalldata, deployInfinitwapToken, sendAnchor, type AnchorSend, type DeployClients, type DeployedToken } from './deploy.js';
-export { deployLauncher, launchWithPool, launcherArtifact, predictedPoolTokenAddress, type PooledLaunch, type PoolLaunchArgs } from './pool.js';
+export { deployLauncher, deployLauncherV3, launchWithPool, launchWithV3, launcherArtifact, predictedPoolTokenAddress, type PooledLaunch, type PoolLaunchArgs, type V3LaunchArgs } from './pool.js';
