@@ -174,7 +174,7 @@ export interface InsertCoinExtra {
   launchBundle?: unknown;
   createdBy?: string;
   /** The payment transaction a user launch consumed (unique on Coin). */
-  paymentTx?: string;
+  paymentTx?: string | null;
   website?: string | null;
   twitter?: string | null;
   telegram?: string | null;
