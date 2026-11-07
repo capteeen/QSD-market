@@ -1,6 +1,13 @@
-# How QSD works: the rules and the numbers
+# How INFINITWAP works: the rules and the numbers
 
-This page is the public description of the QSD protocol rules. Every number
+This page is the public description of the INFINITWAP protocol rules. Coins
+launch on Elysium and are paid for in HYPE. A ticker can be launched once.
+The wallet that pays is the creator of that ticker, and creator rewards for
+it stay with that wallet. Daughter coin creation is not available on Elysium
+yet: no pool is published to buy against, so a collapse does not create a
+second coin and does not spend HYPE to buy one.
+
+Every number
 on it is a constant exported from the open-source `@qsd/protocol` package as
 `PROTOCOL_PARAMS`, and a test in that package reads this file and fails if
 any number here drifts from the code. The physics vocabulary (superposition,
@@ -158,11 +165,10 @@ supply — is paid to the measurer and the other 80 % is burned. All
 divisions round down; the measurer's units plus the burned units equal the
 removed amount exactly.
 
-On mainnet the removed units come from the mother tokens the protocol bought
-with the launch dev buy. An operator who does not buy more
-(`QSD_REWARD_SHORTFALL_MAX_SOL=0`, the default) caps the removed amount at
-what the protocol holds, so it can be less than 1 %; the 20 % / 80 % split
-is unchanged and the collapse record shows the units actually removed.
+On Elysium no pool is published, so the protocol does not buy mother tokens
+and does not spend HYPE to fund that removal. The collapse record shows the
+units actually removed. It can be less than 1 % when the protocol does not
+hold the full amount; the 20 % / 80 % split is unchanged.
 
 **Tunnel.** On 2.5 % (`TUNNEL_PROBABILITY_PPM`) of collapses, decided by
 bytes 8–15 of the same draw, the coin does not produce a daughter. It
@@ -172,6 +178,9 @@ paid. It is there so that "this coin is definitely dead" is never quite
 certain.
 
 ## 4. Daughters
+
+These are the rules a daughter would follow. On Elysium the launch path does
+not create one: daughter coin creation is coming soon.
 
 When a coin collapses without tunnelling, a daughter is born. Its name is
 the mother's name with a generation suffix after a middle dot

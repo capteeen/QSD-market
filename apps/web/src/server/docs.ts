@@ -33,5 +33,5 @@ export async function readDocs(): Promise<{ physics: string; economics: string; 
   const physicsPath = path.join(dir, 'physics.md');
   const economicsPath = path.join(dir, 'economics.md');
   const [physics, economics] = await Promise.all([readFile(physicsPath, 'utf8'), readFile(economicsPath, 'utf8')]);
-  return { physics, economics, source: { physics: physicsPath, economics: economicsPath } };
+  return { physics, economics, source: { physics: 'docs/physics.md', economics: 'docs/economics.md' } };
 }

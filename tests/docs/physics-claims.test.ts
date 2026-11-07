@@ -24,7 +24,7 @@ describe('/docs/physics.md — sentences that must stay (honest statements)', ()
   });
   it('says what a witness-signed attestation does NOT prove', () => {
     expect(flat).toMatch(/It does \*\*not\*\* by itself prove the provider sent it/);
-    expect(flat).toMatch(/you are trusting QSD's witness statement/);
+    expect(flat).toMatch(/you are trusting INFINITWAP's witness statement/);
   });
   it('says nobody downstream can verify the provider hardware is a QRNG', () => {
     expect(flat).toMatch(/cannot\*? verify from the bundle alone is that the provider's hardware is a working QRNG/);
@@ -42,7 +42,7 @@ describe('/docs/physics.md — sentences that must stay (honest statements)', ()
 describe('/docs/physics.md — overclaims and internal contradictions', () => {
   it('FINDING H-P1 (MEDIUM): "no trust in us" contradicts the witness-signed trust model stated later in the same document', () => {
     // §Measurement: "anyone can re-verify with verify() … with no account and no trust in us."
-    // §QRNG: "you are trusting QSD's witness statement about what came over the TLS connection."
+    // §QRNG: "you are trusting INFINITWAP's witness statement about what came over the TLS connection."
     expect(flat).not.toMatch(/no account and no trust in us/);
   });
 

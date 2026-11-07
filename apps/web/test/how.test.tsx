@@ -42,9 +42,9 @@ describe('/how renders the documents verbatim', () => {
     await waitFor(() => expect(container.querySelector('article h1')).toBeInTheDocument());
     expect(container.querySelector('article h1')?.textContent).toBe(firstHeading(physics));
     const physicsText = container.querySelector('article')!.textContent!.replace(/\s+/g, ' ');
-    for (const row of tableRows(physics, 'Term in QSD')) for (const cell of row) expect(physicsText).toContain(cell.replace(/\s+/g, ' '));
+    for (const row of tableRows(physics, 'Term in INFINITWAP')) for (const cell of row) expect(physicsText).toContain(cell.replace(/\s+/g, ' '));
     // Every table of physics.md has exactly its rows rendered.
-    const physicsRows = tableRows(physics, 'Term in QSD').length;
+    const physicsRows = tableRows(physics, 'Term in INFINITWAP').length;
     expect(container.querySelectorAll('article table tbody tr').length).toBe(physicsRows);
 
     fireEvent.click(getByText('economics'));

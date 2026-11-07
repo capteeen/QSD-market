@@ -1,27 +1,29 @@
-# The physics behind QSD, honestly
+# The physics behind INFINITWAP, honestly
 
-QSD — Quantum State Decay — is a token launchpad whose game mechanics are
-*inspired by* quantum mechanics and whose randomness comes from a *real*
-quantum random number generator. Those are two different claims and we keep
-them separate on this page.
+INFINITWAP is a no-vamp launchpad on Elysium. A ticker can be launched once,
+and the wallet that pays for it is the creator of that ticker. Its game
+mechanics are *inspired by* quantum mechanics and its randomness comes from
+a *real* quantum random number generator. Those are two different claims and
+we keep them separate on this page. Coins are paid for in HYPE. This page
+does not describe a pool or a fee split the chain does not perform.
 
 The short version, which every other page on this site must agree with:
 
 - **The randomness is genuinely quantum.** Every measurement of a coin
   consumes bytes from a hardware quantum random number generator operated by
   a third-party provider, and every outcome ships with a proof bundle that
-  anyone can check against QSD's published witness key. What the bundle
+  anyone can check against INFINITWAP's published witness key. What the bundle
   proves is our signed record of the provider's response and what we did
   with it — not the photons, and not that it was the only draw we made. The
   section *Why quantum randomness is different from pseudorandomness* spells
   out exactly where the trust sits.
-- **The coins are not quantum objects.** A token on Solana is a row in a
+- **The coins are not quantum objects.** A token on Elysium is a row in a
   ledger. It is not in a superposition, it does not collapse, it is not
   entangled with anything, and nothing tunnels. When we use those words we
   are naming game rules that borrow the *shape* of the physics. Each section
   below says exactly where the analogy starts and where it stops.
 
-If you ever see copy on qsd.market that claims more than this page allows,
+If you ever see copy on INFINITWAP that claims more than this page allows,
 that copy is wrong and this page wins.
 
 ---
@@ -39,9 +41,9 @@ fact of the matter about which state it is "really" in; the superposition is
 the complete description. Experiments (Bell tests) rule out the simplest
 versions of "it was always secretly one or the other" — any theory that
 reproduces them has to give something up, locality or determinism or both —
-but they do not single out one interpretation, and QSD does not either.
+but they do not single out one interpretation, and INFINITWAP does not either.
 
-### How QSD uses it as a mechanic
+### How INFINITWAP uses it as a mechanic
 
 A newly launched coin is in the game state `superposed`. In that state some
 of its parameters are published as *ranges* rather than single numbers:
@@ -52,7 +54,7 @@ superposed, nobody — including us — knows which channel it will take,
 because that decision has not been made and the input that will decide it
 (the quantum draw) has not been generated yet.
 
-### What QSD does NOT claim
+### What INFINITWAP does NOT claim
 
 - The coin is not physically in a superposition. The ranges are ordinary
   published numbers; the "cloud" is a visualisation of a probability
@@ -73,13 +75,13 @@ possible outcomes, with the probabilities given by the amplitudes. After the
 measurement the system is in the state corresponding to the outcome; the
 other possibilities are gone. This transition is called *collapse* (in the
 standard textbook account; other interpretations describe the same
-predictions differently, and QSD takes no position on interpretation). Which
+predictions differently, and INFINITWAP takes no position on interpretation). Which
 outcome you get is, in the standard account, not determined by anything that
 existed before the measurement; interpretations that keep determinism do so
 at the price of non-locality, and no known interpretation lets anyone
 *predict* the outcome in advance. In practice it is random.
 
-### How QSD uses it as a mechanic
+### How INFINITWAP uses it as a mechanic
 
 Anyone can *measure* a superposed coin. A measurement does the following,
 in order, and the 3D scene renders each step only when it actually happens:
@@ -97,19 +99,21 @@ in order, and the 3D scene renders each step only when it actually happens:
    channel k*, or *tunnel* (`outcomeResolved`).
 
 The outcome is binding. "Collapse" moves the coin to the `collapsed` game
-state and triggers the birth of a daughter coin. The whole thing — bytes,
+state and, in the protocol rules, triggers the birth of a daughter coin. On
+Elysium that birth is not available yet: no pool is published, so a collapse
+does not create a second coin and does not spend HYPE to buy one. The whole thing — bytes,
 attestation, commitment, inputs, outcome — is packaged as a **proof bundle**
 that anyone can re-verify with `verify()` from the open-source `@qsd/quantum`
-package, with no account, trusting only the published QSD witness key (see
+package, with no account, trusting only the published INFINITWAP witness key (see
 *where the trust actually sits*, below).
 
 The *randomness* in step 2 is the genuinely quantum part. The provider's
 hardware performs a physical quantum measurement (for example, measuring
 vacuum fluctuations of the electromagnetic field, or which path a photon
 takes), and the bytes are the digitised results of those measurements. That
-is the only place real quantum physics enters QSD.
+is the only place real quantum physics enters INFINITWAP.
 
-### What QSD does NOT claim
+### What INFINITWAP does NOT claim
 
 - Measuring a coin does not perform a quantum measurement *on the coin*. It
   performs one in the provider's lab, on photons or a vacuum mode, and we
@@ -140,7 +144,7 @@ This is a real, experimentally confirmed phenomenon (first clearly shown in
 trapped ions in 1990). Its mirror image, the anti-Zeno effect, where
 measurement at certain intervals *accelerates* decay, is also real.
 
-### How QSD uses it as a mechanic
+### How INFINITWAP uses it as a mechanic
 
 A coin's `decayProgress` rises with time since its last trade, according to a
 half-life published at launch. Every buy *partially resets* decay progress,
@@ -151,7 +155,7 @@ toward "fresh" and is very unlikely to fully decay. A coin nobody touches
 drifts toward collapse. The exact formula lives in the protocol
 documentation.
 
-### What QSD does NOT claim
+### What INFINITWAP does NOT claim
 
 - A buy is not a quantum measurement and the reset is not a projection. It
   is an arithmetic update to a number in our state machine. The term "weak
@@ -179,7 +183,7 @@ during the measurement. Entanglement does **not** allow faster-than-light
 communication: looking at one particle alone shows pure randomness; the
 correlation is only visible when you compare both sets of results.
 
-### How QSD uses it as a mechanic
+### How INFINITWAP uses it as a mechanic
 
 We use the word "entangled" for two places where one value is a *fixed
 function* of another, so they can never disagree:
@@ -202,7 +206,7 @@ function* of another, so they can never disagree:
 In both cases, "entangled" means *correlated by construction and verifiable
 by recomputation*.
 
-### What QSD does NOT claim
+### What INFINITWAP does NOT claim
 
 - There is no non-local correlation. The daughter and mother are not
   physically linked; the daughter's parameters are just an output of a
@@ -229,7 +233,7 @@ physics says nuclei could not get close enough), how flash memory and
 scanning tunnelling microscopes work, and why some radioactive nuclei decay
 by alpha emission.
 
-### How QSD uses it as a mechanic
+### How INFINITWAP uses it as a mechanic
 
 When a measurement resolves to *collapse*, the same quantum draw is also
 used to decide a second, small fixed-probability event we call
@@ -240,7 +244,7 @@ documentation. It exists to make "this coin is definitely dead" never quite
 certain, which mirrors the physical fact that a barrier is never perfectly
 opaque.
 
-### What QSD does NOT claim
+### What INFINITWAP does NOT claim
 
 - Nothing physically tunnels. No token crosses any barrier. "Tunnelling" is
   the name of one branch of the resolver function.
@@ -281,10 +285,10 @@ one, including the operator, had access to before it was produced.
 That is the difference: a PRNG *hides* a deterministic value; a QRNG
 *harvests* a non-deterministic one (and then cleans it up).
 
-### How QSD uses it as a mechanic
+### How INFINITWAP uses it as a mechanic
 
 Every measurement of every coin consumes bytes drawn live from a
-third-party QRNG service. QSD never generates its own randomness for
+third-party QRNG service. INFINITWAP never generates its own randomness for
 outcomes, never caches bytes for reuse, and has **no deterministic fallback
 in production**: if the provider cannot be reached, measurement is
 unavailable and the interface says so plainly. The only non-quantum
@@ -295,11 +299,11 @@ code is running somewhere with no environment at all. It is permitted only
 with positive evidence of a test or development environment. That guard is
 itself covered by tests.
 
-### What QSD does NOT claim — and where the trust actually sits
+### What INFINITWAP does NOT claim — and where the trust actually sits
 
 This is the most important honesty note on the page.
 
-QSD does not perform the quantum measurement itself. A provider does. So
+INFINITWAP does not perform the quantum measurement itself. A provider does. So
 what you can verify from a proof bundle is:
 
 - **That these exact bytes were applied to these exact inputs and produced
@@ -333,7 +337,7 @@ sight:
   evidence"; it does not make it physically impossible, and we do not claim
   it does.
 - **When it happened.** The `requestedAt` and `receivedAt` timestamps are
-  asserted by the witness (QSD), not by the provider. The provider's own
+  asserted by the witness (INFINITWAP), not by the provider. The provider's own
   `date` header and request id are captured alongside, and the on-chain
   anchors carry block times, so a wrong timestamp is contradictable, but the
   bundle's timestamps are our statement, not a proof.
@@ -343,15 +347,15 @@ bundle says which:
 
 - **`provider-signed`** — the provider itself signed the response with a
   published key. Verifying the signature proves the bytes came from the
-  provider. This is the stronger form, and QSD uses it whenever a provider
+  provider. This is the stronger form, and INFINITWAP uses it whenever a provider
   offers it.
 - **`witness-signed`** — the provider's response (body and relevant
-  headers) was captured verbatim over TLS, and the QSD protocol key signed
+  headers) was captured verbatim over TLS, and the INFINITWAP protocol key signed
   a statement binding the provider id, the request time, the hash of that
   response, and the inputs hash and nonce of the measurement it was requested
-  for. Verifying the signature proves that *QSD's key* attests to
+  for. Verifying the signature proves that *INFINITWAP's key* attests to
   having received that response at that time. It does **not** by itself
-  prove the provider sent it; you are trusting QSD's witness statement
+  prove the provider sent it; you are trusting INFINITWAP's witness statement
   about what came over the TLS connection. We publish the protocol public
   key, and the captured response can be compared against the provider's
   own logs if a dispute ever arises.
@@ -366,7 +370,7 @@ as proof of what we received and what we did with it.
 
 ## Summary table
 
-| Term in QSD | Real physics it is named after | What it actually is in QSD |
+| Term in INFINITWAP | Real physics it is named after | What it actually is in INFINITWAP |
 |---|---|---|
 | Superposed | A state with multiple amplitudes | Published parameter ranges, outcome not yet drawn |
 | Measurement | Projective measurement yielding one outcome | A live QRNG draw fed through a public deterministic resolver |

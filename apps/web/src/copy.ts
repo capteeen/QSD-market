@@ -216,15 +216,15 @@ export const TERM = {
 // ───────────────────────────── page heroes (the inner pages in the home-page manner) ─────────────────────────────
 export const PAGES = {
   field: {
-    body: 'Every coin the protocol has launched, in whatever state it is in now. The scene draws the coins that exist; the table lists them.',
-    arrows: ['SUPERPOSED, COLLAPSED OR TUNNELLED', 'DECAY PROGRESS RECOMPUTED LIVE', 'SORT BY WHAT MATTERS TO YOU'],
+    body: 'Every coin launched on Elysium, in whatever state it is in now. Each ticker belongs to one creator. The scene draws the coins that exist; the table lists them.',
+    arrows: ['SUPERPOSED, COLLAPSED OR TUNNELLED', 'DECAY PROGRESS RECOMPUTED LIVE', 'ONE TICKER, ONE CREATOR'],
   },
   launch: {
     body: 'Pay in HYPE, lock a ticker, and become its creator. A ticker that already exists cannot be launched again.',
     arrows: ['ONE TICKER, ONE CREATOR', 'A COPY IS REFUSED BEFORE PAYMENT', 'CREATOR REWARDS STAY WITH THAT WALLET'],
   },
   measure: {
-    body: 'Coins nearest to their auto-measurement, soonest first. Anyone can measure any of them before the protocol does.',
+    body: 'Coins on Elysium nearest to their auto-measurement, soonest first. Anyone can measure any of them before the protocol does.',
     arrows: ['SOONEST DUE AT THE TOP', 'REWARD PAID ON COLLAPSE', 'THE PROTOCOL MEASURES WHAT NOBODY DOES'],
   },
   burns: {
@@ -232,7 +232,7 @@ export const PAGES = {
     arrows: ['ONE BURN PER HOUR', 'EVERY TRANSACTION LINKED', 'TOTALS FROM THE LEDGER, NOT A COUNTER'],
   },
   how: {
-    body: 'The two documents the protocol is written against, rendered verbatim: the physics the mechanics borrow from, and the economics they implement.',
+    body: 'INFINITWAP on Elysium, written down and rendered verbatim: the physics the mechanics borrow from, and the economics they implement. A ticker launches once. The wallet that pays is the creator.',
     arrows: ['PHYSICS, HONESTLY', 'ECONOMICS, EXACTLY', 'VERIFY A SIGNATURE WHILE YOU READ'],
   },
   me: {
@@ -468,7 +468,7 @@ export const LAUNCH = {
     payTo: 'paid to',
   },
   noWalletEyebrow: 'WALLET REQUIRED',
-  noWalletSentence: 'Connect a wallet to pay for a launch.',
+  noWalletSentence: 'Connect a wallet to pay in HYPE on Elysium.',
   quoteUnavailableEyebrow: 'LAUNCH NOT AVAILABLE',
   devnetNotice: 'This deployment is on Elysium testnet. The coin is an ERC-20 paid for in HYPE.',
   mainnetNotice: 'Elysium mainnet chain ID, RPC and explorer are not published yet. Launches stay on testnet.',
@@ -488,7 +488,7 @@ export const MEASURE = {
   eyebrow: 'MEASUREMENT QUEUE',
   title: 'Nearest to auto-measurement',
   caption:
-    'If nobody measures a coin within its window, the protocol does. Collapse can be delayed by trading; it can never be avoided.',
+    'Coins on Elysium. If nobody measures a coin within its window, the protocol does. Collapse can be delayed by trading; it can never be avoided.',
   emptyEyebrow: 'NOTHING TO MEASURE',
   emptySentence: 'No coin is in a measurable state.',
   unavailableEyebrow: 'QUEUE NOT AVAILABLE',
@@ -527,7 +527,7 @@ export const ME = {
   eyebrow: 'ME',
   title: 'Your positions',
   connectEyebrow: 'CONNECT A WALLET',
-  connectSentence: 'Connect a wallet to see your positions.',
+  connectSentence: 'Connect a wallet to see the coins you created on Elysium.',
   unavailableEyebrow: 'POSITIONS NOT AVAILABLE',
   coinsCreated: 'Coins you created',
   creatorRewardNote: 'Creator rewards on these tickers belong to this wallet. A second coin cannot take the name.',

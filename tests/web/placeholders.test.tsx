@@ -218,7 +218,7 @@ describe('(b) every API empty: honest empty states, real zeros only', () => {
     stubFetch(emptyResponder);
     const { container } = renderPage(<HowView />);
     await waitFor(() => expect(container.querySelector('article h1')).not.toBeNull());
-    expect(container.querySelector('article h1')?.textContent).toBe('The physics behind QSD, honestly');
+    expect(container.querySelector('article h1')?.textContent).toBe('The physics behind INFINITWAP, honestly');
   });
 });
 

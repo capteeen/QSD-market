@@ -42,8 +42,10 @@ describe('readDocs and GET /api/how', () => {
     const d = await readDocs();
     expect(d.physics).toBe(PHYSICS);
     expect(d.economics).toBe(ECONOMICS);
-    expect(path.resolve(d.source.physics)).toBe(path.join(ROOT, 'docs/physics.md'));
-    expect(path.resolve(d.source.economics)).toBe(path.join(ROOT, 'docs/economics.md'));
+    expect(d.source.physics).toBe('docs/physics.md');
+    expect(d.source.economics).toBe('docs/economics.md');
+    expect(d.physics).toContain('A token on Elysium is a row in a');
+    expect(d.physics).not.toMatch(/Solana|pump\.fun|qsd\.market/);
   });
 
   it('GET /api/how serves them unchanged with no-store; a missing docs dir → 503 unavailable', async () => {
