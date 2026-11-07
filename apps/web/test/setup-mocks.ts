@@ -25,6 +25,7 @@ vi.mock('wagmi', () => ({
   http: () => ({}),
 }));
 vi.mock('wagmi/connectors', () => ({ injected: () => ({}) }));
+vi.mock('@wagmi/core', () => ({ injected: () => ({}) }));
 vi.mock('wagmi/actions', () => ({ waitForTransactionReceipt: vi.fn() }));
 
 vi.mock('next/dynamic', () => ({

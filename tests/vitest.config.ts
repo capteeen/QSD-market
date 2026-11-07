@@ -10,6 +10,7 @@ export default defineConfig({
       { find: /^wagmi\/connectors$/, replacement: path.resolve(__dirname, 'web/wagmi-mock.ts') },
       { find: /^wagmi\/actions$/, replacement: path.resolve(__dirname, 'web/wagmi-mock.ts') },
       { find: /^wagmi$/, replacement: path.resolve(__dirname, 'web/wagmi-mock.ts') },
+      { find: /^@wagmi\/core$/, replacement: path.resolve(__dirname, 'web/wagmi-mock.ts') },
       { find: '@', replacement: path.resolve(__dirname, '../apps/web/src') },
       { find: 'server-only', replacement: path.resolve(__dirname, 'web/empty.ts') },
       { find: '@prisma/client', replacement: path.resolve(__dirname, 'web/prisma-stub.ts') },

@@ -2,7 +2,7 @@
 import { useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider, createConfig, http } from 'wagmi';
-import { injected } from 'wagmi/connectors';
+import { injected } from '@wagmi/core';
 import { elysiumTestnet } from '@qsd/elysium/chain';
 import { publicRpcUrl } from '@/lib/env';
 import { LiveProvider } from './LiveProvider';
