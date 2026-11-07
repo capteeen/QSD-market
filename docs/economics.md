@@ -1,11 +1,12 @@
 # How INFINITWAP works: the rules and the numbers
 
 This page is the public description of the INFINITWAP protocol rules. Coins
-launch on Elysium and are paid for in HYPE. A ticker can be launched once.
-The wallet that pays is the creator of that ticker, and creator rewards for
-it stay with that wallet. Daughter coin creation is not available on Elysium
-yet: no pool is published to buy against, so a collapse does not create a
-second coin and does not spend HYPE to buy one.
+launch on Elysium and are paid for in HYPE. A launch on mainnet puts the whole
+supply into a Uniswap v2 pool against HYPE and locks the liquidity. A ticker
+can be launched once. The wallet that pays is the creator of that ticker, and
+creator rewards for it stay with that wallet. Daughter coin creation is not
+available on Elysium yet: a collapse does not create a second coin and does
+not spend HYPE to buy one.
 
 Every number
 on it is a constant exported from the open-source `@qsd/protocol` package as
@@ -165,8 +166,8 @@ supply — is paid to the measurer and the other 80 % is burned. All
 divisions round down; the measurer's units plus the burned units equal the
 removed amount exactly.
 
-On Elysium no pool is published, so the protocol does not buy mother tokens
-and does not spend HYPE to fund that removal. The collapse record shows the
+The collapse does not buy mother tokens from the trading pool and does not
+spend HYPE to fund that removal. The collapse record shows the
 units actually removed. It can be less than 1 % when the protocol does not
 hold the full amount; the 20 % / 80 % split is unchanged.
 

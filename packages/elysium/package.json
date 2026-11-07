@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Elysium (Kinetiq) chain helpers for INFINITWAP: testnet definition, HYPE payments, ERC-20 deploy. Not an official Kinetiq or Hyperliquid product.",
+  "description": "Elysium (Kinetiq) chain helpers for INFINITWAP: mainnet and testnet, HYPE payments, ERC-20 deploy, Uniswap v2 pool launch. Not an official Kinetiq or Hyperliquid product.",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./chain": "./src/chain.ts"
+    "./chain": "./src/chain.ts",
+    "./uniswap": "./src/uniswap.ts"
   },
   "files": ["src", "artifacts", "README.md"],
   "scripts": {

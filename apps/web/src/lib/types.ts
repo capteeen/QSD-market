@@ -230,6 +230,8 @@ export interface LaunchQuoteResponse {
   /** Half-life presets this deployment offers (only the 30-second one during the launch phase). */
   presets: { id: string; label: string; maxWindowSec: number }[];
   payTo: string | null;
+  /** HYPE the protocol deposits to open the pool, in wei. Null on testnet, where no pool is opened. */
+  poolSeedWei?: string | null;
   reasons: { launchCost?: string; identityReserve?: string; devBuy?: string; payTo?: string };
 }
 

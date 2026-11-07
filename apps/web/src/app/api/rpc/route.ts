@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 
 /**
  * POST JSON-RPC → Elysium. ELYSIUM_RPC_URL (or an Alchemy key) stays server-side.
- * With neither set, the published public testnet RPC is used. Only the methods
+ * With neither set, the public relay for the selected network is used. Only the methods
  * a wallet payment needs are relayed, and each client IP is limited per minute.
  */
 export async function POST(req: Request): Promise<NextResponse> {

@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { getAddress } from 'viem';
 import {
+  ELYSIUM_MAINNET_ID,
+  ELYSIUM_MAINNET_PUBLIC_RPC,
+  ELYSIUM_TESTNET_EXPLORER,
   ELYSIUM_TESTNET_ID,
   ELYSIUM_TESTNET_RPC,
-  ELYSIUM_TESTNET_EXPLORER,
-  WHYPE_TESTNET,
-  USDC_TESTNET,
   MULTICALL3_TESTNET,
-  elysiumTestnet,
-  elysiumMainnet,
+  UNISWAP_V2_FACTORY_MAINNET,
+  UNISWAP_V2_ROUTER_MAINNET,
+  USDC_TESTNET,
+  WHYPE_MAINNET,
+  WHYPE_TESTNET,
   anchorCalldata,
+  elysiumMainnet,
+  elysiumTestnet,
   predictedTokenAddress,
 } from '../src/index';
 
@@ -21,7 +26,17 @@ describe('Elysium testnet, from the Kinetiq docs', () => {
     expect(elysiumTestnet.rpcUrls.default.http[0]).toBe(ELYSIUM_TESTNET_RPC);
     expect(elysiumTestnet.rpcUrls.default.http[0]).toBe('https://testnet-rpc.elysium.kinetiq.xyz');
     expect(elysiumTestnet.blockExplorers?.default.url).toBe(ELYSIUM_TESTNET_EXPLORER);
-    expect(() => elysiumMainnet()).toThrow(/not published/);
+  });
+
+  it('mainnet is chain 99901, the chain the other launchpads use', () => {
+    expect(elysiumMainnet.id).toBe(ELYSIUM_MAINNET_ID);
+    expect(elysiumMainnet.id).toBe(99901);
+    expect(elysiumMainnet.nativeCurrency).toEqual({ name: 'HYPE', symbol: 'HYPE', decimals: 18 });
+    expect(elysiumMainnet.rpcUrls.default.http[0]).toBe(ELYSIUM_MAINNET_PUBLIC_RPC);
+    expect(elysiumMainnet.blockExplorers).toBeUndefined();
+    expect(getAddress(WHYPE_MAINNET)).toBe('0xbA876237B0F021A6c6D852d6c26E107997cC5E81');
+    expect(getAddress(UNISWAP_V2_FACTORY_MAINNET)).toBe('0xBbBcC62853a5fA27b93d6Bab3E6F7ce841E25Df2');
+    expect(getAddress(UNISWAP_V2_ROUTER_MAINNET)).toBe('0xE783DE89a7F0408687f051e3E6D0BEb62719EbAd');
   });
 
   it('uses the canonical testnet WHYPE, USDC and Multicall3 addresses from the contract-addresses page', () => {

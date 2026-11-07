@@ -1,7 +1,7 @@
 import type { NextResponse } from 'next/server';
 import { chainStatus, getChain, serverCluster } from '@/server/chain';
 import { genesisStatus } from '@/server/genesis';
-import { launchCosts, launchPresets } from '@/server/launch';
+import { launchCosts, launchPresets, poolSeedWei } from '@/server/launch';
 import { guarded, json } from '@/server/unavailable';
 import type { LaunchQuoteResponse } from '@/lib/types';
 
@@ -26,13 +26,23 @@ export async function GET(): Promise<NextResponse> {
     } else reasons.payTo = cs.reason ?? 'chain not configured';
     const g = genesisStatus();
     if (g.error) reasons.payTo = reasons.payTo ? `${reasons.payTo}; ${g.error}` : g.error;
+    let poolSeed: string | null = null;
+    if (serverCluster() === 'mainnet') {
+      try {
+        poolSeed = poolSeedWei().toString();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        reasons.payTo = reasons.payTo ? `${reasons.payTo}; ${msg}` : msg;
+      }
+    }
     const res: LaunchQuoteResponse = {
       cluster: serverCluster(),
       launchCostLamports: costs.launchCostLamports?.toString() ?? null,
       identityReserveLamports: costs.identityReserveLamports?.toString() ?? null,
       devBuyLamports: null,
       presets: launchPresets().map((p) => ({ id: p.id, label: p.label, maxWindowSec: p.maxWindowSec })),
-      payTo: g.error ? null : payTo,
+      payTo: g.error || (!poolSeed && serverCluster() === 'mainnet') ? null : payTo,
+      poolSeedWei: poolSeed,
       reasons,
     };
     return json(res);

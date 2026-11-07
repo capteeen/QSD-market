@@ -1,15 +1,23 @@
 import 'server-only';
 import path from 'node:path';
-import { createPublicClient, createWalletClient, http, type Address, type Hash, type PublicClient, type WalletClient } from 'viem';
+import { createPublicClient, createWalletClient, getAddress, http, isAddress, type Address, type Hash, type Hex, type PublicClient, type WalletClient } from 'viem';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 import {
+  ELYSIUM_MAINNET_ALCHEMY_RPC,
+  ELYSIUM_MAINNET_PUBLIC_RPC,
   ELYSIUM_TESTNET_ALCHEMY_RPC,
   ELYSIUM_TESTNET_RPC,
+  UNISWAP_V2_ROUTER_MAINNET,
+  WHYPE_MAINNET,
   WHYPE_TESTNET,
   deployInfinitwapToken,
+  deployLauncher,
+  elysiumMainnet,
   elysiumTestnet,
+  launchWithPool,
   predictedTokenAddress,
   sendAnchor,
+  type PooledLaunch,
 } from '@qsd/elysium';
 import {
   ChainObserver,
@@ -27,23 +35,40 @@ import {
 } from '@qsd/solana';
 import { chainStorageFromEnv } from './chainStorage';
 
-/** Anchor transactions sent before the token CREATE. The predicted address is nonce + this. */
+/** Anchor transactions sent before the token CREATE on testnet. The predicted address is nonce + this. */
 export const ANCHORS_BEFORE_DEPLOY = 2n;
 
+export type ElysiumNetwork = 'testnet' | 'mainnet';
+
+export interface PoolOpenArgs {
+  name: string;
+  symbol: string;
+  supply: bigint;
+  creator: Address;
+  firstBuyWei: bigint;
+  seedWei: bigint;
+  salt: Hex;
+}
+
 export interface ElysiumChain {
-  network: 'testnet';
+  network: ElysiumNetwork;
   whype: Address;
   publicClient: PublicClient;
   vault: KeyVault;
   reserve: IdentityReserve;
   observer: ChainObserver;
   creatorAddress(): Address;
+  creatorBalance(): Promise<bigint>;
   withCreator(): Promise<{
     address: Address;
     anchor: AnchorFn;
+    /** Testnet CREATE address. Mainnet predicts with `predictedPoolTokenAddress` instead. */
     predictedCa: Address;
     deployNonce: bigint;
+    /** Set on mainnet: the launcher that opens the Uniswap v2 pool. */
+    launcher?: Address;
     deployToken: (args: { name: string; symbol: string; supply: bigint; recipient: Address }) => Promise<{ ca: Address; txHash: Hash; supply: bigint; path: 'elysium-erc20' }>;
+    openPool?: (args: PoolOpenArgs) => Promise<PooledLaunch>;
     balanceWei: () => Promise<bigint>;
   }>;
   journal<T>(name: string): JournalStore<T>;
@@ -73,48 +98,110 @@ export function rpcUrlFromEnv(env: NodeJS.ProcessEnv): string {
     if (!/^https?:\/\//.test(explicit)) throw new Error('ELYSIUM_RPC_URL must be an http(s) URL');
     return explicit;
   }
+  const network = networkFromEnv(env);
   const alchemy = env.ELYSIUM_ALCHEMY_API_KEY?.trim();
-  if (alchemy) return `${ELYSIUM_TESTNET_ALCHEMY_RPC}${alchemy}`;
-  return ELYSIUM_TESTNET_RPC;
+  if (alchemy) return `${network === 'mainnet' ? ELYSIUM_MAINNET_ALCHEMY_RPC : ELYSIUM_TESTNET_ALCHEMY_RPC}${alchemy}`;
+  return network === 'mainnet' ? ELYSIUM_MAINNET_PUBLIC_RPC : ELYSIUM_TESTNET_RPC;
+}
+
+export function networkFromEnv(env: NodeJS.ProcessEnv): ElysiumNetwork {
+  const network = (env.ELYSIUM_NETWORK ?? 'mainnet').trim();
+  if (network !== 'mainnet' && network !== 'testnet') throw new Error("ELYSIUM_NETWORK must be 'mainnet' or 'testnet'");
+  return network;
+}
+
+const LAUNCHER_KEY = 'elysium/launcher';
+const launcherMemo = globalThis as unknown as { __qsdLauncher?: Promise<Address> };
+
+async function ensureLauncher(
+  clients: { publicClient: PublicClient; walletClient: WalletClient; account: Address },
+  router: Address,
+): Promise<Address> {
+  if (!launcherMemo.__qsdLauncher) {
+    launcherMemo.__qsdLauncher = loadOrDeployLauncher(clients, router).catch((e: unknown) => {
+      delete launcherMemo.__qsdLauncher;
+      throw e;
+    });
+  }
+  return launcherMemo.__qsdLauncher;
+}
+
+async function loadOrDeployLauncher(
+  clients: { publicClient: PublicClient; walletClient: WalletClient; account: Address },
+  router: Address,
+): Promise<Address> {
+  const fromEnv = process.env.INFINITWAP_LAUNCHER?.trim();
+  const stored = fromEnv && isAddress(fromEnv) ? getAddress(fromEnv) : await readStoredLauncher();
+  if (fromEnv && !isAddress(fromEnv)) throw new Error('INFINITWAP_LAUNCHER is not an address');
+  if (stored) {
+    const code = await clients.publicClient.getCode({ address: stored });
+    if (code && code !== '0x') return stored;
+    if (fromEnv) throw new Error('INFINITWAP_LAUNCHER has no contract code on this chain');
+  }
+  const deployed = await deployLauncher(clients, router);
+  await rememberLauncher(deployed);
+  return deployed;
+}
+
+async function readStoredLauncher(): Promise<Address | null> {
+  try {
+    const { db } = await import('./db');
+    const row = await db().chainKv.findUnique({ where: { key: LAUNCHER_KEY } });
+    return row && isAddress(row.value) ? getAddress(row.value) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function rememberLauncher(address: Address): Promise<void> {
+  try {
+    const { db } = await import('./db');
+    await db().chainKv.upsert({
+      where: { key: LAUNCHER_KEY },
+      create: { key: LAUNCHER_KEY, value: address, version: 1 },
+      update: { value: address },
+    });
+  } catch {
+    // the in-memory promise still returns this address for the rest of the process
+  }
 }
 
 const g = globalThis as unknown as { __qsdChain?: { chain?: ElysiumChain; error?: string } };
 
 function build(env: NodeJS.ProcessEnv): ElysiumChain {
-  const network = (env.ELYSIUM_NETWORK ?? 'testnet').trim();
-  if (network === 'mainnet') {
-    throw new Error('ELYSIUM_NETWORK=mainnet is refused: Elysium mainnet chain ID, RPC and explorer are not published yet');
-  }
-  if (network !== 'testnet') throw new Error("ELYSIUM_NETWORK must be 'testnet'");
+  const network = networkFromEnv(env);
   const kek = readHex32('the launch encryption key', env.QSD_KEY_ENCRYPTION_KEY);
   const account: PrivateKeyAccount = privateKeyToAccount(readPrivateKey(env.ELYSIUM_DEPLOYER_PRIVATE_KEY));
   const rpcUrl = rpcUrlFromEnv(env);
+  const chainDef = network === 'mainnet' ? elysiumMainnet : elysiumTestnet;
   const storage = chainStorageFromEnv(env);
   const keyStore = storage?.keyStore ?? (env.QSD_KEYSTORE_PATH?.trim() ? new FileKeyStore(env.QSD_KEYSTORE_PATH.trim()) : new MemoryKeyStore());
   const vault = new KeyVault(kek, keyStore);
   const backend = storage?.reserveBackend ?? (env.QSD_KEYSTORE_PATH?.trim() ? new FileReserveBackend(`${env.QSD_KEYSTORE_PATH.trim()}.reserve.json`) : new MemoryReserveBackend());
   const reserve = new IdentityReserve(vault, backend);
   const observer = new ChainObserver();
-  const publicClient = createPublicClient({ chain: elysiumTestnet, transport: http(rpcUrl) });
-  const walletClient: WalletClient = createWalletClient({ account, chain: elysiumTestnet, transport: http(rpcUrl) });
+  const publicClient = createPublicClient({ chain: chainDef, transport: http(rpcUrl) });
+  const walletClient: WalletClient = createWalletClient({ account, chain: chainDef, transport: http(rpcUrl) });
   const journalDir = env.QSD_JOURNAL_DIR?.trim();
   const clients = { publicClient, walletClient, account: account.address };
 
   const chain: ElysiumChain = {
-    network: 'testnet',
-    whype: WHYPE_TESTNET,
+    network,
+    whype: network === 'mainnet' ? WHYPE_MAINNET : WHYPE_TESTNET,
     publicClient,
     vault,
     reserve,
     observer,
     creatorAddress: () => account.address,
+    creatorBalance: () => publicClient.getBalance({ address: account.address }),
     async withCreator() {
+      const launcher = network === 'mainnet' ? await ensureLauncher(clients, UNISWAP_V2_ROUTER_MAINNET) : undefined;
       const startNonce = BigInt(await publicClient.getTransactionCount({ address: account.address, blockTag: 'pending' }));
       const deployNonce = startNonce + ANCHORS_BEFORE_DEPLOY;
       const anchor: AnchorFn = async (hashHex, kind, nonceHex) => {
         observer.emit({ type: 'anchorRequested', kind, hash: hashHex });
         const sent = await sendAnchor(clients, kind, hashHex, nonceHex);
-        observer.emit({ type: 'anchored', kind, hash: hashHex, txSignature: sent.txHash, cluster: 'testnet' });
+        observer.emit({ type: 'anchored', kind, hash: hashHex, txSignature: sent.txHash, cluster: network });
         const result: AnchorResult = { kind, hash: hashHex, txSignature: sent.txHash, lastValidBlockHeight: sent.blockNumber, status: 'confirmed' };
         if (nonceHex !== undefined) result.nonce = nonceHex;
         return result;
@@ -124,7 +211,13 @@ function build(env: NodeJS.ProcessEnv): ElysiumChain {
         anchor,
         predictedCa: predictedTokenAddress(account.address, deployNonce),
         deployNonce,
+        ...(launcher ? { launcher } : {}),
         deployToken: (args) => deployInfinitwapToken(clients, { ...args, nonce: deployNonce }),
+        ...(launcher
+          ? {
+              openPool: (args: PoolOpenArgs) => launchWithPool(clients, { ...args, launcher }),
+            }
+          : {}),
         balanceWei: () => publicClient.getBalance({ address: account.address }),
       };
     },
@@ -154,13 +247,13 @@ export function getChain(): ElysiumChain {
   return s.chain;
 }
 
-export function chainStatus(): { configured: boolean; cluster: 'testnet' | 'mainnet' | null; reason: string | null } {
+export function chainStatus(): { configured: boolean; cluster: ElysiumNetwork | null; reason: string | null } {
   const s = init();
-  if (s.chain) return { configured: true, cluster: 'testnet', reason: null };
+  if (s.chain) return { configured: true, cluster: s.chain.network, reason: null };
   return { configured: false, cluster: null, reason: s.error ?? null };
 }
 
-/** Testnet until Kinetiq publishes mainnet. A refused mainnet flag still reports testnet, which is the only network this build can talk to. */
-export function serverCluster(): 'testnet' | 'mainnet' {
-  return 'testnet';
+/** Elysium mainnet (chain 99901) unless ELYSIUM_NETWORK=testnet. */
+export function serverCluster(): ElysiumNetwork {
+  return (process.env.ELYSIUM_NETWORK ?? 'mainnet').trim() === 'testnet' ? 'testnet' : 'mainnet';
 }

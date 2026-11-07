@@ -16,7 +16,7 @@ import type { Observable } from '@qsd/scene/model';
 import { COIN, MEASURE_TEXT, PAGES, SHARED } from '@/copy';
 import { apiPost, isUnavailable } from '@/lib/api';
 import { liveDecay, superpositionInput, uncertainty } from '@/lib/coin';
-import { publicCluster, publicWitnessKeys } from '@/lib/env';
+import { publicWitnessKeys } from '@/lib/env';
 import { formatBps, formatHalfLife, formatPercent, formatPpm, formatUnits, formatUnix, shortAddress } from '@/lib/format';
 import { routes } from '@/lib/links';
 import type { CoinDto, HoldersResponse, MeasureChallengeResponse, MeasureResponse, MeasurementDto } from '@/lib/types';
@@ -28,6 +28,7 @@ import { CoinLink, Empty, LoadingPanel, Page, StateLabel, TxLink, UnavailablePan
 import { useQueryClient } from '@tanstack/react-query';
 import { CoinTerminal } from '@/components/terminal/pages';
 import { AirdropPanel } from '@/components/AirdropFigure';
+import { TradePanel } from '@/components/trade/TradePanel';
 
 export function CoinView({ ca }: { ca: string }) {
   const q = useCoin(ca);
@@ -53,7 +54,6 @@ export function CoinView({ ca }: { ca: string }) {
 function CoinLoaded({ coin }: { coin: CoinDto }) {
   const now = useNow();
   const decay = liveDecay(coin, now);
-  const cluster = publicCluster();
   const measurable = isMeasurable(coin.state);
   const supplyDecimals = coin.supply.decimals;
   const nodes = useMemo(() => {
@@ -68,12 +68,8 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
     <PageShell>
       <PageHero accent={coin.state === 'collapsed' ? ACCENT.collapse : coin.state === 'tunnelled' ? ACCENT.decay : ACCENT.probability} eyebrow={`${SHARED.coin} · generation ${coin.generation}`} title={`${coin.name} · ${coin.ticker}`}>
         <StateLabel state={coin.state} />
-        {cluster === 'mainnet' ? (
-          <span className="qsd-note">{COIN.trade}</span>
-        ) : (
-          <span className="qsd-note">{COIN.tradeDevnet}</span>
-        )}
       </PageHero>
+      <TradePanel ca={coin.ca} ticker={coin.ticker} decimals={supplyDecimals} />
       <div className="mb-6">
         <LineageBreadcrumb nodes={nodes} renderLink={(n, children) => <Link href={n.href!}>{children}</Link>} />{' '}
         <Link className="qsd-link ml-3 text-xs" href={routes.lineage(coin.lineageId)}>

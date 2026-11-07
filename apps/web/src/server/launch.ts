@@ -1,6 +1,7 @@
 import 'server-only';
 import type { Prisma } from '@prisma/client';
-import { isAddress, type Address, type Hash } from 'viem';
+import { isAddress, keccak256, toHex as toHex0x, type Address, type Hash, type Hex } from 'viem';
+import { predictedPoolTokenAddress } from '@qsd/elysium';
 import { sha256 } from '@noble/hashes/sha256';
 import { readNativeTransfer } from '@qsd/elysium';
 import { CryptoObserver, redactEvent, toHex, type CryptoEvent } from '@qsd/crypto';
@@ -166,6 +167,17 @@ export function launchCosts(): LaunchCosts {
   return { launchCostLamports: read('QSD_LAUNCH_COST_LAMPORTS'), identityReserveLamports: read('QSD_IDENTITY_RESERVE_LAMPORTS'), devBuyLamports: read('QSD_LAUNCH_DEV_BUY_LAMPORTS') };
 }
 
+/** HYPE the protocol wallet deposits as the pool's HYPE side. The whole supply is the other side, so the coin opens at this market cap. Same open as the other Elysium pads. */
+export const DEFAULT_POOL_SEED_WEI = 30n * 10n ** 18n;
+
+/** Pool seed in wei. `POOL_SEED_WEI` overrides the 30 HYPE open. */
+export function poolSeedWei(env: NodeJS.ProcessEnv = process.env): bigint {
+  const v = env.POOL_SEED_WEI?.trim();
+  if (!v) return DEFAULT_POOL_SEED_WEI;
+  if (!/^\d+$/.test(v) || BigInt(v) === 0n) throw new Error('POOL_SEED_WEI must be a positive integer number of wei');
+  return BigInt(v);
+}
+
 /** The wallet pays only the first buy it chose. A launch with no first buy sends no HYPE. */
 async function verifyPayment(form: LaunchForm, payTo: Address): Promise<bigint> {
   const firstBuy = BigInt(form.devBuyWei);
@@ -291,9 +303,9 @@ export async function launchPreflight(): Promise<LaunchPreflight> {
   await Promise.all([
     check('protocol wallet', async () => {
       const chain = getChain();
-      const { balanceWei } = await chain.withCreator();
-      const wei = await balanceWei();
-      if (wei < PREFLIGHT_MIN_CREATOR_WEI) throw new Error(`holds ${wei} wei of HYPE, needs at least ${PREFLIGHT_MIN_CREATOR_WEI} for network fees`);
+      const wei = await chain.creatorBalance();
+      const min = chain.network === 'mainnet' ? poolSeedWei() + PREFLIGHT_MIN_CREATOR_WEI : PREFLIGHT_MIN_CREATOR_WEI;
+      if (wei < min) throw new Error(`holds ${wei} wei of HYPE, needs at least ${min} wei to seed the pool and pay network fees`);
       await chain.publicClient.getBlockNumber();
     }),
     check('quantum provider', () => qrngProbe()),
@@ -320,16 +332,29 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     const chain = getChain();
     const genesis = genesisConfig();
     const preset = launchPresets().find((p) => p.id === form.halfLifePreset)!;
-    const { address, anchor, predictedCa, deployToken } = await chain.withCreator();
+    const session = await chain.withCreator();
+    const { address, anchor } = session;
+    const tokenDecimals = 18;
+    const scale = 10n ** BigInt(tokenDecimals - genesis.decimals);
+    const minted = genesis.supplyUnits * scale;
+    let ca: Address;
+    let salt: Hex | null = null;
+    if (chain.network === 'mainnet') {
+      if (!session.launcher || !session.openPool) throw new Error('the pool launcher is not configured');
+      salt = keccak256(toHex0x(crypto.getRandomValues(new Uint8Array(32))));
+      ca = predictedPoolTokenAddress(session.launcher, salt, { name: form.name.trim(), symbol: form.ticker, supply: minted, recipient: session.launcher });
+    } else {
+      ca = session.predictedCa;
+    }
 
     push('status', { step: 'payment', message: 'verifying payment' });
     yield* drain();
     await verifyPayment(form, address);
     timer.mark('payment check');
 
-    // 1. The contract address is the CREATE address at the nonce reserved for the
-    //    deploy (two anchor transactions land first). It is vaulted before any send.
-    const ca = predictedCa;
+    // 1. The contract address is reserved before any send and vaulted.
+    //    Testnet: CREATE at the deployer's nonce after the two anchors.
+    //    Mainnet: CREATE2 from the launcher, so the anchors do not move it.
     await chain.vault.storeSecret(`qsd/mint/${ca}`, new TextEncoder().encode(ca));
     push('status', { step: 'mint', message: 'contract address reserved and vaulted', ca });
     yield* drain();
@@ -407,16 +432,23 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     yield* drain();
     timer.mark('signature + proof anchor');
 
-    // 7. Deploy the ERC-20 on Elysium. No pool: Uniswap v4 addresses are not published for this chain.
-    push('status', { step: 'launch', message: 'deploying the ERC-20 on Elysium' });
+    // 7. On mainnet, deploy the ERC-20, seed a Uniswap v2 HYPE pool, lock the liquidity, and fill the first buy.
+    //    On testnet there is no Uniswap deployment, so the coin is the ERC-20 only.
+    push('status', { step: 'launch', message: chain.network === 'mainnet' ? 'opening the HYPE pool on Elysium' : 'deploying the ERC-20 on Elysium' });
     yield* drain();
-    const tokenDecimals = 18;
-    const scale = 10n ** BigInt(tokenDecimals - genesis.decimals);
-    const minted = genesis.supplyUnits * scale;
-    const launch = await deployToken({ name: form.name.trim(), symbol: form.ticker, supply: minted, recipient: address });
+    const launch =
+      chain.network === 'mainnet'
+        ? await (async () => {
+            const seed = poolSeedWei();
+            const firstBuy = BigInt(form.devBuyWei);
+            const bal = await session.balanceWei();
+            if (bal < seed + firstBuy) throw new Error(`protocol wallet holds ${bal} wei of HYPE, needs ${seed + firstBuy} wei to seed the pool and fill the first buy`);
+            return session.openPool!({ name: form.name.trim(), symbol: form.ticker, supply: minted, creator: form.wallet as Address, firstBuyWei: firstBuy, seedWei: seed, salt: salt! });
+          })()
+        : await session.deployToken({ name: form.name.trim(), symbol: form.ticker, supply: minted, recipient: address });
     if (launch.ca.toLowerCase() !== ca.toLowerCase()) throw new Error(`deployed ${launch.ca} does not match the reserved ${ca}`);
     timer.mark('elysium deploy');
-    push('launch', { ca: launch.ca, txSignature: launch.txHash, path: launch.path });
+    push('launch', { ca: launch.ca, txSignature: launch.txHash, path: launch.path, ...('pair' in launch ? { pair: launch.pair } : {}) });
     yield* drain();
 
     // 8. persist.

@@ -27,6 +27,15 @@ export function useSignMessage() {
 export function useConfig() {
   return {};
 }
+export function usePublicClient() {
+  return null;
+}
+export function useWriteContract() {
+  return { writeContractAsync: vi.fn(), isPending: false };
+}
+export function useSwitchChain() {
+  return { switchChainAsync: vi.fn() };
+}
 export function WagmiProvider({ children }: { children: React.ReactNode }) {
   return children;
 }

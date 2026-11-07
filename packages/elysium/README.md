@@ -1,15 +1,18 @@
 # @qsd/elysium
 
-Elysium testnet helpers for INFINITWAP. Not an official Kinetiq or Hyperliquid product.
+Elysium helpers for INFINITWAP. Not an official Kinetiq or Hyperliquid product.
 
 Network facts are copied from [Connecting to Elysium](https://elysium.kinetiq.xyz/docs/connecting-to-elysium) and [Contract addresses](https://elysium.kinetiq.xyz/docs/contract-addresses):
 
-- Chain ID `99801`
-- Public RPC `https://testnet-rpc.elysium.kinetiq.xyz`
+- Testnet chain ID `99801`, public RPC `https://testnet-rpc.elysium.kinetiq.xyz`
+- Mainnet chain ID `99901` (published 7 Nov 2026). Kinetiq's own public RPC and explorer are still listed as coming at launch. `elysiumMainnet` uses a public relay that answers chain 99901.
 - Native gas: HYPE (18 decimals)
 - Canonical testnet WHYPE `0xCD57F65c2B0e5881CFC2E609F7CD53b746E1F234`
+- Mainnet WHYPE `0xbA876237B0F021A6c6D852d6c26E107997cC5E81`
+- Uniswap v2 factory `0xBbBcC62853a5fA27b93d6Bab3E6F7ce841E25Df2`
+- Uniswap v2 router `0xE783DE89a7F0408687f051e3E6D0BEb62719EbAd` (its `factory()` and `WETH()` return the two addresses above)
 
-Mainnet chain ID, RPC and explorer are not published. `elysiumMainnet()` throws rather than inventing them. This package does not use viem’s bundled `elysiumTestnet` export.
+This package does not use viem’s bundled `elysiumTestnet` export.
 
 The token is `contracts/src/InfinitwapToken.sol`, an OpenZeppelin ERC-20. Build it with Foundry:
 
@@ -20,4 +23,4 @@ forge build
 forge test
 ```
 
-`src/token.ts` reads `artifacts/InfinitwapToken.json`, which is the forge output checked in so a launch does not need the compiler at runtime. There is no Uniswap v4 pool: Kinetiq has announced Uniswap on Elysium, and this package does not invent a PoolManager address.
+`src/token.ts` and `src/pool.ts` read the forge output checked in under `artifacts/`, so a launch does not need the compiler at runtime. `InfinitwapLauncher` deploys the token with CREATE2, adds the whole supply and a HYPE seed to the Uniswap v2 router, sends the LP to the dead address, then swaps the optional first buy to the creator.

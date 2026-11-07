@@ -100,8 +100,8 @@ in order, and the 3D scene renders each step only when it actually happens:
 
 The outcome is binding. "Collapse" moves the coin to the `collapsed` game
 state and, in the protocol rules, triggers the birth of a daughter coin. On
-Elysium that birth is not available yet: no pool is published, so a collapse
-does not create a second coin and does not spend HYPE to buy one. The whole thing — bytes,
+Elysium that birth is not available yet: a collapse does not create a second
+coin and does not spend HYPE to buy one. The whole thing — bytes,
 attestation, commitment, inputs, outcome — is packaged as a **proof bundle**
 that anyone can re-verify with `verify()` from the open-source `@qsd/quantum`
 package, with no account, trusting only the published INFINITWAP witness key (see

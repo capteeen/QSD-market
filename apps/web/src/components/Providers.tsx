@@ -3,14 +3,15 @@ import { useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider, createConfig, http } from 'wagmi';
 import { injected } from '@wagmi/core';
-import { elysiumTestnet } from '@qsd/elysium/chain';
-import { publicRpcUrl } from '@/lib/env';
+import { elysiumChain } from '@qsd/elysium/chain';
+import { publicCluster, publicRpcUrl } from '@/lib/env';
 import { LiveProvider } from './LiveProvider';
 
+const chain = elysiumChain(publicCluster());
 const wagmiConfig = createConfig({
-  chains: [elysiumTestnet],
+  chains: [chain],
   connectors: [injected()],
-  transports: { [elysiumTestnet.id]: http(publicRpcUrl()) },
+  transports: { [chain.id]: http(publicRpcUrl()) },
   ssr: true,
 });
 

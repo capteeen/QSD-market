@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useAccount, useConfig, useSendTransaction } from 'wagmi';
 import { waitForTransactionReceipt } from 'wagmi/actions';
-import { elysiumTestnet } from '@qsd/elysium/chain';
+import { elysiumChain } from '@qsd/elysium/chain';
+import { publicCluster } from '@/lib/env';
 import { DataRow, Panel } from '@qsd/ui-tokens';
 import { createSceneStore, decodeCryptoEvents, type ChainEvent, type LineageInput, type SceneStore, type SuperpositionInput } from '@qsd/scene/model';
 import type { QuantumEvent } from '@qsd/quantum';
@@ -151,7 +152,7 @@ export function LaunchView() {
     if (firstBuyWei > 0n) {
       setStatus(LAUNCH.form.paying);
       try {
-        paymentSignature = await sendTransactionAsync({ to: q.payTo as `0x${string}`, value: firstBuyWei, chainId: elysiumTestnet.id });
+        paymentSignature = await sendTransactionAsync({ to: q.payTo as `0x${string}`, value: firstBuyWei, chainId: elysiumChain(publicCluster()).id });
         await waitForTransactionReceipt(wagmiConfig, { hash: paymentSignature as `0x${string}` });
       } catch (e) {
         setPhase('failed');
@@ -232,10 +233,12 @@ export function LaunchView() {
             print({ channel: 'chain', text: ev.type === 'anchored' ? `anchored ${ev.txSignature}${ev.slot !== undefined ? ` slot ${ev.slot}` : ''}` : `anchorSubmitted ${ev.txSignature ?? ''}`, ...(ev.type === 'anchored' ? { tone: 'ok' as const } : {}) });
             break;
           }
-          case 'launch':
-            setCa((JSON.parse(f.data) as { ca: string }).ca);
-            print({ channel: 'launch', text: `coin address ${(JSON.parse(f.data) as { ca: string }).ca}`, tone: 'ok' });
+          case 'launch': {
+            const launched = JSON.parse(f.data) as { ca: string; pair?: string };
+            setCa(launched.ca);
+            print({ channel: 'launch', text: launched.pair ? `coin ${launched.ca} · pool ${launched.pair}` : `coin address ${launched.ca}`, tone: 'ok' });
             break;
+          }
           case 'lineage': {
             const input = JSON.parse(f.data) as LineageInput;
             setSources((x) => ({ ...x, lineage: input }));
@@ -360,6 +363,7 @@ export function LaunchView() {
               <p className="qsd-launch-preview__name">{name.trim() || LAUNCH.preview.untitled}</p>
               <p className="qsd-launch-preview__pair">{ticker ? `$${ticker} / HYPE` : LAUNCH.preview.pair}</p>
               <DataRow label={LAUNCH.cost.launch} value={LAUNCH.cost.launchFree} />
+              {q!.poolSeedWei ? <DataRow label={LAUNCH.cost.opensAt} value={formatHype(BigInt(q!.poolSeedWei))} /> : null}
               {firstBuyWei !== null && firstBuyWei > 0n ? <DataRow label={LAUNCH.cost.firstBuy} value={formatHype(firstBuyWei)} /> : <DataRow label={LAUNCH.cost.firstBuy} value={devBuyParsed.error ? devBuyParsed.error : LAUNCH.cost.none} />}
               {firstBuyWei !== null && firstBuyWei > 0n ? <DataRow label={LAUNCH.cost.total} value={formatHype(firstBuyWei)} /> : <DataRow label={LAUNCH.cost.total} value={LAUNCH.cost.launchFree} />}
               <DataRow label={LAUNCH.preview.wallet} value={address ? shortAddress(address) : LAUNCH.preview.disconnected} />

@@ -2,10 +2,14 @@
 
 Next.js 14 (app router), React 18, Tailwind 3.4 on the `@qsd/ui-tokens` preset,
 Zustand, TanStack Query, Prisma + Postgres, Redis pub/sub + SSE, BullMQ
-workers, wagmi + viem against Elysium testnet (chain ID 99801, HYPE gas).
+workers, wagmi + viem against Elysium mainnet (chain ID 99901, HYPE gas).
 
-This is not an official Kinetiq or Hyperliquid product. Elysium mainnet chain
-ID, RPC and explorer are not published; launches stay on testnet.
+This is not an official Kinetiq or Hyperliquid product. A mainnet launch opens
+a Uniswap v2 HYPE pool and locks the liquidity. The protocol wallet pays the
+opening deposit (30 HYPE unless `POOL_SEED_WEI` is set). Kinetiq's own public
+mainnet RPC and explorer are not published yet; set `ELYSIUM_RPC_URL` to
+override the public relay. `ELYSIUM_NETWORK=testnet` deploys an ERC-20 on
+chain 99801 with no pool.
 
 **Live data only.** There is no seed script, no mock coin, no placeholder
 number. The first row in `Coin` is the first real launch. Every page renders
