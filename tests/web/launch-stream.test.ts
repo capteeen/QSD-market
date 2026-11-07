@@ -237,10 +237,10 @@ describe('payment is verified on-chain BEFORE any identity or key material exist
     });
   }
 
-  it('a dev buy other than the fixed amount → refused before the chain is read', async () => {
-    const frames = await collect(form({ devBuyWei: '500000000' }));
+  it('a dev buy above 100 HYPE is refused before the chain is read', async () => {
+    const frames = await collect(form({ devBuyWei: (100n * 10n ** 18n + 1n).toString() }));
     expect(frames.at(-1)!.event).toBe('error');
-    expect(String(json(frames.at(-1)!)['message'])).toMatch(/dev buy must be exactly 0 wei of HYPE/);
+    expect(String(json(frames.at(-1)!)['message'])).toMatch(/between 0 and 100/);
     expect(state.getTransactionCalls).toEqual([]);
     expect(state.vaultWrites).toEqual([]);
   });

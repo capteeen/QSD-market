@@ -460,6 +460,8 @@ export const LAUNCH = {
     telegram: 'telegram',
     socialsNote: 'Optional. These links are shown on the coin.',
     devBuy: 'dev buy (HYPE)',
+    devBuyNote: 'Added to the HYPE you pay on this launch.',
+    devBuyMissing: 'enter the HYPE amount for this buy',
     submit: 'Pay and launch',
     checking: 'checking the launch services',
     paying: 'confirm the payment in your wallet',

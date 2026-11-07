@@ -47,3 +47,15 @@ describe('launchPresets', () => {
     expect(() => validateLaunchForm({ ...base, website: 'javascript:alert(1)' })).toThrow(/website must be an https link/);
   });
 });
+
+describe('parseHypeToWei', () => {
+  it('reads a typed HYPE amount as wei and rejects a blank or an amount over 100', async () => {
+    const { parseHypeToWei } = await import('@/lib/hype');
+    expect(parseHypeToWei('')).toBeNull();
+    expect(parseHypeToWei('1')).toBe(10n ** 18n);
+    expect(parseHypeToWei('0.5')).toBe(5n * 10n ** 17n);
+    expect(parseHypeToWei('1.')).toBe(10n ** 18n);
+    expect(() => parseHypeToWei('101')).toThrow(/between 0 and 100/);
+    expect(() => parseHypeToWei('nope')).toThrow(/HYPE amount/);
+  });
+});

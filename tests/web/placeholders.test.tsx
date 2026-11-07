@@ -190,7 +190,7 @@ describe('(b) every API empty: honest empty states, real zeros only', () => {
     expect(within(byLabel(LAUNCH.cost.launch) as HTMLElement).getByRole('cell').getAttribute('data-unavailable')).toBe('true');
     expect(byLabel(LAUNCH.cost.launch).textContent).toContain('the launch cost is not set');
     expect(byLabel(LAUNCH.cost.identity).textContent).toContain('the identity reserve is not set');
-    expect(byLabel(LAUNCH.cost.devBuy).textContent).toContain('the dev buy is not set');
+    expect(byLabel(LAUNCH.cost.devBuy).textContent).toContain(LAUNCH.form.devBuyMissing);
     expect(within(byLabel(LAUNCH.cost.total) as HTMLElement).getByRole('cell').getAttribute('data-unavailable')).toBe('true');
     expect(byLabel(LAUNCH.cost.payTo).textContent).toContain('chain not configured');
     expect(screen.getByText(LAUNCH.noWalletEyebrow)).toBeTruthy();

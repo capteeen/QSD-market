@@ -15,7 +15,6 @@ export async function GET(): Promise<NextResponse> {
     const reasons: LaunchQuoteResponse['reasons'] = {};
     if (costs.launchCostLamports === null) reasons.launchCost = 'the launch cost is not set';
     if (costs.identityReserveLamports === null) reasons.identityReserve = 'the identity reserve is not set';
-    if (costs.devBuyLamports === null) reasons.devBuy = 'the dev buy is not set';
     let payTo: string | null = null;
     const cs = chainStatus();
     if (cs.configured) {
@@ -31,7 +30,7 @@ export async function GET(): Promise<NextResponse> {
       cluster: serverCluster(),
       launchCostLamports: costs.launchCostLamports?.toString() ?? null,
       identityReserveLamports: costs.identityReserveLamports?.toString() ?? null,
-      devBuyLamports: costs.devBuyLamports?.toString() ?? null,
+      devBuyLamports: null,
       presets: launchPresets().map((p) => ({ id: p.id, label: p.label, maxWindowSec: p.maxWindowSec })),
       payTo: g.error ? null : payTo,
       reasons,

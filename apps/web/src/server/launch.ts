@@ -167,11 +167,10 @@ export function launchCosts(): LaunchCosts {
 /** The wallet must have paid launch cost + identity reserve + dev buy, in HYPE, to the protocol address. */
 async function verifyPayment(form: LaunchForm, payTo: Address): Promise<bigint> {
   const costs = launchCosts();
-  if (costs.launchCostLamports === null || costs.identityReserveLamports === null || costs.devBuyLamports === null) {
-    throw new LaunchValidationError('launch cost, identity reserve or dev buy is not configured');
+  if (costs.launchCostLamports === null || costs.identityReserveLamports === null) {
+    throw new LaunchValidationError('launch cost or identity reserve is not configured');
   }
   const devBuyWei = BigInt(form.devBuyWei);
-  if (devBuyWei !== costs.devBuyLamports) throw new LaunchValidationError(`dev buy must be exactly ${costs.devBuyLamports} wei of HYPE`);
   const total = costs.launchCostLamports + costs.identityReserveLamports + devBuyWei;
   const chain = getChain();
   let payment;
@@ -292,7 +291,7 @@ export async function launchPreflight(): Promise<LaunchPreflight> {
   await check('genesis config', () => genesisConfig());
   await check('launch costs', () => {
     const c = launchCosts();
-    if (c.launchCostLamports === null || c.identityReserveLamports === null || c.devBuyLamports === null) throw new Error('a launch cost is not configured');
+    if (c.launchCostLamports === null || c.identityReserveLamports === null) throw new Error('a launch cost is not configured');
   });
   await Promise.all([
     check('protocol wallet', async () => {
