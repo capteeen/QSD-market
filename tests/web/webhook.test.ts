@@ -59,7 +59,7 @@ describe('POST /api/webhooks/helius', () => {
     for (const h of [undefined, '', 'wrong', 'agent-h-webhook-secret']) {
       const r = await POST(post(delivery, h));
       expect(r.status, `auth=${String(h)}`).toBe(501);
-      expect(await r.json()).toEqual({ error: 'Elysium trade indexing is not configured. Solana webhooks are not accepted, and no trade was stored.' });
+      expect(await r.json()).toEqual({ error: 'Trade indexing is not configured. No trade was stored.' });
     }
     expect(fakeDb.trade.rows.length).toBe(0);
     expect(fakeDb.balanceChange.rows.length).toBe(0);

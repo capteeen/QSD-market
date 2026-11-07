@@ -30,6 +30,7 @@ export function MeView() {
           ) : (
             <div className="qsd-pgrid qsd-pgrid--2">
               <Panel eyebrow={ME.coinsCreated}>
+                <p className="qsd-note mb-3">{ME.creatorRewardNote}</p>
                 {data.created.length === 0 ? (
                   <p className="qsd-note">{ME.noneCreated}</p>
                 ) : (

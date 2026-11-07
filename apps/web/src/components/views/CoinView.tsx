@@ -88,6 +88,8 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
         <Panel eyebrow={PAGES.coin.identityEyebrow}>
           <DataRow label={COIN.rows.name} value={coin.name} />
           <DataRow label={COIN.rows.ticker} value={coin.ticker} />
+          {coin.createdBy ? <DataRow label={COIN.rows.creator} value={coin.createdBy} /> : <DataRow label={COIN.rows.creator} unavailable={{ reason: 'no creator was recorded for this coin' }} />}
+          <p className="qsd-note mt-2">{COIN.creatorRewardNote}</p>
           <Row label={COIN.rows.ca}>
             <HashDisplay hash={coin.ca} full />
           </Row>

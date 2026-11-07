@@ -6,7 +6,7 @@ import { Providers } from '@/components/Providers';
 import { AppShell } from '@/components/AppShell';
 import { SITE_NAME, SITE_TAGLINE } from '@/copy';
 
-const DESCRIPTION = 'An Elysium launchpad where a coin that stops trading decays into a daughter coin, resolved by attested quantum randomness.';
+const DESCRIPTION = 'INFINITWAP is a no-vamp launchpad on Elysium. One ticker belongs to one creator.';
 
 export const metadata: Metadata = {
   title: `${SITE_NAME} — ${SITE_TAGLINE}`,

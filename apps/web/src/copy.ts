@@ -14,7 +14,7 @@
  */
 
 export const SITE_NAME = 'INFINITWAP';
-export const SITE_TAGLINE = 'Launch on Elysium';
+export const SITE_TAGLINE = 'No-vamp launchpad on Elysium';
 
 export const FOOTER_DISCLAIMER =
   'A daughter coin is a new coin and can fail. INFINITWAP guarantees a share of the next attempt, not a return. Coins launch on Elysium. A meme, not an investment.';
@@ -37,10 +37,10 @@ export const WALLET = {
 
 // ───────────────────────────── home ─────────────────────────────
 export const HOME = {
-  eyebrow: 'Your coin dies. Your bag doesn’t.',
+  eyebrow: 'No vamp. Creator rewards.',
   h1: 'INFINITWAP',
   sentence:
-    'A coin that stops trading decays; when a measurement resolves to collapse, a daughter coin is born and every holder of the mother receives a share of it at birth.',
+    'A ticker can be launched once. The wallet that launches it is the creator, and that name cannot be copied.',
   launch: 'Launch',
   how: 'How it works',
   nextBurnLabel: 'next INFINITWAP burn',
@@ -48,20 +48,20 @@ export const HOME = {
   stepsEyebrow: 'FOUR STEPS',
   steps: [
     {
-      title: 'Launch',
-      body: 'A coin launches on Elysium in the game state “superposed”: some of its parameters are published as ranges rather than single numbers, and the decision that resolves them has not been made yet.',
+      title: 'No vamp',
+      body: 'Each ticker can be launched once. A second attempt with the same ticker is refused before anyone is asked to pay.',
     },
     {
-      title: 'Decay',
-      body: 'Its decay progress rises with time since its last trade, according to a half-life published at launch. Every buy partially resets it — the Zeno mechanic, named after the quantum Zeno effect; the resemblance is in the shape only.',
+      title: 'Creator',
+      body: 'The wallet that pays for the launch is stored as the creator of that ticker.',
     },
     {
-      title: 'Measure',
-      body: 'Anyone can measure a superposed coin. A measurement draws bytes from a hardware quantum random number generator and feeds them through a public, deterministic resolver: survive, collapse, or tunnel. Every outcome ships with a proof bundle anyone can verify.',
+      title: 'Creator reward',
+      body: 'Creator rewards belong to that wallet alone. A copied ticker never qualifies, because a copy is not created.',
     },
     {
-      title: 'Daughter',
-      body: 'On collapse a daughter is born. Each holder’s share is their bag fraction times an entanglement weight computed from how they held — a fixed public function of the holder snapshot, verifiable by recomputation.',
+      title: 'On Elysium',
+      body: 'The coin is paid for in HYPE. The creator and the ticker are written with the coin.',
     },
   ],
   countersEyebrow: 'LIVE',
@@ -85,55 +85,54 @@ export const HOME = {
 // ───────────────────────────── home: the anime.js-style story ─────────────────────────────
 /** Hero, scroll story, feature sections. Illustrative visuals are labelled as such; no string here stands for live data. */
 export const STORY = {
-  heroEyebrow: 'INFINITWAP · A LAUNCHPAD ON ELYSIUM',
-  heroTitle: 'Your coin dies. Your bag doesn’t.',
+  heroEyebrow: 'INFINITWAP · NO VAMP ON ELYSIUM',
+  heroTitle: 'One ticker. One creator.',
   heroCtaLaunch: 'launch a coin',
   heroCtaHow: 'how it works',
   heroScroll: 'scroll',
   illustration: 'illustration · not live data',
   apartEyebrow: 'ONE MACHINE',
   apartTitle: 'Every launch is a machine you can take apart.',
-  apartBody:
-    'Each part is a real operation the protocol performs, and every one leaves something you can check: a public key, a Merkle root, a witness-signed draw, a transaction.',
-  blueprintEyebrow: 'THE COMPLETE LAUNCH PIPELINE',
-  blueprintTitle: 'From key generation to the holder share, in the order it runs.',
-  blueprintBody: 'Hash-based identity, published ranges, a decay clock, a measurement drawn from a hardware quantum random number generator, and a daughter whose shape follows the mother’s.',
+  apartBody: 'Two rules, and both are enforced: a ticker launches once, and the wallet that launches it is the creator of that coin.',
+  blueprintEyebrow: 'THE LAUNCH',
+  blueprintTitle: 'From a free ticker to a creator reward.',
+  blueprintBody: 'The ticker is checked, the creator wallet is stored, and the coin is deployed on Elysium.',
   rebuiltEyebrow: 'REASSEMBLED',
   rebuiltTitle: 'Put back together, it is one coin on Elysium.',
-  rebuiltBody: 'Launch publishes the ranges, the identity and the half-life. Everything after that is a trade, a measurement or a birth.',
+  rebuiltBody: 'What remains is one coin, one ticker, and one creator.',
   parts: {
-    intake: 'quantum draw',
-    witness: 'witness signature',
-    cables: 'attested bytes',
-    chains: 'WOTS+ chains',
-    tree: 'Merkle root',
-    superposition: 'superposition ranges',
-    core: 'launch identity',
-    decay: 'decay clock',
-    measure: 'measurement',
-    daughter: 'daughter coin',
-    share: 'holder share',
+    intake: 'one ticker',
+    witness: 'no copy',
+    cables: 'locked ticker',
+    chains: 'name locked',
+    tree: 'first creator',
+    superposition: 'creator wallet',
+    core: 'creator reward',
+    decay: 'your coin',
+    measure: 'on elysium',
+    daughter: 'paid in hype',
+    share: 'your share',
   },
   features: {
     launch: {
-      eyebrow: 'LAUNCH',
-      title: 'Launch in superposition',
-      arrows: ['PARAMETERS PUBLISHED AS RANGES', 'HASH-BASED LAUNCH IDENTITY', 'ANCHORED ON ELYSIUM'],
+      eyebrow: 'NO VAMP',
+      title: 'One ticker, one coin',
+      arrows: ['TICKER CHECKED BEFORE PAYMENT', 'A SECOND LAUNCH IS REFUSED', 'THE NAME STAYS WITH THE FIRST CREATOR'],
     },
     decay: {
-      eyebrow: 'DECAY',
-      title: 'Quiet time decays it',
-      arrows: ['HALF-LIFE PUBLISHED AT LAUNCH', 'EVERY BUY RESETS PART OF IT', 'NOTHING HAPPENS UNTIL A MEASUREMENT'],
+      eyebrow: 'CREATOR',
+      title: 'The launching wallet',
+      arrows: ['STORED WITH THE COIN', 'SHOWN ON THE COIN PAGE', 'SHOWN UNDER ME'],
     },
     measure: {
-      eyebrow: 'MEASURE',
-      title: 'Anyone can measure',
-      arrows: ['BYTES FROM A HARDWARE QRNG', 'WITNESS-SIGNED RESPONSE', 'PUBLIC, DETERMINISTIC RESOLVER'],
+      eyebrow: 'REWARDS',
+      title: 'Creator rewards',
+      arrows: ['ASSIGNED TO THE CREATOR WALLET', 'A COPIED TICKER NEVER QUALIFIES', 'NO SECOND COIN CAN TAKE THE NAME'],
     },
     daughter: {
-      eyebrow: 'COLLAPSE',
-      title: 'Collapse births a daughter',
-      arrows: ['PARAMETERS FOLLOW HOW THE MOTHER DIED', 'EVERY HOLDER GETS A SHARE AT BIRTH', 'A NEW COIN, WHICH CAN FAIL'],
+      eyebrow: 'ELYSIUM',
+      title: 'Launch the coin',
+      arrows: ['A TOKEN ON ELYSIUM', 'PAID IN HYPE', 'THE TICKER IS LOCKED AT LAUNCH'],
     },
   },
   liveEyebrow: 'THE FIELD',
@@ -175,6 +174,7 @@ export const TERM = {
     header: 'quiet  progress        state',
     autoAt: (hl: string): string => `auto-measurement at ${hl} half-lives of quiet time; a survive removes ${'<R>'} of the quiet time`,
     zeno: (k: string, cap: string): string => `zeno: a buy worth x of market cap removes min(${cap}, ${k}·x) of the quiet time`,
+    zenoNote: 'The resemblance is in the shape only.',
     presets: 'half-life presets offered at launch:',
     autoLabel: 'auto-measure',
     stateQuiet: 'quiet',
@@ -220,8 +220,8 @@ export const PAGES = {
     arrows: ['SUPERPOSED, COLLAPSED OR TUNNELLED', 'DECAY PROGRESS RECOMPUTED LIVE', 'SORT BY WHAT MATTERS TO YOU'],
   },
   launch: {
-    body: 'A coin launches on Elysium with its parameters published as ranges. The identity is a hash-based key, generated for this launch alone.',
-    arrows: ['PAY ONCE, FROM YOUR WALLET', 'EVERY STAGE IS A REAL OPERATION', 'THE STREAM PRINTS WHAT HAPPENS'],
+    body: 'Pay in HYPE, lock a ticker, and become its creator. A ticker that already exists cannot be launched again.',
+    arrows: ['ONE TICKER, ONE CREATOR', 'A COPY IS REFUSED BEFORE PAYMENT', 'CREATOR REWARDS STAY WITH THAT WALLET'],
   },
   measure: {
     body: 'Coins nearest to their auto-measurement, soonest first. Anyone can measure any of them before the protocol does.',
@@ -237,7 +237,7 @@ export const PAGES = {
   },
   me: {
     body: 'What this wallet has launched, holds and has been allocated, read from the protocol’s own records.',
-    arrows: ['COINS YOU LAUNCHED', 'COINS YOU HOLD', 'DAUGHTER SHARES YOU RECEIVED'],
+    arrows: ['COINS YOU CREATED', 'CREATOR REWARDS ON THOSE TICKERS', 'NO SECOND COIN CAN TAKE THE NAME'],
   },
   lineage: {
     body: 'One lineage, from its generation-one coin through every collapse and every daughter born from it.',
@@ -320,6 +320,7 @@ export const COIN = {
   rows: {
     name: 'name',
     ticker: 'ticker',
+    creator: 'creator',
     ca: 'contract address',
     generation: 'generation',
     state: 'state',
@@ -383,6 +384,7 @@ export const COIN = {
   daughterTitle: 'Coming soon',
   daughterCaption: 'Daughter coin creation is coming soon.',
   daughterComingSoon: 'Daughter coin creation is coming soon.',
+  creatorRewardNote: 'Creator rewards for this ticker belong to this wallet. No one else can launch the same ticker.',
   daughterNoWallet: 'wallet not connected',
   daughterNoSnapshot: 'no holder snapshot or holding history exists for this coin yet',
   daughterNotHolder: 'the connected wallet holds none of this coin',
@@ -446,6 +448,7 @@ export const LAUNCH = {
     name: 'name',
     ticker: 'ticker',
     tickerTaken: 'already launched',
+    noVamp: 'This ticker can be used once. The wallet that pays becomes its creator.',
     image: 'image',
     description: 'description',
     halfLife: 'half-life preset',
@@ -526,7 +529,8 @@ export const ME = {
   connectEyebrow: 'CONNECT A WALLET',
   connectSentence: 'Connect a wallet to see your positions.',
   unavailableEyebrow: 'POSITIONS NOT AVAILABLE',
-  coinsCreated: 'Coins you launched',
+  coinsCreated: 'Coins you created',
+  creatorRewardNote: 'Creator rewards on these tickers belong to this wallet. A second coin cannot take the name.',
   coinsHeld: 'Coins you hold',
   noneCreated: 'You have not launched a coin.',
   noneHeld: 'No trades from this wallet have been seen by the protocol.',

@@ -43,7 +43,7 @@ Redis must be reachable over the plain Redis protocol (`redis://` or `rediss://`
 `REDIS_URL`); the app uses ioredis and BullMQ, not a REST client.
 
 `POST /api/webhooks/helius` returns 501 and stores nothing. Elysium trade
-indexing is not configured; do not point a Solana webhook at it.
+indexing is not configured; the webhook route stores nothing.
 
 ### Genesis config (`QSD_GENESIS_CONFIG`)
 

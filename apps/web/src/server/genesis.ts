@@ -11,7 +11,7 @@ import { validateChannels, PROTOCOL_PARAMS, type Channel } from '@qsd/protocol';
  *
  * File shape:
  * {
- *   "supplyUnits": "1000000000000000",   // devnet mint supply, base units (mainnet: pump.fun decides)
+ *   "supplyUnits": "1000000000000000",   // token supply in base units
  *   "decimals": 6,
  *   "poolUnits": { "min": "...", "max": "..." },   // genesis superposition band outer bounds
  *   "channels": [ { "id": "...", "probabilityPpm": 500000, "label": "...",

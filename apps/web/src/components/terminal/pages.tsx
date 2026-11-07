@@ -414,7 +414,7 @@ export function LaunchPreflightTerminal({
       <Kv k="total" tone={total !== null ? 'ok' : 'dim'}>
         {total !== null ? formatHype(total) : 'not available'}
       </Kv>
-      <Out dim>on submit: XMSS identity → superposition → quantum draw → sign → anchor</Out>
+      <Out dim>on submit: ticker check → pay in HYPE → deploy the coin → record the creator</Out>
     </Terminal>
   );
 }

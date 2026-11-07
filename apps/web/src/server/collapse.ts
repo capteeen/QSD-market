@@ -7,7 +7,7 @@ export function proofAnchorSlot(row: { measurements: { outcomeKind: string; proo
 }
 
 /**
- * Daughter launch, curve buys and airdrops were Solana / pump.fun.
+ * Daughter launch, curve buys and airdrops are not available on Elysium.
  * Elysium has no published pool to buy against, so a collapse does not invent a daughter coin.
  */
 export async function runCollapse(ca: string, log: (line: string) => void = console.log): Promise<void> {

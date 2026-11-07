@@ -281,6 +281,7 @@ export function LaunchView() {
               <label>
                 {LAUNCH.form.ticker}
                 <input className="qsd-input uppercase" value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())} maxLength={10} pattern="[A-Za-z0-9]{1,10}" required />
+                <span className="qsd-note">{LAUNCH.form.noVamp}</span>
               </label>
               <label>
                 {LAUNCH.form.image}

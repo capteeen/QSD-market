@@ -6,7 +6,7 @@ import { readNativeTransfer } from '@qsd/elysium';
 import { CryptoObserver, redactEvent, toHex, type CryptoEvent } from '@qsd/crypto';
 import { HALF_LIFE_PRESETS, initialImageLineage, maxWindowSec, type Coin } from '@qsd/protocol';
 import { QuantumEventBus, bundleHash, canonicalJson, type JsonValue, type OutcomeResolver, type ProofBundle, type QuantumEvent } from '@qsd/quantum';
-import { redactSecrets, type ChainEvent as SolanaChainEvent } from '@qsd/solana';
+import { redactSecrets, type ChainEvent as ReserveChainEvent } from '@qsd/solana';
 import { encodeCryptoEvents } from '@qsd/scene/model';
 import type { ChainEvent as SceneChainEvent, LineageInput, SuperpositionInput } from '@qsd/scene/model';
 import { getChain } from './chain';
@@ -362,7 +362,7 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     const imageHash = toHex(sha256(form.image.bytes));
     const inputs: LaunchInputs = { ca, identityRoot, halfLifeSec: preset.halfLifeSec, imageHash };
     let chainSeq = 0;
-    const chainFrame = (e: SolanaChainEvent): void => {
+    const chainFrame = (e: ReserveChainEvent): void => {
       if (e.type === 'anchorRequested') push('chain', { type: 'anchorSubmitted', seq: chainSeq++ } satisfies SceneChainEvent);
       if (e.type === 'anchored') push('chain', { type: 'anchored', seq: chainSeq++, txSignature: e.txSignature } satisfies SceneChainEvent);
     };

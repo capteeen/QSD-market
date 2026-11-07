@@ -1,7 +1,7 @@
 import 'server-only';
 
 /**
- * The Solana hourly buy-and-burn (Jupiter, $QSD) does not exist on Elysium.
+ * Hourly buy-and-burn is not available on Elysium.
  * This returns without writing a burn row. /burns stays empty until a real
  * Elysium burn route exists.
  */

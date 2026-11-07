@@ -42,23 +42,9 @@ interface Review {
  */
 const REVIEWED: Record<string, Review> = {
   // ── layout
-  'An Elysium launchpad where a coin that stops trading decays into a daughter coin, resolved by attested quantum randomness.': { section: 'physics.md: Measurement and collapse; Why quantum randomness … where the trust actually sits', verdict: 'ok' },
   // ── footer
   'A daughter coin is a new coin and can fail. INFINITWAP guarantees a share of the next attempt, not a return. Coins launch on Elysium. A meme, not an investment.': { section: 'SPEC §8 verbatim', verdict: 'ok' },
   // ── home
-  'A coin that stops trading decays; when a measurement resolves to collapse, a daughter coin is born and every holder of the mother receives a share of it at birth.': {
-    section: 'physics.md: Measurement and collapse (outcome: survive, collapse into channel k, or tunnel); Tunnelling',
-    verdict: 'ok',
-    note: '"resolves to collapse" names the resolver outcome `collapse`, which excludes `tunnel`; economics §6 "every holder of the mother at the collapse block gets a share".',
-  },
-  'A coin launches on Elysium in the game state “superposed”: some of its parameters are published as ranges rather than single numbers, and the decision that resolves them has not been made yet.': { section: 'physics.md: Superposition — How QSD uses it', verdict: 'ok' },
-  'Its decay progress rises with time since its last trade, according to a half-life published at launch. Every buy partially resets it — the Zeno mechanic, named after the quantum Zeno effect; the resemblance is in the shape only.': { section: 'physics.md: The quantum Zeno effect — How QSD uses it / does NOT claim', verdict: 'ok' },
-  'Anyone can measure a superposed coin. A measurement draws bytes from a hardware quantum random number generator and feeds them through a public, deterministic resolver: survive, collapse, or tunnel. Every outcome ships with a proof bundle anyone can verify.': {
-    section: 'physics.md: Measurement and collapse — How QSD uses it; the short version ("a proof bundle that anyone can check against QSD’s published witness key")',
-    verdict: 'ok',
-    note: 'In-browser verification needs NEXT_PUBLIC_QSD_WITNESS_PUBLIC_KEYS; the coin page says so when it is unset (COIN.verifyNoKeys).',
-  },
-  'On collapse a daughter is born. Each holder’s share is their bag fraction times an entanglement weight computed from how they held — a fixed public function of the holder snapshot, verifiable by recomputation.': { section: 'physics.md: Entanglement — How QSD uses it (2); Summary table row "Collapse"', verdict: 'ok' },
   'coins in superposition': { section: 'physics.md: Superposition — "Superposed is a word for undecided and bound to a future quantum draw"; SPEC §8 mandates this label', verdict: 'ok', note: 'A state label, counted over the superposed/measured-alive/tunnelled states (economics §1).' },
   'measurements today': { section: 'physics.md: Measurement', verdict: 'ok' },
   'collapses': { section: 'physics.md: Measurement and collapse', verdict: 'ok' },
@@ -107,7 +93,6 @@ const REVIEWED: Record<string, Review> = {
   'unverified': { section: 'ProofBadge status word', verdict: 'ok' },
   'decay': { section: 'sort key (economics §1 decay progress)', verdict: 'ok' },
   '(auto-measurement after': { section: 'economics §3 auto-measurement window (protocol constant per preset)', verdict: 'ok' },
-  'Decay': { section: 'step title', verdict: 'ok' },
   'attestation': { section: 'physics.md where the trust sits (attestation kinds)', verdict: 'ok' },
   'proof tx': { section: 'physics.md Measurement (commitment anchored on-chain)', verdict: 'ok' },
   'no allocation table exists for this collapse': { section: 'economics §6', verdict: 'ok' },
@@ -164,31 +149,6 @@ const REVIEWED: Record<string, Review> = {
   'tunnel': { section: 'outcome label', verdict: 'ok' },
   'proof': { section: 'link label', verdict: 'ok' },
   // ── home: the anime.js-style story (2026-10 redesign)
-  'Each part is a real operation the protocol performs, and every one leaves something you can check: a public key, a Merkle root, a witness-signed draw, a transaction.': {
-    section: 'physics.md: What QSD does NOT claim — and where the trust actually sits (the published witness key, the proof bundle, the chain anchor); @qsd/crypto README (public key = root ‖ pubSeed)',
-    verdict: 'ok',
-    note: 'Names only artefacts that exist: XMSS public key, Merkle root, the witness-signed provider response, the anchoring transaction. The 3D object itself is labelled "illustration · not live data".',
-  },
-  'Hash-based identity, published ranges, a decay clock, a measurement drawn from a hardware quantum random number generator, and a daughter whose shape follows the mother’s.': {
-    section: 'physics.md: Superposition — How QSD uses it (ranges); Measurement and collapse — How QSD uses it (hardware QRNG); Entanglement — How QSD uses it (1) daughter parameters from the mother’s final state; economics §1 (decay)',
-    verdict: 'ok',
-  },
-  'Launch publishes the ranges, the identity and the half-life. Everything after that is a trade, a measurement or a birth.': { section: 'economics §1 (half-life published at launch), §3 (measurement), §4 (daughters); physics.md Superposition (ranges)', verdict: 'ok' },
-  'quantum draw': { section: 'physics.md: Measurement and collapse — How QSD uses it (the draw from a hardware QRNG); callout label on the illustration', verdict: 'ok' },
-  'witness signature': { section: 'physics.md: where the trust actually sits (witness-signed provider response); callout label', verdict: 'ok' },
-  'attested bytes': { section: 'physics.md: where the trust actually sits (attestation); callout label', verdict: 'ok' },
-  'superposition ranges': { section: 'physics.md: Superposition — How QSD uses it; callout label', verdict: 'ok' },
-  'decay clock': { section: 'economics §1 (quiet time, half-life); callout label', verdict: 'ok' },
-  'measurement': { section: 'physics.md: Measurement; callout label', verdict: 'ok' },
-  'Launch in superposition': { section: 'physics.md: Superposition — How QSD uses it ("superposed" is the game state at launch); feature title above HOME.steps[0].body', verdict: 'ok' },
-  'Quiet time decays it': { section: 'economics §1 (decay progress rises with quiet time); feature title above HOME.steps[1].body', verdict: 'ok' },
-  'HALF-LIFE PUBLISHED AT LAUNCH': { section: 'economics §1', verdict: 'ok' },
-  'NOTHING HAPPENS UNTIL A MEASUREMENT': { section: 'economics §1 "A half-life, not a timer. The number only becomes an event when someone measures the coin."; §3 auto-measurement is itself a measurement', verdict: 'ok' },
-  'Anyone can measure': { section: 'physics.md: Measurement and collapse — How QSD uses it ("Anyone can measure"); feature title above HOME.steps[2].body', verdict: 'ok' },
-  'BYTES FROM A HARDWARE QRNG': { section: 'physics.md: Why quantum randomness is different — How QSD uses it (hardware QRNG, no fallback)', verdict: 'ok' },
-  'WITNESS-SIGNED RESPONSE': { section: 'physics.md: where the trust actually sits (the witness signs the verbatim provider response)', verdict: 'ok' },
-  'PUBLIC, DETERMINISTIC RESOLVER': { section: 'physics.md: Measurement and collapse — How QSD uses it (public deterministic resolver); @qsd/protocol resolver', verdict: 'ok' },
-  'Collapse births a daughter': { section: 'physics.md: Measurement and collapse (collapse → daughter); economics §4; feature title above HOME.steps[3].body', verdict: 'ok' },
   // ── home terminals (every number printed comes from a computation in the browser or a protocol constant)
   'xmss verify --live': { section: '@qsd/crypto README (XMSS verify); the panel runs a real keygen/sign/verify with @qsd/crypto', verdict: 'ok' },
   '# verify    pk[i] =? H^(<U>-d[i])(σ[i])': { section: 'RFC 8391 WOTS+ verification as implemented in @qsd/crypto wots.ts', verdict: 'ok' },
@@ -256,7 +216,6 @@ const REVIEWED: Record<string, Review> = {
   'infinitwap proof verify --latest': { section: 'physics.md verify(); @qsd/quantum verify on the latest proof bundle', verdict: 'ok' },
   'no measurement yet · nothing to verify': { section: 'ui state (coin.measurements empty)', verdict: 'ok' },
   'measurement #': { section: 'coin terminal: measurement index', verdict: 'ok' },
-  'on submit: XMSS identity → superposition → quantum draw → sign → anchor': { section: 'SPEC §4 launch pipeline order; LaunchView stream events', verdict: 'ok' },
 };
 
 
@@ -324,7 +283,7 @@ describe('user-facing copy vs docs/physics.md (SPEC §2 l.86-90, §10 l.413-414)
     expect(copy.COIN.bandCaption).toMatch(/not a physical state/);
     expect(copy.COIN.measureCaption).toMatch(/does not perform a quantum measurement on the coin/);
     expect(copy.COIN.tunnelledNote).toMatch(/Nothing physically tunnelled/);
-    expect(copy.HOME.steps[1].body).toMatch(/resemblance is in the shape only/);
+    expect(copy.TERM.decay.zenoNote).toMatch(/resemblance is in the shape only/);
     expect(copy.COIN.verifiedCaption).toMatch(/does not prove the photons/);
     // physics.md's own wording for the things above
     expect(physics).toMatch(/not a physical state|not physically in a superposition/);
@@ -398,7 +357,8 @@ describe('user-facing copy vs docs/physics.md (SPEC §2 l.86-90, §10 l.413-414)
         'components/terminal/pages.tsx: not configured',
         'components/terminal/pages.tsx: not connected',
         'components/terminal/pages.tsx: of the quiet time',
-        'components/terminal/pages.tsx: on submit: XMSS identity → superposition → quantum draw → sign → anchor',
+        'components/terminal/pages.tsx: on submit: ticker check → pay in HYPE → deploy the coin → record the creator',
+        'components/views/CoinView.tsx: no creator was recorded for this coin',
         'components/terminal/pages.tsx: one-time keys left',
         'components/terminal/pages.tsx: infinitwap burns --all',
         'components/terminal/pages.tsx: infinitwap identity ls',

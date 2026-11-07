@@ -46,6 +46,9 @@ export function DecayTerminal({ className }: { className?: string | undefined })
       <Out key="z" dim>
         {T.zeno(String(PROTOCOL_PARAMS.ZENO_K), `${PROTOCOL_PARAMS.ZENO_RESET_CAP_BPS / 100} %`)}
       </Out>,
+      <Out key="zn" dim>
+        {T.zenoNote}
+      </Out>,
       <Out key="p" dim>
         {T.presets} {HALF_LIFE_PRESETS.map((x) => x.label).join(' · ')}
       </Out>,

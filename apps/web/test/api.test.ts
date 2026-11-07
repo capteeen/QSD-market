@@ -33,7 +33,7 @@ describe('POST /api/webhooks/helius', () => {
     for (const headers of [{}, { authorization: 'wrong' }, { authorization: 'test-secret' }]) {
       const res = await POST(post('/api/webhooks/helius', fixture.payload, headers));
       expect(res.status).toBe(501);
-      expect(await res.json()).toEqual({ error: 'Elysium trade indexing is not configured. Solana webhooks are not accepted, and no trade was stored.' });
+      expect(await res.json()).toEqual({ error: 'Trade indexing is not configured. No trade was stored.' });
     }
     expect(ingestBuy).not.toHaveBeenCalled();
     expect(enqueue).not.toHaveBeenCalled();

@@ -21,7 +21,7 @@ export const Unavailable: S = {
   render: () => (
     <Panel eyebrow="live values">
       <DataRow label="holders" unavailable={{ reason: 'DAS indexer unreachable' }} />
-      <DataRow label="market cap" unavailable={{ reason: 'pump.fun API returned no quote' }} />
+      <DataRow label="market cap" unavailable={{ reason: 'no quote has been published for this coin' }} />
       <DataRow label="decay progress" />
     </Panel>
   ),

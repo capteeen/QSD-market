@@ -4,7 +4,7 @@
  *   ingest-trades  buys queued by the webhook when the database was unreachable
  *   auto-measure   every minute (10 s in the launch phase): measure every coin whose window elapsed (by = 'protocol')
  *   collapse       execute / resume a collapse (snapshot → rewards → daughter → allocation → airdrop)
- *   hourly-burn    cron at minute 0: tally fees, buy $QSD, burn
+ *   hourly-burn    cron at minute 0: buy-and-burn is not available on Elysium
  *   snapshot       refresh a coin's identity-reserve mirror
  *   reconcile-collapses  every 5 minutes: re-enqueue collapsed mothers whose daughter launch never got scheduled
  *
