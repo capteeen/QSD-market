@@ -123,6 +123,6 @@ describe('honest empty state against empty arrays', () => {
   it('/me is wallet-gated', async () => {
     mockFetch();
     renderWithQuery(<MeView />);
-    expect(screen.getByText('Connect a wallet to see your positions.')).toBeInTheDocument();
+    expect(screen.getByText('Connect a wallet to see the coins you created on Elysium.')).toBeInTheDocument();
   });
 });

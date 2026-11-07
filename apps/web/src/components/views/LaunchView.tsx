@@ -5,7 +5,6 @@ import { useAccount, useConfig, useSendTransaction } from 'wagmi';
 import { waitForTransactionReceipt } from 'wagmi/actions';
 import { elysiumTestnet } from '@qsd/elysium/chain';
 import { DataRow, Panel } from '@qsd/ui-tokens';
-import { HALF_LIFE_PRESETS } from '@qsd/protocol';
 import { createSceneStore, decodeCryptoEvents, type ChainEvent, type LineageInput, type SceneStore, type SuperpositionInput } from '@qsd/scene/model';
 import type { QuantumEvent } from '@qsd/quantum';
 import { LAUNCH, PAGES } from '@/copy';
@@ -76,12 +75,9 @@ export function LaunchView() {
   const [name, setName] = useState('');
   const [ticker, setTicker] = useState('');
   const [description, setDescription] = useState('');
-  const [presetChoice, setPreset] = useState<string>(HALF_LIFE_PRESETS[2]!.id);
   const [image, setImage] = useState<File | null>(null);
 
   const q = quote.data && !isUnavailable(quote.data) ? quote.data : null;
-  const presets = q?.presets?.length ? q.presets : HALF_LIFE_PRESETS;
-  const preset = presets.some((p) => p.id === presetChoice) ? presetChoice : presets[0]!.id;
   const devBuyLamports = q && q.devBuyLamports !== null ? BigInt(q.devBuyLamports) : null;
   const total = q && q.launchCostLamports !== null && q.identityReserveLamports !== null && devBuyLamports !== null ? BigInt(q.launchCostLamports) + BigInt(q.identityReserveLamports) + devBuyLamports : null;
   const tickerOk = /^[A-Za-z0-9]{1,10}$/.test(ticker);
@@ -143,7 +139,6 @@ export function LaunchView() {
     fd.set('name', name.trim());
     fd.set('ticker', ticker.toUpperCase());
     fd.set('description', description);
-    fd.set('halfLifePreset', preset);
     fd.set('devBuyWei', (devBuyLamports ?? 0n).toString());
     fd.set('image', image);
     fd.set('wallet', address);
@@ -290,16 +285,6 @@ export function LaunchView() {
               <label>
                 {LAUNCH.form.description}
                 <textarea className="qsd-input" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} />
-              </label>
-              <label>
-                {LAUNCH.form.halfLife}
-                <select className="qsd-input" value={preset} onChange={(e) => setPreset(e.target.value)}>
-                  {presets.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label} (auto-measurement after {p.maxWindowSec >= 3600 ? `${p.maxWindowSec / 3600} h` : p.maxWindowSec >= 120 ? `${p.maxWindowSec / 60} min` : `${p.maxWindowSec} s`})
-                    </option>
-                  ))}
-                </select>
               </label>
               {!address ? <Empty eyebrow={LAUNCH.noWalletEyebrow} sentence={LAUNCH.noWalletSentence} /> : null}
               <div className="qsd-form__actions">

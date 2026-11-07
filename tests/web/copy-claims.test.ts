@@ -92,7 +92,6 @@ const REVIEWED: Record<string, Review> = {
   'verified': { section: 'ProofBadge status word; see tests/web/coin-page.test.tsx (H-W4) for when it is shown', verdict: 'ok' },
   'unverified': { section: 'ProofBadge status word', verdict: 'ok' },
   'decay': { section: 'sort key (economics §1 decay progress)', verdict: 'ok' },
-  '(auto-measurement after': { section: 'economics §3 auto-measurement window (protocol constant per preset)', verdict: 'ok' },
   'attestation': { section: 'physics.md where the trust sits (attestation kinds)', verdict: 'ok' },
   'proof tx': { section: 'physics.md Measurement (commitment anchored on-chain)', verdict: 'ok' },
   'no allocation table exists for this collapse': { section: 'economics §6', verdict: 'ok' },
@@ -113,7 +112,6 @@ const REVIEWED: Record<string, Review> = {
   'proof bundle': { section: 'physics.md Measurement', verdict: 'ok' },
   'measurements survived': { section: 'economics §5', verdict: 'ok' },
   // ── launch
-  'half-life preset': { section: 'economics §1', verdict: 'ok' },
   'launching — every stage below is a real operation': { section: 'SPEC §7 CORE RULE; verified by tests/web/launch-stream.test.ts', verdict: 'ok' },
   'Every visual in the sequence is driven by a real event from the key generation, the quantum draw, the signature and the chain. If no event arrives, no stage advances and no value changes; the only motion without an event is the chamber’s ambient drift.': {
     section: 'SPEC §7 CORE RULE; packages/scene README §3 (documented ambient motion); tests/scene/stillness (no stage / count / value changes without an event)',
@@ -385,7 +383,6 @@ describe('user-facing copy vs docs/physics.md (SPEC §2 l.86-90, §10 l.413-414)
         'components/views/CoinView.tsx: the coin has collapsed',
         'components/views/CoinView.tsx: the inputs are not in the current format',
         'components/views/CoinView.tsx: the protocol (auto-measurement)',
-        'components/views/LaunchView.tsx: (auto-measurement after',
         'components/views/LineageView.tsx: NO COLLAPSE YET',
         'components/views/LineageView.tsx: collapsed at',
         'components/views/LineageView.tsx: No coin in this lineage has collapsed; the lineage is its generation-one coin.',

@@ -102,6 +102,12 @@ export function launchPresets(): readonly LaunchPreset[] {
   return process.env.QSD_FAST_LAUNCH_PHASE?.trim() === 'true' ? [FAST_LAUNCH_PRESET] : HALF_LIFE_PRESETS;
 }
 
+/** The half-life applied when the launch form does not ask the creator to choose one. */
+export function directLaunchPreset(): LaunchPreset {
+  const presets = launchPresets();
+  return presets.find((p) => p.id === '24h') ?? presets[0]!;
+}
+
 export class LaunchValidationError extends Error {
   override readonly name = 'LaunchValidationError';
 }
@@ -121,7 +127,8 @@ export function validateLaunchForm(f: Partial<LaunchForm>): asserts f is LaunchF
   if (!f.name || f.name.trim().length < 1 || f.name.length > 32) throw new LaunchValidationError('name must be 1–32 characters');
   if (!f.ticker || !/^[A-Z0-9]{1,10}$/.test(f.ticker)) throw new LaunchValidationError('ticker must be 1–10 uppercase letters or digits');
   if (typeof f.description !== 'string' || f.description.length > 500) throw new LaunchValidationError('description must be at most 500 characters');
-  if (!f.halfLifePreset || !launchPresets().some((p) => p.id === f.halfLifePreset)) throw new LaunchValidationError('half-life preset is not one of the presets offered');
+  if (!f.halfLifePreset) f.halfLifePreset = directLaunchPreset().id;
+  if (!launchPresets().some((p) => p.id === f.halfLifePreset)) throw new LaunchValidationError('half-life preset is not one of the presets offered');
   if (typeof f.devBuyWei !== 'string' || !/^\d+$/.test(f.devBuyWei)) throw new LaunchValidationError('dev buy must be an integer number of wei');
   if (BigInt(f.devBuyWei) > 100n * 10n ** 18n) throw new LaunchValidationError('dev buy must be a number of HYPE between 0 and 100');
   if (!f.image || !(f.image.bytes instanceof Uint8Array) || f.image.bytes.length === 0 || f.image.bytes.length > 2_000_000) throw new LaunchValidationError('image must be 1 byte to 2 MB');

@@ -451,7 +451,6 @@ export const LAUNCH = {
     noVamp: 'This ticker can be used once. The wallet that pays becomes its creator.',
     image: 'image',
     description: 'description',
-    halfLife: 'half-life preset',
     devBuy: 'dev buy (HYPE)',
     submit: 'Pay and launch',
     checking: 'checking the launch services',
