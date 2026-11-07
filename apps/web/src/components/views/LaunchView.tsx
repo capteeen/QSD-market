@@ -94,7 +94,8 @@ export function LaunchView() {
       return { wei: null as bigint | null, error: e instanceof Error ? e.message : String(e) };
     }
   })();
-  const firstBuyWei = devBuyParsed.error ? null : (devBuyParsed.wei ?? 0n);
+  const opensAtZero = q?.poolSeedWei === '0';
+  const firstBuyWei = opensAtZero ? 0n : devBuyParsed.error ? null : (devBuyParsed.wei ?? 0n);
   const social = (kind: SocialKind, value: string): string | null => {
     try {
       normalizeSocial(kind, value);
@@ -321,7 +322,7 @@ export function LaunchView() {
       ) : (
         <div className="qsd-pgrid qsd-pgrid--32">
           <Panel eyebrow={LAUNCH.eyebrow}>
-            <p className="qsd-note mb-4">{q?.cluster === 'mainnet' ? LAUNCH.mainnetNotice : LAUNCH.devnetNotice}</p>
+            <p className="qsd-note mb-4">{q?.poolSeedWei === '0' ? LAUNCH.zeroNotice : q?.cluster === 'mainnet' ? LAUNCH.mainnetNotice : LAUNCH.devnetNotice}</p>
             <form className="qsd-form" onSubmit={(e) => { e.preventDefault(); void launch(); }}>
               <label>
                 {LAUNCH.form.image}
@@ -360,15 +361,21 @@ export function LaunchView() {
                 <input className="qsd-input" value={telegram} onChange={(e) => setTelegram(e.target.value)} maxLength={200} placeholder="@handle" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
               </label>
               {telegramError ? <p className="qsd-form__error">{telegramError}</p> : null}
-              <label>
-                {LAUNCH.form.firstBuy}
-                <span className="qsd-note"> {LAUNCH.form.optional}</span>
-                <span className="qsd-form__amount">
-                  <input className="qsd-input" value={devBuy} onChange={(e) => setDevBuy(e.target.value)} inputMode="decimal" autoComplete="off" spellCheck={false} placeholder="0.00" />
-                  <span className="qsd-form__unit">HYPE</span>
-                </span>
-              </label>
-              {devBuyParsed.error ? <p className="qsd-form__error">{devBuyParsed.error}</p> : <span className="qsd-note">{LAUNCH.form.firstBuyNote}</span>}
+              {opensAtZero ? (
+                <span className="qsd-note">{LAUNCH.form.zeroOpenNote}</span>
+              ) : (
+                <>
+                  <label>
+                    {LAUNCH.form.firstBuy}
+                    <span className="qsd-note"> {LAUNCH.form.optional}</span>
+                    <span className="qsd-form__amount">
+                      <input className="qsd-input" value={devBuy} onChange={(e) => setDevBuy(e.target.value)} inputMode="decimal" autoComplete="off" spellCheck={false} placeholder="0.00" />
+                      <span className="qsd-form__unit">HYPE</span>
+                    </span>
+                  </label>
+                  {devBuyParsed.error ? <p className="qsd-form__error">{devBuyParsed.error}</p> : <span className="qsd-note">{LAUNCH.form.firstBuyNote}</span>}
+                </>
+              )}
               {!address ? <Empty eyebrow={LAUNCH.noWalletEyebrow} sentence={LAUNCH.noWalletSentence} /> : null}
               <div className="qsd-form__actions">
                 <button type="submit" className="qsd-btn" data-primary="true" disabled={!canLaunch}>

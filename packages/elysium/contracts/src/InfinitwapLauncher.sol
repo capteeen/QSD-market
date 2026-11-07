@@ -31,11 +31,13 @@ interface IUniswapV2Factory {
     function getPair(address tokenA, address tokenB) external view returns (address);
 }
 
-/// @notice Opens an Infinitwap coin the way the other Elysium launchpads do.
-///         One transaction deploys the ERC-20, puts the whole supply into a
-///         Uniswap v2 pool against WHYPE, burns the liquidity, then buys
-///         tokens for the creator with the optional first buy.
-///         The pool fee is Uniswap v2's 0.3%. It stays in the locked pool.
+/// @notice Opens an Infinitwap coin.
+///         With seedWei 0 the whole supply is minted to the creator and no
+///         pool is opened, so the price starts at 0. The creator adds
+///         liquidity in whatever pool they choose.
+///         With seedWei above 0, one transaction also puts the whole supply
+///         into a Uniswap v2 pool against WHYPE, burns the liquidity, then
+///         buys tokens for the creator with the optional first buy.
 contract InfinitwapLauncher {
     address public immutable router;
     address public immutable factory;
@@ -55,8 +57,8 @@ contract InfinitwapLauncher {
         uint256 firstBuyWei
     );
 
-    error SeedZero();
     error ValueMismatch();
+    error FirstBuyNeedsPool();
     error CreatorZero();
     error PairMissing();
     error LiquidityMissing();
@@ -71,8 +73,8 @@ contract InfinitwapLauncher {
     }
 
     /// @param salt CREATE2 salt chosen by the caller so the token address is known before this transaction.
-    /// @param seedWei HYPE deposited as the pool's HYPE side. The whole token supply is the other side.
-    /// @param firstBuyWei HYPE swapped for tokens and sent to `creator` in this same transaction. May be zero.
+    /// @param seedWei HYPE deposited as the pool's HYPE side. Zero mints the supply to `creator` and opens no pool.
+    /// @param firstBuyWei HYPE swapped for tokens and sent to `creator` in this same transaction. Zero unless a pool is seeded.
     function launch(
         string calldata name,
         string calldata symbol,
@@ -84,9 +86,16 @@ contract InfinitwapLauncher {
     ) external payable returns (address token, address pair, uint256 tokensOut) {
         if (locked != 1) revert Reentered();
         locked = 2;
-        if (seedWei == 0) revert SeedZero();
         if (msg.value != seedWei + firstBuyWei) revert ValueMismatch();
         if (creator == address(0) || creator == address(this)) revert CreatorZero();
+        if (seedWei == 0) {
+            if (firstBuyWei != 0) revert FirstBuyNeedsPool();
+            InfinitwapToken opened = new InfinitwapToken{salt: salt}(name, symbol, supply, creator);
+            token = address(opened);
+            emit Launched(token, creator, address(0), 0, 0, 0);
+            locked = 1;
+            return (token, address(0), 0);
+        }
 
         InfinitwapToken created = new InfinitwapToken{salt: salt}(name, symbol, supply, address(this));
         token = address(created);

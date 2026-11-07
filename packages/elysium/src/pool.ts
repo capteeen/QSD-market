@@ -24,7 +24,7 @@ export function launcherArtifact(): TokenArtifact {
   return { abi: json.abi, bytecode: json.bytecode.object };
 }
 
-/** CREATE2 address of the token `launch` deploys. The recipient in the init code is the launcher, which then adds the supply as liquidity. */
+/** CREATE2 address of the token `launch` deploys. The init-code recipient is the creator when the seed is zero, and the launcher when the seed is added as liquidity. */
 export function predictedPoolTokenAddress(launcher: Address, salt: Hex, args: DeployArgs): Address {
   return getContractAddress({
     bytecode: tokenInitCode(args),
@@ -73,7 +73,7 @@ export async function launchWithPool(clients: DeployClients, args: PoolLaunchArg
     name: args.name,
     symbol: args.symbol,
     supply: args.supply,
-    recipient: args.launcher,
+    recipient: args.seedWei === 0n ? args.creator : args.launcher,
   });
   const data = encodeFunctionData({
     abi: art.abi,
@@ -110,5 +110,6 @@ export async function launchWithPool(clients: DeployClients, args: PoolLaunchArg
     throw new Error(`deployed ${token ?? 'missing'} is not the predicted ${expected}`);
   }
   if (!pair) throw new Error('pool launch did not report a pair');
+  if (args.seedWei > 0n && pair === '0x0000000000000000000000000000000000000000') throw new Error('pool launch did not open a pair');
   return { ca: token, txHash: hash, supply: args.supply, pair, tokensOut, path: 'elysium-v2' };
 }

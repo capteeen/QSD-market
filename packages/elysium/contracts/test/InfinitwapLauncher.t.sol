@@ -118,8 +118,24 @@ contract InfinitwapLauncherTest is Test {
         launcher.launch{value: 1 ether}("Photon", "PHO", 100 ether, address(0xCAFE), 1 ether, 30 ether, bytes32(uint256(3)));
     }
 
-    function testRejectsAZeroSeed() public {
-        vm.expectRevert(InfinitwapLauncher.SeedZero.selector);
-        launcher.launch{value: 0}("Photon", "PHO", 100 ether, address(0xCAFE), 0, 0, bytes32(uint256(4)));
+    function testZeroSeedMintsTheSupplyToTheCreatorAndOpensNoPool() public {
+        uint256 supply = 1_000_000 ether;
+        address creator = address(0xCAFE);
+        bytes32 salt = bytes32(uint256(4));
+        bytes memory initCode = abi.encodePacked(type(InfinitwapToken).creationCode, abi.encode("Photon", "PHO", supply, creator));
+        address predicted = vm.computeCreate2Address(salt, keccak256(initCode), address(launcher));
+
+        (address token, address pair, uint256 tokensOut) = launcher.launch{value: 0}("Photon", "PHO", supply, creator, 0, 0, salt);
+
+        assertEq(token, predicted);
+        assertEq(pair, address(0));
+        assertEq(tokensOut, 0);
+        assertEq(InfinitwapToken(token).balanceOf(creator), supply);
+        assertEq(address(launcher).balance, 0);
+    }
+
+    function testZeroSeedRejectsAFirstBuy() public {
+        vm.expectRevert(InfinitwapLauncher.FirstBuyNeedsPool.selector);
+        launcher.launch{value: 1 ether}("Photon", "PHO", 100 ether, address(0xCAFE), 1 ether, 0, bytes32(uint256(5)));
     }
 }

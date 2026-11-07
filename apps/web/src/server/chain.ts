@@ -110,7 +110,7 @@ export function networkFromEnv(env: NodeJS.ProcessEnv): ElysiumNetwork {
   return network;
 }
 
-const LAUNCHER_KEY = 'elysium/launcher';
+const LAUNCHER_KEY = 'elysium/launcher/v2';
 const launcherMemo = globalThis as unknown as { __qsdLauncher?: Promise<Address> };
 
 async function ensureLauncher(

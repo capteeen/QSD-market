@@ -23,4 +23,4 @@ forge build
 forge test
 ```
 
-`src/token.ts` and `src/pool.ts` read the forge output checked in under `artifacts/`, so a launch does not need the compiler at runtime. `InfinitwapLauncher` deploys the token with CREATE2, adds the whole supply and a HYPE seed to the Uniswap v2 router, sends the LP to the dead address, then swaps the optional first buy to the creator.
+`src/token.ts` and `src/pool.ts` read the forge output checked in under `artifacts/`, so a launch does not need the compiler at runtime. `InfinitwapLauncher` deploys the token with CREATE2. A seed of zero mints the supply to the creator and opens no pool. A positive seed adds the whole supply and that HYPE to the Uniswap v2 router, sends the LP to the dead address, then swaps the optional first buy to the creator.

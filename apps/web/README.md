@@ -4,9 +4,10 @@ Next.js 14 (app router), React 18, Tailwind 3.4 on the `@qsd/ui-tokens` preset,
 Zustand, TanStack Query, Prisma + Postgres, Redis pub/sub + SSE, BullMQ
 workers, wagmi + viem against Elysium mainnet (chain ID 99901, HYPE gas).
 
-This is not an official Kinetiq or Hyperliquid product. A mainnet launch opens
-a Uniswap v2 HYPE pool and locks the liquidity. The protocol wallet pays the
-opening deposit (30 HYPE unless `POOL_SEED_WEI` is set). Kinetiq's own public
+This is not an official Kinetiq or Hyperliquid product. A mainnet launch mints
+the supply to the creator at a price of zero. The creator adds liquidity in
+any pool. `POOL_SEED_WEI` set to a positive amount deposits that much HYPE from
+the protocol wallet and locks a Uniswap v2 pool. Kinetiq's own public
 mainnet RPC and explorer are not published yet; set `ELYSIUM_RPC_URL` to
 override the public relay. `ELYSIUM_NETWORK=testnet` deploys an ERC-20 on
 chain 99801 with no pool.
