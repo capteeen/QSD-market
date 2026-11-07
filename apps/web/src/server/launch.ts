@@ -157,7 +157,7 @@ export function launchCosts(): LaunchCosts {
 async function verifyPayment(form: LaunchForm, payTo: Address): Promise<bigint> {
   const costs = launchCosts();
   if (costs.launchCostLamports === null || costs.identityReserveLamports === null || costs.devBuyLamports === null) {
-    throw new LaunchValidationError('launch cost, identity reserve or dev buy is not configured (QSD_LAUNCH_COST_LAMPORTS / QSD_IDENTITY_RESERVE_LAMPORTS / QSD_LAUNCH_DEV_BUY_LAMPORTS)');
+    throw new LaunchValidationError('launch cost, identity reserve or dev buy is not configured');
   }
   const devBuyWei = BigInt(form.devBuyWei);
   if (devBuyWei !== costs.devBuyLamports) throw new LaunchValidationError(`dev buy must be exactly ${costs.devBuyLamports} wei of HYPE`);

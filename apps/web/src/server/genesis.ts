@@ -45,7 +45,7 @@ export function genesisConfig(): GenesisConfig {
 export function genesisStatus(): { config?: GenesisConfig; error?: string } {
   if (cached) return cached;
   const file = process.env.QSD_GENESIS_CONFIG;
-  if (!file) return (cached = { error: 'QSD_GENESIS_CONFIG is unset: no generation-1 channel table is configured' });
+  if (!file) return (cached = { error: 'the generation-1 channel table is not set' });
   try {
     // Either the JSON itself (handy on hosts like Vercel, where a file path is not bundled) or a path to a JSON file.
     const text = file.trim().startsWith('{') ? file : readFileSync(file, 'utf8');
@@ -78,6 +78,6 @@ export function genesisStatus(): { config?: GenesisConfig; error?: string } {
     if (!Number.isInteger(raw.decimals) || raw.decimals < 0 || raw.decimals > 9) throw new Error('decimals must be 0..9');
     return (cached = { config: { supplyUnits, decimals: raw.decimals, poolUnits: pool, channels } });
   } catch (e) {
-    return (cached = { error: `QSD_GENESIS_CONFIG could not be loaded: ${e instanceof Error ? e.message : String(e)}` });
+    return (cached = { error: `the generation-1 channel table could not be loaded: ${e instanceof Error ? e.message : String(e)}` });
   }
 }

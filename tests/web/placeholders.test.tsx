@@ -68,7 +68,7 @@ const emptyResponder: Responder = (p) => {
     return { body: { physics, economics, source: { physics: '/docs/physics.md', economics: '/docs/economics.md' } } };
   }
   if (p.startsWith('/api/launch/quote'))
-    return { body: { cluster: 'devnet', launchCostLamports: null, identityReserveLamports: null, devBuyLamports: null, payTo: null, reasons: { launchCost: 'QSD_LAUNCH_COST_LAMPORTS is unset', identityReserve: 'QSD_IDENTITY_RESERVE_LAMPORTS is unset', devBuy: 'QSD_LAUNCH_DEV_BUY_LAMPORTS is unset', payTo: 'chain not configured' } } };
+    return { body: { cluster: 'devnet', launchCostLamports: null, identityReserveLamports: null, devBuyLamports: null, payTo: null, reasons: { launchCost: 'the launch cost is not set', identityReserve: 'the identity reserve is not set', devBuy: 'the dev buy is not set', payTo: 'chain not configured' } } };
   if (p.startsWith('/api/me')) return { body: { wallet: WALLET, created: [], held: [], received: [], identities: [], now: 1_700_000_000 } };
   return { status: 503, body: DOWN };
 };
@@ -188,9 +188,9 @@ describe('(b) every API empty: honest empty states, real zeros only', () => {
     const rows = [...container.querySelectorAll('[role="row"]')];
     const byLabel = (label: string) => rows.find((r) => r.querySelector('[role="rowheader"]')?.textContent?.trim() === label)!;
     expect(within(byLabel(LAUNCH.cost.launch) as HTMLElement).getByRole('cell').getAttribute('data-unavailable')).toBe('true');
-    expect(byLabel(LAUNCH.cost.launch).textContent).toContain('QSD_LAUNCH_COST_LAMPORTS is unset');
-    expect(byLabel(LAUNCH.cost.identity).textContent).toContain('QSD_IDENTITY_RESERVE_LAMPORTS is unset');
-    expect(byLabel(LAUNCH.cost.devBuy).textContent).toContain('QSD_LAUNCH_DEV_BUY_LAMPORTS is unset');
+    expect(byLabel(LAUNCH.cost.launch).textContent).toContain('the launch cost is not set');
+    expect(byLabel(LAUNCH.cost.identity).textContent).toContain('the identity reserve is not set');
+    expect(byLabel(LAUNCH.cost.devBuy).textContent).toContain('the dev buy is not set');
     expect(within(byLabel(LAUNCH.cost.total) as HTMLElement).getByRole('cell').getAttribute('data-unavailable')).toBe('true');
     expect(byLabel(LAUNCH.cost.payTo).textContent).toContain('chain not configured');
     expect(screen.getByText(LAUNCH.noWalletEyebrow)).toBeTruthy();

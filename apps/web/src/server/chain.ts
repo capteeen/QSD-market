@@ -86,7 +86,7 @@ function build(env: NodeJS.ProcessEnv): ElysiumChain {
     throw new Error('ELYSIUM_NETWORK=mainnet is refused: Elysium mainnet chain ID, RPC and explorer are not published yet');
   }
   if (network !== 'testnet') throw new Error("ELYSIUM_NETWORK must be 'testnet'");
-  const kek = readHex32('QSD_KEY_ENCRYPTION_KEY', env.QSD_KEY_ENCRYPTION_KEY);
+  const kek = readHex32('the launch encryption key', env.QSD_KEY_ENCRYPTION_KEY);
   const account: PrivateKeyAccount = privateKeyToAccount(readPrivateKey(env.ELYSIUM_DEPLOYER_PRIVATE_KEY));
   const rpcUrl = rpcUrlFromEnv(env);
   const storage = chainStorageFromEnv(env);

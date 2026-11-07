@@ -13,9 +13,9 @@ export async function GET(): Promise<NextResponse> {
   return guarded(async () => {
     const costs = launchCosts();
     const reasons: LaunchQuoteResponse['reasons'] = {};
-    if (costs.launchCostLamports === null) reasons.launchCost = 'QSD_LAUNCH_COST_LAMPORTS is unset';
-    if (costs.identityReserveLamports === null) reasons.identityReserve = 'QSD_IDENTITY_RESERVE_LAMPORTS is unset';
-    if (costs.devBuyLamports === null) reasons.devBuy = 'QSD_LAUNCH_DEV_BUY_LAMPORTS is unset';
+    if (costs.launchCostLamports === null) reasons.launchCost = 'the launch cost is not set';
+    if (costs.identityReserveLamports === null) reasons.identityReserve = 'the identity reserve is not set';
+    if (costs.devBuyLamports === null) reasons.devBuy = 'the dev buy is not set';
     let payTo: string | null = null;
     const cs = chainStatus();
     if (cs.configured) {
