@@ -33,13 +33,12 @@ export function HomeView() {
   const now = useNow(5000);
   const fieldCoins = useMemo(() => (coins.data && !isUnavailable(coins.data) ? coins.data.coins.map((c) => fieldCoin(c, now)) : []), [coins.data, now]);
   const nextBurn = stats.data && !isUnavailable(stats.data) ? stats.data.nextBurnAt : null;
-  const burnReason = HOME.nextBurnUnavailable;
   const F = STORY.features;
   const steps = HOME.steps;
 
   return (
     <>
-      <StackStory nextBurn={nextBurn} burnReason={burnReason} />
+      <StackStory nextBurn={nextBurn} />
 
       <FeatureSection id="launch" accent={ACCENT.probability} eyebrow={F.launch.eyebrow} title={F.launch.title} body={steps[0].body} arrows={F.launch.arrows} centre={<RangesFigure />} terminal={<XmssVerifyTerminal />} />
       <FeatureSection id="decay" accent={ACCENT.decay} eyebrow={F.decay.eyebrow} title={F.decay.title} body={steps[1].body} arrows={F.decay.arrows} centre={<HalfLifeFigure />} terminal={<DecayTerminal />} />

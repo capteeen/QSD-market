@@ -22,9 +22,8 @@ const PAPER = hexToRgb(colors.paper);
 const mix = (t: number): string => `rgb(${VOID.map((v, i) => Math.round(v + ((PAPER[i] as number) - v) * t)).join(',')})`;
 
 export interface StackStoryProps {
-  /** The next-burn countdown target, or null with the reason it is unavailable (rendered in the hero). */
+  /** A real scheduler timestamp, or null when no burn is scheduled. */
   nextBurn: string | null;
-  burnReason: string;
 }
 
 /**
@@ -33,7 +32,7 @@ export interface StackStoryProps {
  * scene is loaded only when WebGL exists; otherwise the chapters stand on
  * their own with the dial as the hero graphic.
  */
-export function StackStory({ nextBurn, burnReason }: StackStoryProps) {
+export function StackStory({ nextBurn }: StackStoryProps) {
   const container = useRef<HTMLElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const bg = useRef<HTMLDivElement>(null);
@@ -156,7 +155,7 @@ export function StackStory({ nextBurn, burnReason }: StackStoryProps) {
             </div>
             <div className="qsd-hero__burn">
               <span className="qsd-eyebrow">{HOME.nextBurnLabel}</span>
-              <Countdown size="sm" {...(nextBurn ? { target: nextBurn } : { unavailable: { reason: burnReason } })} />
+              {nextBurn ? <Countdown size="sm" target={nextBurn} /> : <span className="qsd-hero__burn-note">{HOME.nextBurnUnavailable}</span>}
             </div>
           </div>
           <span className="qsd-hero__scroll" aria-hidden="true">

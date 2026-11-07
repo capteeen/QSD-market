@@ -109,8 +109,10 @@ describe('(a) every API down: honest unavailable state, no number anywhere', () 
     expect(cells.length).toBeGreaterThanOrEqual(6);
     for (const c of cells) expect(c.textContent).toContain(DOWN.unavailable.reason);
     expect(container.querySelectorAll('[role="cell"][data-unavailable="false"]').length).toBe(0);
-    const countdown = container.querySelector('[data-unavailable="true"].qsd-countdown, .qsd-countdown[data-unavailable="true"], [data-size="sm"][data-unavailable="true"]');
-    expect(countdown).not.toBeNull();
+    const note = container.querySelector('.qsd-hero__burn-note');
+    expect(note?.textContent).toBe(HOME.nextBurnUnavailable);
+    expect(note?.textContent ?? '').not.toContain('DATABASE_URL');
+    expect(container.querySelector('.qsd-hero__burn .qsd-countdown')).toBeNull();
   });
 
   it('partial outage is reported per panel: stats up, log down → counters render, log says why', async () => {
