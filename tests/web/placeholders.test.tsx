@@ -181,25 +181,23 @@ describe('(b) every API empty: honest empty states, real zeros only', () => {
     expect(bodyText(b.container)).not.toMatch(/\d/);
   });
 
-  it('/launch with a quote whose costs are unset: every cost row unavailable with the API reason; the only digits are the preset labels (protocol constants), "SHA-256", "ERC-20" and the dev-buy input echo', async () => {
+  it('/launch with the chain unset: the launch fee is free, the first buy defaults to 0 HYPE, and the chain row says why', async () => {
     stubFetch(emptyResponder);
     const { container } = renderPage(<LaunchView />);
     await settled(container);
     const rows = [...container.querySelectorAll('[role="row"]')];
     const byLabel = (label: string) => rows.find((r) => r.querySelector('[role="rowheader"]')?.textContent?.trim() === label)!;
-    expect(within(byLabel(LAUNCH.cost.launch) as HTMLElement).getByRole('cell').getAttribute('data-unavailable')).toBe('true');
-    expect(byLabel(LAUNCH.cost.launch).textContent).toContain('the launch cost is not set');
-    expect(byLabel(LAUNCH.cost.identity).textContent).toContain('the identity reserve is not set');
-    expect(byLabel(LAUNCH.cost.devBuy).textContent).toContain(LAUNCH.form.devBuyMissing);
-    expect(within(byLabel(LAUNCH.cost.total) as HTMLElement).getByRole('cell').getAttribute('data-unavailable')).toBe('true');
-    expect(byLabel(LAUNCH.cost.payTo).textContent).toContain('chain not configured');
+    expect(byLabel(LAUNCH.cost.launch).textContent).toContain(LAUNCH.cost.launchFree);
+    expect(byLabel(LAUNCH.cost.firstBuy).textContent).toContain(LAUNCH.cost.none);
+    expect(byLabel(LAUNCH.cost.total).textContent).toContain(LAUNCH.cost.launchFree);
+    expect(byLabel(LAUNCH.cost.chain).textContent).toContain('chain not configured');
+    expect(screen.getAllByText(LAUNCH.form.firstBuy).length).toBeGreaterThan(0);
     expect(screen.getByText(LAUNCH.noWalletEyebrow)).toBeTruthy();
     expect(screen.getByText(LAUNCH.devnetNotice)).toBeTruthy();
-    let stripped = bodyText(container).replace(/SHA-256/g, '').replace(/ERC-20/g, '');
+    let stripped = bodyText(container).replace(/SHA-256/g, '').replace(/ERC-20/g, '').replace(/0 HYPE/g, '');
     for (const p of HALF_LIFE_PRESETS) stripped = stripped.split(`${p.label} (auto-measurement after ${p.maxWindowSec / 3600} h)`).join('');
     expect(stripped).not.toMatch(/\d/);
-    // the submit button is disabled: nothing can be paid for a quote with no price
-    expect((screen.getByText(LAUNCH.form.submit) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByText(LAUNCH.form.connect) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('/me: wallet gate without a wallet; with a wallet and empty data every section says so in words', async () => {

@@ -11,7 +11,7 @@ import { LAUNCH, PAGES } from '@/copy';
 import { parseHypeToWei } from '@/lib/hype';
 import { normalizeSocial, type SocialKind } from '@/lib/socials';
 import { isUnavailable } from '@/lib/api';
-import { formatHype } from '@/lib/format';
+import { formatHype, shortAddress } from '@/lib/format';
 import { routes } from '@/lib/links';
 import { useLaunchQuote } from '@/hooks/useApi';
 import { LaunchSequence } from '@/components/scenes';
@@ -91,8 +91,7 @@ export function LaunchView() {
       return { wei: null as bigint | null, error: e instanceof Error ? e.message : String(e) };
     }
   })();
-  const devBuyWei = devBuyParsed.wei;
-  const total = q && q.launchCostLamports !== null && q.identityReserveLamports !== null && devBuyWei !== null ? BigInt(q.launchCostLamports) + BigInt(q.identityReserveLamports) + devBuyWei : null;
+  const firstBuyWei = devBuyParsed.error ? null : (devBuyParsed.wei ?? 0n);
   const social = (kind: SocialKind, value: string): string | null => {
     try {
       normalizeSocial(kind, value);
@@ -128,10 +127,10 @@ export function LaunchView() {
       alive = false;
     };
   }, [ticker, tickerOk]);
-  const canLaunch = !!q && !!q.payTo && total !== null && devBuyWei !== null && !devBuyParsed.error && !!address && !!image && name.trim().length > 0 && tickerOk && tickerFree && socialsOk && (phase === 'form' || phase === 'failed');
+  const canLaunch = !!q && !!q.payTo && firstBuyWei !== null && !!address && !!image && name.trim().length > 0 && tickerOk && tickerFree && socialsOk && (phase === 'form' || phase === 'failed');
 
   const launch = async () => {
-    if (!q || !q.payTo || total === null || devBuyWei === null || !address || !image) return;
+    if (!q || !q.payTo || firstBuyWei === null || !address || !image) return;
     setError(null);
     setPhase('paying');
     setStatus(LAUNCH.form.checking);
@@ -148,15 +147,17 @@ export function LaunchView() {
       setError(`${LAUNCH.notCharged} ${e instanceof Error ? e.message : String(e)}`);
       return;
     }
-    setStatus(LAUNCH.form.paying);
-    let paymentSignature: `0x${string}`;
-    try {
-      paymentSignature = await sendTransactionAsync({ to: q.payTo as `0x${string}`, value: total, chainId: elysiumTestnet.id });
-      await waitForTransactionReceipt(wagmiConfig, { hash: paymentSignature });
-    } catch (e) {
-      setPhase('failed');
-      setError(e instanceof Error ? e.message : String(e));
-      return;
+    let paymentSignature = '';
+    if (firstBuyWei > 0n) {
+      setStatus(LAUNCH.form.paying);
+      try {
+        paymentSignature = await sendTransactionAsync({ to: q.payTo as `0x${string}`, value: firstBuyWei, chainId: elysiumTestnet.id });
+        await waitForTransactionReceipt(wagmiConfig, { hash: paymentSignature as `0x${string}` });
+      } catch (e) {
+        setPhase('failed');
+        setError(e instanceof Error ? e.message : String(e));
+        return;
+      }
     }
     setPhase('launching');
     setStatus(LAUNCH.form.launching);
@@ -167,7 +168,7 @@ export function LaunchView() {
     fd.set('website', website.trim());
     fd.set('twitter', twitter.trim());
     fd.set('telegram', telegram.trim());
-    fd.set('devBuyWei', devBuyWei.toString());
+    fd.set('devBuyWei', firstBuyWei.toString());
     fd.set('image', image);
     fd.set('wallet', address);
     fd.set('paymentSignature', paymentSignature);
@@ -283,13 +284,11 @@ export function LaunchView() {
     );
   }
 
-  const lam = (v: string | null, reason: string | null | undefined, label: string) => (v !== null ? <DataRow label={label} value={formatHype(BigInt(v))} /> : <DataRow label={label} unavailable={{ reason: reason ?? LAUNCH.cost.unavailableReason }} />);
-
   return (
     <PageShell>
       <PageHero accent={ACCENT.probability} eyebrow={LAUNCH.eyebrow} title={LAUNCH.title} body={PAGES.launch.body} arrows={PAGES.launch.arrows} figure={<RangesFigure />} />
       {quote.isPending ? (
-        <LoadingPanel eyebrow={LAUNCH.costEyebrow} />
+        <LoadingPanel eyebrow={LAUNCH.previewEyebrow} />
       ) : !quote.data || isUnavailable(quote.data) ? (
         <UnavailablePanel eyebrow={LAUNCH.quoteUnavailableEyebrow} reason={quote.data?.unavailable.reason ?? 'no response'} />
       ) : (
@@ -297,6 +296,11 @@ export function LaunchView() {
           <Panel eyebrow={LAUNCH.eyebrow}>
             <p className="qsd-note mb-4">{q?.cluster === 'mainnet' ? LAUNCH.mainnetNotice : LAUNCH.devnetNotice}</p>
             <form className="qsd-form" onSubmit={(e) => { e.preventDefault(); void launch(); }}>
+              <label>
+                {LAUNCH.form.image}
+                <input className="qsd-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(e) => setImage(e.target.files?.[0] ?? null)} required />
+                <span className="qsd-note">{LAUNCH.form.imageHint}</span>
+              </label>
               <label>
                 {LAUNCH.form.name}
                 <input className="qsd-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={32} required />
@@ -307,41 +311,41 @@ export function LaunchView() {
                 <span className="qsd-note">{LAUNCH.form.noVamp}</span>
               </label>
               <label>
-                {LAUNCH.form.image}
-                <input className="qsd-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(e) => setImage(e.target.files?.[0] ?? null)} required />
-              </label>
-              <label>
                 {LAUNCH.form.description}
-                <textarea className="qsd-input" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} />
+                <span className="qsd-note"> {LAUNCH.form.optional}</span>
+                <textarea className="qsd-input" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} placeholder={LAUNCH.form.descriptionPlaceholder} />
               </label>
-              <fieldset className="qsd-form__socials">
-                <legend>{LAUNCH.form.socials}</legend>
-                <label>
-                  {LAUNCH.form.website}
-                  <input className="qsd-input" value={website} onChange={(e) => setWebsite(e.target.value)} maxLength={200} inputMode="url" placeholder="https://" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
-                </label>
-                {websiteError ? <p className="qsd-form__error">{websiteError}</p> : null}
-                <label>
-                  {LAUNCH.form.twitter}
-                  <input className="qsd-input" value={twitter} onChange={(e) => setTwitter(e.target.value)} maxLength={200} inputMode="url" placeholder="https://x.com/" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
-                </label>
-                {twitterError ? <p className="qsd-form__error">{twitterError}</p> : null}
-                <label>
-                  {LAUNCH.form.telegram}
-                  <input className="qsd-input" value={telegram} onChange={(e) => setTelegram(e.target.value)} maxLength={200} inputMode="url" placeholder="https://t.me/" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
-                </label>
-                {telegramError ? <p className="qsd-form__error">{telegramError}</p> : null}
-                <span className="qsd-note">{LAUNCH.form.socialsNote}</span>
-              </fieldset>
               <label>
-                {LAUNCH.form.devBuy}
-                <input className="qsd-input" value={devBuy} onChange={(e) => setDevBuy(e.target.value)} inputMode="decimal" autoComplete="off" spellCheck={false} />
+                {LAUNCH.form.website}
+                <span className="qsd-note"> {LAUNCH.form.optional}</span>
+                <input className="qsd-input" value={website} onChange={(e) => setWebsite(e.target.value)} maxLength={200} inputMode="url" placeholder="yourcoin.xyz" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
               </label>
-              {devBuyParsed.error ? <p className="qsd-form__error">{devBuyParsed.error}</p> : <span className="qsd-note">{LAUNCH.form.devBuyNote}</span>}
+              {websiteError ? <p className="qsd-form__error">{websiteError}</p> : null}
+              <label>
+                {LAUNCH.form.twitter}
+                <span className="qsd-note"> {LAUNCH.form.optional}</span>
+                <input className="qsd-input" value={twitter} onChange={(e) => setTwitter(e.target.value)} maxLength={200} placeholder="@handle" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+              </label>
+              {twitterError ? <p className="qsd-form__error">{twitterError}</p> : null}
+              <label>
+                {LAUNCH.form.telegram}
+                <span className="qsd-note"> {LAUNCH.form.optional}</span>
+                <input className="qsd-input" value={telegram} onChange={(e) => setTelegram(e.target.value)} maxLength={200} placeholder="@handle" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+              </label>
+              {telegramError ? <p className="qsd-form__error">{telegramError}</p> : null}
+              <label>
+                {LAUNCH.form.firstBuy}
+                <span className="qsd-note"> {LAUNCH.form.optional}</span>
+                <span className="qsd-form__amount">
+                  <input className="qsd-input" value={devBuy} onChange={(e) => setDevBuy(e.target.value)} inputMode="decimal" autoComplete="off" spellCheck={false} placeholder="0.00" />
+                  <span className="qsd-form__unit">HYPE</span>
+                </span>
+              </label>
+              {devBuyParsed.error ? <p className="qsd-form__error">{devBuyParsed.error}</p> : <span className="qsd-note">{LAUNCH.form.firstBuyNote}</span>}
               {!address ? <Empty eyebrow={LAUNCH.noWalletEyebrow} sentence={LAUNCH.noWalletSentence} /> : null}
               <div className="qsd-form__actions">
                 <button type="submit" className="qsd-btn" data-primary="true" disabled={!canLaunch}>
-                  {phase === 'paying' ? status ?? LAUNCH.form.paying : LAUNCH.form.submit}
+                  {phase === 'paying' ? status ?? LAUNCH.form.paying : !address ? LAUNCH.form.connect : firstBuyWei !== null && firstBuyWei > 0n ? LAUNCH.form.submit : LAUNCH.form.launch}
                 </button>
                 {error ? (
                   <p className="qsd-form__error">
@@ -352,15 +356,17 @@ export function LaunchView() {
             </form>
           </Panel>
           <div className="qsd-pblock">
-            <Panel eyebrow={LAUNCH.costEyebrow}>
-              {lam(q!.launchCostLamports, q!.reasons.launchCost, LAUNCH.cost.launch)}
-              {lam(q!.identityReserveLamports, q!.reasons.identityReserve, LAUNCH.cost.identity)}
-              {devBuyWei !== null ? <DataRow label={LAUNCH.cost.devBuy} value={formatHype(devBuyWei)} /> : <DataRow label={LAUNCH.cost.devBuy} unavailable={{ reason: LAUNCH.form.devBuyMissing }} />}
-              {total !== null ? <DataRow label={LAUNCH.cost.total} value={formatHype(total)} /> : <DataRow label={LAUNCH.cost.total} unavailable={{ reason: LAUNCH.cost.unavailableReason }} />}
-              {q!.payTo ? <DataRow label={LAUNCH.cost.payTo} value={q!.payTo} /> : <DataRow label={LAUNCH.cost.payTo} unavailable={{ reason: q!.reasons.payTo ?? LAUNCH.cost.unavailableReason }} />}
+            <Panel eyebrow={LAUNCH.previewEyebrow}>
+              <p className="qsd-launch-preview__name">{name.trim() || LAUNCH.preview.untitled}</p>
+              <p className="qsd-launch-preview__pair">{ticker ? `$${ticker} / HYPE` : LAUNCH.preview.pair}</p>
+              <DataRow label={LAUNCH.cost.launch} value={LAUNCH.cost.launchFree} />
+              {firstBuyWei !== null && firstBuyWei > 0n ? <DataRow label={LAUNCH.cost.firstBuy} value={formatHype(firstBuyWei)} /> : <DataRow label={LAUNCH.cost.firstBuy} value={devBuyParsed.error ? devBuyParsed.error : LAUNCH.cost.none} />}
+              {firstBuyWei !== null && firstBuyWei > 0n ? <DataRow label={LAUNCH.cost.total} value={formatHype(firstBuyWei)} /> : <DataRow label={LAUNCH.cost.total} value={LAUNCH.cost.launchFree} />}
+              <DataRow label={LAUNCH.preview.wallet} value={address ? shortAddress(address) : LAUNCH.preview.disconnected} />
+              {q!.payTo ? null : <DataRow label={LAUNCH.cost.chain} unavailable={{ reason: q!.reasons.payTo ?? LAUNCH.cost.chainUnset }} />}
             </Panel>
             <div className="qsd-pblock">
-              <LaunchPreflightTerminal quote={q!} wallet={address ?? null} name={name} ticker={ticker} tickerTaken={!tickerFree && tickerOk} image={image} devBuyLamports={devBuyWei} total={total} />
+              <LaunchPreflightTerminal quote={q!} wallet={address ?? null} name={name} ticker={ticker} tickerTaken={!tickerFree && tickerOk} image={image} devBuyLamports={firstBuyWei} total={firstBuyWei} />
             </div>
             <p className="qsd-note mt-4">{LAUNCH.identityNote}</p>
           </div>

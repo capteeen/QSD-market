@@ -145,7 +145,9 @@ export function validateLaunchForm(f: Partial<LaunchForm>): asserts f is LaunchF
   if (!f.image || !(f.image.bytes instanceof Uint8Array) || f.image.bytes.length === 0 || f.image.bytes.length > 2_000_000) throw new LaunchValidationError('image must be 1 byte to 2 MB');
   if (!/^image\/(png|jpeg|gif|webp)$/.test(f.image.mime)) throw new LaunchValidationError('image must be png, jpeg, gif or webp');
   if (!f.wallet || !isAddress(f.wallet)) throw new LaunchValidationError('wallet is not a valid address');
-  if (!f.paymentSignature || !/^0x[0-9a-fA-F]{64}$/.test(f.paymentSignature)) throw new LaunchValidationError('payment signature is required');
+  const paid = BigInt(f.devBuyWei) > 0n;
+  if (paid && (!f.paymentSignature || !/^0x[0-9a-fA-F]{64}$/.test(f.paymentSignature))) throw new LaunchValidationError('payment signature is required');
+  if (!paid) f.paymentSignature = '';
 }
 
 export interface LaunchCosts {
@@ -164,14 +166,11 @@ export function launchCosts(): LaunchCosts {
   return { launchCostLamports: read('QSD_LAUNCH_COST_LAMPORTS'), identityReserveLamports: read('QSD_IDENTITY_RESERVE_LAMPORTS'), devBuyLamports: read('QSD_LAUNCH_DEV_BUY_LAMPORTS') };
 }
 
-/** The wallet must have paid launch cost + identity reserve + dev buy, in HYPE, to the protocol address. */
+/** The wallet pays only the first buy it chose. A launch with no first buy sends no HYPE. */
 async function verifyPayment(form: LaunchForm, payTo: Address): Promise<bigint> {
-  const costs = launchCosts();
-  if (costs.launchCostLamports === null || costs.identityReserveLamports === null) {
-    throw new LaunchValidationError('launch cost or identity reserve is not configured');
-  }
-  const devBuyWei = BigInt(form.devBuyWei);
-  const total = costs.launchCostLamports + costs.identityReserveLamports + devBuyWei;
+  const firstBuy = BigInt(form.devBuyWei);
+  if (firstBuy === 0n) return 0n;
+  const total = firstBuy;
   const chain = getChain();
   let payment;
   try {
@@ -289,10 +288,6 @@ export async function launchPreflight(): Promise<LaunchPreflight> {
     }
   };
   await check('genesis config', () => genesisConfig());
-  await check('launch costs', () => {
-    const c = launchCosts();
-    if (c.launchCostLamports === null || c.identityReserveLamports === null) throw new Error('a launch cost is not configured');
-  });
   await Promise.all([
     check('protocol wallet', async () => {
       const chain = getChain();
@@ -447,13 +442,14 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     };
     try {
       await db().$transaction(async (tx) => {
-        await assertPaymentUnused(tx, form.paymentSignature);
+        const paymentTx = BigInt(form.devBuyWei) > 0n ? form.paymentSignature : null;
+        if (paymentTx) await assertPaymentUnused(tx, paymentTx);
         await insertCoinWith(tx, coin, {
           launchPath: launch.path,
           launchTx: launch.txHash,
           launchBundle: bundle as unknown as ProofBundle,
           createdBy: form.wallet,
-          paymentTx: form.paymentSignature,
+          paymentTx,
           website: form.website,
           twitter: form.twitter,
           telegram: form.telegram,

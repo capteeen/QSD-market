@@ -172,7 +172,7 @@ function form(overrides: Partial<import('@/server/launch').LaunchForm> = {}): im
     twitter: null,
     telegram: null,
     halfLifePreset: '1h',
-    devBuyWei: '0',
+    devBuyWei: (LAUNCH_COST + RESERVE).toString(),
     image: { bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]), mime: 'image/png' },
     wallet: wallet.address,
     paymentSignature: PAYMENT_SIG,
@@ -218,12 +218,12 @@ describe('payment is verified on-chain BEFORE any identity or key material exist
     { name: 'paid by another wallet', set: () => (state.payment.from = other.address), re: /does not involve the wallet and the protocol address/ },
     { name: 'transaction reverted', set: () => (state.payment.status = 'reverted'), re: /failed on-chain/ },
     { name: 'one wei short', set: () => (state.payment.value = LAUNCH_COST + RESERVE - 1n), re: /below the required/ },
-    { name: 'dev buy not covered', set: () => (process.env.QSD_LAUNCH_DEV_BUY_LAMPORTS = '500000000'), re: /below the required/ },
+    { name: 'dev buy not covered', set: () => undefined, re: /below the required/ },
   ];
   for (const f of failures) {
     it(`${f.name}: an error frame, no vault write, no reserve entry, no transaction, no coin`, async () => {
       f.set();
-      const frames = await collect(form(f.name === 'dev buy not covered' ? { devBuyWei: '500000000' } : {}));
+      const frames = await collect(form(f.name === 'dev buy not covered' ? { devBuyWei: (LAUNCH_COST + RESERVE + 1n).toString() } : {}));
       expect(frames.map((x) => x.event)).toEqual(['status', 'error']);
       expect(String(json(frames[1]!)['message'])).toMatch(f.re);
       expect(state.getTransactionCalls).toEqual([PAYMENT_SIG]);
@@ -245,14 +245,14 @@ describe('payment is verified on-chain BEFORE any identity or key material exist
     expect(state.vaultWrites).toEqual([]);
   });
 
-  it('launch cost not configured → refused before the chain is read', async () => {
+  it('an unset operator fee does not block a launch with no first buy', async () => {
     delete process.env.QSD_LAUNCH_COST_LAMPORTS;
-    const frames = await collect(form());
-    expect(frames.at(-1)!.event).toBe('error');
-    expect(String(json(frames.at(-1)!)['message'])).toMatch(/not configured/);
+    delete process.env.QSD_IDENTITY_RESERVE_LAMPORTS;
+    delete process.env.QSD_LAUNCH_DEV_BUY_LAMPORTS;
+    const frames = await collect(form({ devBuyWei: '0', ticker: 'FREE' }));
+    expect(frames.at(-1)!.event).toBe('done');
     expect(state.getTransactionCalls).toEqual([]);
-    expect(state.vaultWrites).toEqual([]);
-  });
+  }, 120_000);
 
   it('a ticker that is already launched is refused before any payment check or transaction', async () => {
     await fakeDb.coin.create({ data: { ca: '0x' + 'ab'.repeat(20), ticker: 'PHO', name: 'Photon' } });

@@ -72,6 +72,11 @@
 .qsd-form { display: flex; flex-direction: column; gap: 1rem; }
 .qsd-form label { display: block; font-size: var(--text-xs); letter-spacing: 0.12em; text-transform: uppercase; color: var(--qsd-muted); }
 .qsd-form label > input, .qsd-form label > select, .qsd-form label > textarea { margin-top: 0.4rem; text-transform: none; letter-spacing: 0; }
+.qsd-form__amount { display: flex; align-items: center; gap: 0.75rem; }
+.qsd-form__amount > input { flex: 1; margin-top: 0.4rem; }
+.qsd-form__unit { margin-top: 0.4rem; font-family: var(--font-mono); letter-spacing: 0.08em; color: var(--qsd-text); }
+.qsd-launch-preview__name { margin: 0; font-family: var(--font-heading); font-size: 1.7rem; letter-spacing: -0.03em; }
+.qsd-launch-preview__pair { margin: 0.25rem 0 1rem; color: var(--qsd-muted); font-size: var(--text-sm); }
 .qsd-form__socials { border: 1px solid var(--qsd-border); padding: 0.85rem 1rem 1rem; display: flex; flex-direction: column; gap: 0.85rem; }
 .qsd-form__socials legend { font-size: var(--text-xs); letter-spacing: 0.12em; text-transform: uppercase; color: var(--qsd-muted); padding: 0 0.35rem; }
 .qsd-form__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-top: 0.5rem; }
