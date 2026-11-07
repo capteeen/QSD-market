@@ -43,8 +43,8 @@ export const HOME = {
     'A ticker can be launched once. The wallet that launches it is the creator, and that name cannot be copied.',
   launch: 'Launch',
   how: 'How it works',
-  nextBurnLabel: 'next INFINITWAP burn',
-  nextBurnUnavailable: 'the burn schedule is not available',
+  nextBurnLabel: 'INFINITWAP burn',
+  nextBurnUnavailable: 'buy-and-burn is not available on Elysium',
   stepsEyebrow: 'FOUR STEPS',
   steps: [
     {

@@ -163,7 +163,7 @@
 }
 .qsd-hero__sub { font-family: var(--font-heading); font-weight: 400; font-size: clamp(1rem, 1.5vw, 1.3rem); line-height: 1.45; color: var(--qsd-text); max-width: 29rem; opacity: 0.92; }
 .qsd-hero__ctas { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.75rem; }
-.qsd-hero__burn { display: flex; align-items: baseline; gap: 0.75rem; margin-top: 1.75rem; }
+.qsd-hero__burn { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.75rem; max-width: 40rem; }
 .qsd-hero__scroll { position: absolute; left: 1.25rem; bottom: 1.5rem; font-size: var(--text-xs); letter-spacing: 0.2em; text-transform: uppercase; color: var(--qsd-muted); }
 @media (min-width: 900px) { .qsd-hero__scroll { left: 2.5rem; } }
 @media (max-width: 899px) { .qsd-hero__scroll { display: none; } }
