@@ -236,7 +236,7 @@ export class FakePrismaClient {
   calls = 0;
   writes: string[] = [];
 
-  readonly coin = new FakeTable('coin', this, 'ca', () => ({ createdAt: new Date(), updatedAt: new Date(), motherCa: null, daughterCa: null, collapsedAt: null, launchBundle: null, createdBy: null }), { channels: { table: 'channel', fk: 'coinCa' } });
+  readonly coin = new FakeTable('coin', this, 'ca', () => ({ createdAt: new Date(), updatedAt: new Date(), motherCa: null, daughterCa: null, collapsedAt: null, launchBundle: null, createdBy: null, website: null, twitter: null, telegram: null }), { channels: { table: 'channel', fk: 'coinCa' } });
   readonly channel = new FakeTable('channel', this, 'id');
   readonly measurement = new FakeTable('measurement', this, 'id', () => ({ createdAt: new Date(), precommitTx: null, proofTx: null }));
   readonly lineage = new FakeTable('lineage', this, 'id', () => ({ createdAt: new Date() }));

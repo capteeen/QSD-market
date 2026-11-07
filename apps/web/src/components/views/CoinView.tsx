@@ -89,6 +89,9 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
           <DataRow label={COIN.rows.name} value={coin.name} />
           <DataRow label={COIN.rows.ticker} value={coin.ticker} />
           {coin.createdBy ? <DataRow label={COIN.rows.creator} value={coin.createdBy} /> : <DataRow label={COIN.rows.creator} unavailable={{ reason: 'no creator was recorded for this coin' }} />}
+          <SocialLink label={COIN.rows.website} href={coin.socials?.website ?? null} />
+          <SocialLink label={COIN.rows.twitter} href={coin.socials?.twitter ?? null} />
+          <SocialLink label={COIN.rows.telegram} href={coin.socials?.telegram ?? null} />
           <p className="qsd-note mt-2">{COIN.creatorRewardNote}</p>
           <Row label={COIN.rows.ca}>
             <HashDisplay hash={coin.ca} full />
@@ -199,6 +202,17 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
 
 function channelLabel(coin: CoinDto, channelId: string): string {
   return coin.decayChannels.find((c) => c.id === channelId)?.label ?? channelId;
+}
+
+function SocialLink({ label, href }: { label: string; href: string | null }) {
+  if (!href) return null;
+  return (
+    <Row label={label}>
+      <a className="qsd-link" href={href} target="_blank" rel="noreferrer">
+        {href.replace(/^https:\/\//, '')}
+      </a>
+    </Row>
+  );
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {

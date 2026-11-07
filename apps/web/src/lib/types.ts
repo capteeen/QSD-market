@@ -58,6 +58,7 @@ export interface CoinDto {
   launchPath: string;
   launchTx: string;
   createdBy: string | null;
+  socials: { website: string | null; twitter: string | null; telegram: string | null };
   measurements: MeasurementDto[];
   /** Server clock at response time (unix seconds) so clients compute live decay consistently. */
   now: number;

@@ -8,6 +8,7 @@ import { DataRow, Panel } from '@qsd/ui-tokens';
 import { createSceneStore, decodeCryptoEvents, type ChainEvent, type LineageInput, type SceneStore, type SuperpositionInput } from '@qsd/scene/model';
 import type { QuantumEvent } from '@qsd/quantum';
 import { LAUNCH, PAGES } from '@/copy';
+import { normalizeSocial, type SocialKind } from '@/lib/socials';
 import { isUnavailable } from '@/lib/api';
 import { formatHype } from '@/lib/format';
 import { routes } from '@/lib/links';
@@ -75,11 +76,26 @@ export function LaunchView() {
   const [name, setName] = useState('');
   const [ticker, setTicker] = useState('');
   const [description, setDescription] = useState('');
+  const [website, setWebsite] = useState('');
+  const [twitter, setTwitter] = useState('');
+  const [telegram, setTelegram] = useState('');
   const [image, setImage] = useState<File | null>(null);
 
   const q = quote.data && !isUnavailable(quote.data) ? quote.data : null;
   const devBuyLamports = q && q.devBuyLamports !== null ? BigInt(q.devBuyLamports) : null;
   const total = q && q.launchCostLamports !== null && q.identityReserveLamports !== null && devBuyLamports !== null ? BigInt(q.launchCostLamports) + BigInt(q.identityReserveLamports) + devBuyLamports : null;
+  const social = (kind: SocialKind, value: string): string | null => {
+    try {
+      normalizeSocial(kind, value);
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const websiteError = social('website', website);
+  const twitterError = social('x', twitter);
+  const telegramError = social('telegram', telegram);
+  const socialsOk = !websiteError && !twitterError && !telegramError;
   const tickerOk = /^[A-Za-z0-9]{1,10}$/.test(ticker);
   const [tickerFree, setTickerFree] = useState(true);
   useEffect(() => {
@@ -103,7 +119,7 @@ export function LaunchView() {
       alive = false;
     };
   }, [ticker, tickerOk]);
-  const canLaunch = !!q && !!q.payTo && total !== null && !!address && !!image && name.trim().length > 0 && tickerOk && tickerFree && (phase === 'form' || phase === 'failed');
+  const canLaunch = !!q && !!q.payTo && total !== null && !!address && !!image && name.trim().length > 0 && tickerOk && tickerFree && socialsOk && (phase === 'form' || phase === 'failed');
 
   const launch = async () => {
     if (!q || !q.payTo || total === null || !address || !image) return;
@@ -139,6 +155,9 @@ export function LaunchView() {
     fd.set('name', name.trim());
     fd.set('ticker', ticker.toUpperCase());
     fd.set('description', description);
+    fd.set('website', website.trim());
+    fd.set('twitter', twitter.trim());
+    fd.set('telegram', telegram.trim());
     fd.set('devBuyWei', (devBuyLamports ?? 0n).toString());
     fd.set('image', image);
     fd.set('wallet', address);
@@ -286,6 +305,25 @@ export function LaunchView() {
                 {LAUNCH.form.description}
                 <textarea className="qsd-input" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} />
               </label>
+              <fieldset className="qsd-form__socials">
+                <legend>{LAUNCH.form.socials}</legend>
+                <label>
+                  {LAUNCH.form.website}
+                  <input className="qsd-input" value={website} onChange={(e) => setWebsite(e.target.value)} maxLength={200} inputMode="url" placeholder="https://" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+                </label>
+                {websiteError ? <p className="qsd-form__error">{websiteError}</p> : null}
+                <label>
+                  {LAUNCH.form.twitter}
+                  <input className="qsd-input" value={twitter} onChange={(e) => setTwitter(e.target.value)} maxLength={200} inputMode="url" placeholder="https://x.com/" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+                </label>
+                {twitterError ? <p className="qsd-form__error">{twitterError}</p> : null}
+                <label>
+                  {LAUNCH.form.telegram}
+                  <input className="qsd-input" value={telegram} onChange={(e) => setTelegram(e.target.value)} maxLength={200} inputMode="url" placeholder="https://t.me/" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+                </label>
+                {telegramError ? <p className="qsd-form__error">{telegramError}</p> : null}
+                <span className="qsd-note">{LAUNCH.form.socialsNote}</span>
+              </fieldset>
               {!address ? <Empty eyebrow={LAUNCH.noWalletEyebrow} sentence={LAUNCH.noWalletSentence} /> : null}
               <div className="qsd-form__actions">
                 <button type="submit" className="qsd-btn" data-primary="true" disabled={!canLaunch}>

@@ -6,8 +6,8 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 /**
- * POST multipart/form-data (name, ticker, description, halfLifePreset,
- * devBuyWei, image, wallet, paymentSignature) → text/event-stream of the real
+ * POST multipart/form-data (name, ticker, description, website, twitter,
+ * telegram, devBuyWei, image, wallet, paymentSignature) → text/event-stream of the real
  * launch (see src/server/launch.ts for the frame protocol).
  */
 export async function POST(req: NextRequest): Promise<Response> {
@@ -22,6 +22,9 @@ export async function POST(req: NextRequest): Promise<Response> {
     name: String(fd.get('name') ?? ''),
     ticker: String(fd.get('ticker') ?? '').toUpperCase(),
     description: String(fd.get('description') ?? ''),
+    website: String(fd.get('website') ?? ''),
+    twitter: String(fd.get('twitter') ?? ''),
+    telegram: String(fd.get('telegram') ?? ''),
     halfLifePreset: String(fd.get('halfLifePreset') ?? ''),
     devBuyWei: String(fd.get('devBuyWei') ?? ''),
     wallet: String(fd.get('wallet') ?? ''),

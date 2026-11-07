@@ -140,6 +140,7 @@ export async function coinToDto(row: DbCoinFull, now: number): Promise<CoinDto> 
     launchPath: row.launchPath,
     launchTx: row.launchTx,
     createdBy: row.createdBy,
+    socials: { website: row.website ?? null, twitter: row.twitter ?? null, telegram: row.telegram ?? null },
     measurements: row.measurements.map(measurementToDto),
     now,
     holderCount: holderCount === 0 ? (await db().trade.count({ where: { mint: row.ca } })) === 0 ? null : 0 : holderCount,
@@ -174,6 +175,9 @@ export interface InsertCoinExtra {
   createdBy?: string;
   /** The payment transaction a user launch consumed (unique on Coin). */
   paymentTx?: string;
+  website?: string | null;
+  twitter?: string | null;
+  telegram?: string | null;
 }
 
 /** Insert a brand-new protocol Coin (launch or daughter birth) with its channel table, in its own transaction. */
@@ -214,6 +218,9 @@ export async function insertCoinWith(tx: Prisma.TransactionClient, coin: Coin, e
         ...(extra.launchBundle !== undefined ? { launchBundle: extra.launchBundle as Prisma.InputJsonValue } : {}),
         createdBy: extra.createdBy ?? null,
         paymentTx: extra.paymentTx ?? null,
+        website: extra.website ?? null,
+        twitter: extra.twitter ?? null,
+        telegram: extra.telegram ?? null,
         channels: {
           create: coin.decayChannels.map((c, i) => ({
             channelId: c.id,

@@ -84,6 +84,7 @@ async function measured(kind: 'witness' | 'dev', bytes = new Uint8Array(32).fill
     launchPath: 'devnet-spl',
     launchTx: '5'.repeat(88),
     createdBy: null,
+    socials: { website: null, twitter: null, telegram: null },
     measurements: [mdto],
     now: at + 1,
     holderCount: null,

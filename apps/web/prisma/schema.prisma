@@ -56,6 +56,10 @@ model Coin {
   launchBundle   Json?
   /// Wallet that paid for / requested the launch.
   createdBy      String?
+  /// Optional creator links. Null when the launch form left them blank.
+  website        String?
+  twitter        String?
+  telegram       String?
   /// The SOL payment transaction this launch consumed. Unique: one payment buys one launch (H-W1).
   paymentTx      String?   @unique
   createdAt      DateTime  @default(now())

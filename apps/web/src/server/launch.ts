@@ -9,6 +9,7 @@ import { QuantumEventBus, bundleHash, canonicalJson, type JsonValue, type Outcom
 import { redactSecrets, type ChainEvent as ReserveChainEvent } from '@qsd/solana';
 import { encodeCryptoEvents } from '@qsd/scene/model';
 import type { ChainEvent as SceneChainEvent, LineageInput, SuperpositionInput } from '@qsd/scene/model';
+import { normalizeSocial } from '@/lib/socials';
 import { getChain } from './chain';
 import { db } from './db';
 import { insertCoinWith } from './coins';
@@ -52,6 +53,9 @@ export interface LaunchForm {
   name: string;
   ticker: string;
   description: string;
+  website: string | null;
+  twitter: string | null;
+  telegram: string | null;
   halfLifePreset: string;
   /** Dev buy in wei of HYPE, as a base-10 integer string. */
   devBuyWei: string;
@@ -127,6 +131,13 @@ export function validateLaunchForm(f: Partial<LaunchForm>): asserts f is LaunchF
   if (!f.name || f.name.trim().length < 1 || f.name.length > 32) throw new LaunchValidationError('name must be 1–32 characters');
   if (!f.ticker || !/^[A-Z0-9]{1,10}$/.test(f.ticker)) throw new LaunchValidationError('ticker must be 1–10 uppercase letters or digits');
   if (typeof f.description !== 'string' || f.description.length > 500) throw new LaunchValidationError('description must be at most 500 characters');
+  try {
+    f.website = normalizeSocial('website', typeof f.website === 'string' ? f.website : '');
+    f.twitter = normalizeSocial('x', typeof f.twitter === 'string' ? f.twitter : '');
+    f.telegram = normalizeSocial('telegram', typeof f.telegram === 'string' ? f.telegram : '');
+  } catch (e) {
+    throw new LaunchValidationError(e instanceof Error ? e.message : String(e));
+  }
   if (!f.halfLifePreset) f.halfLifePreset = directLaunchPreset().id;
   if (!launchPresets().some((p) => p.id === f.halfLifePreset)) throw new LaunchValidationError('half-life preset is not one of the presets offered');
   if (typeof f.devBuyWei !== 'string' || !/^\d+$/.test(f.devBuyWei)) throw new LaunchValidationError('dev buy must be an integer number of wei');
@@ -438,7 +449,16 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     try {
       await db().$transaction(async (tx) => {
         await assertPaymentUnused(tx, form.paymentSignature);
-        await insertCoinWith(tx, coin, { launchPath: launch.path, launchTx: launch.txHash, launchBundle: bundle as unknown as ProofBundle, createdBy: form.wallet, paymentTx: form.paymentSignature });
+        await insertCoinWith(tx, coin, {
+          launchPath: launch.path,
+          launchTx: launch.txHash,
+          launchBundle: bundle as unknown as ProofBundle,
+          createdBy: form.wallet,
+          paymentTx: form.paymentSignature,
+          website: form.website,
+          twitter: form.twitter,
+          telegram: form.telegram,
+        });
       });
     } catch (e) {
       if (isTickerUniqueViolation(e)) throw new LaunchValidationError(tickerTakenMessage(form.ticker));

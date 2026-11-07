@@ -24,4 +24,26 @@ describe('launchPresets', () => {
     expect(() => validateLaunchForm(form)).toThrow(/dev buy/);
     expect(form.halfLifePreset).toBe('24h');
   });
+
+  it('keeps blank socials blank and stores https links, including an x or telegram handle', async () => {
+    const { validateLaunchForm } = await import('@/server/launch');
+    const base = {
+      name: 'Photon',
+      ticker: 'PHO',
+      description: '',
+      halfLifePreset: '24h',
+      devBuyWei: '0',
+      image: { bytes: new Uint8Array([1]), mime: 'image/png' },
+      wallet: `0x${'11'.repeat(20)}`,
+      paymentSignature: `0x${'ab'.repeat(32)}`,
+      website: '',
+      twitter: '@hypiobeat',
+      telegram: 't.me/hypiobeat',
+    };
+    expect(() => validateLaunchForm(base)).not.toThrow();
+    expect(base.website).toBeNull();
+    expect(base.twitter).toBe('https://x.com/hypiobeat');
+    expect(base.telegram).toBe('https://t.me/hypiobeat');
+    expect(() => validateLaunchForm({ ...base, website: 'javascript:alert(1)' })).toThrow(/website must be an https link/);
+  });
 });
