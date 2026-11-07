@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { useAccount, useConfig, useSendTransaction } from 'wagmi';
+import { useAccount, useConfig, useSendTransaction, useSignMessage } from 'wagmi';
 import { waitForTransactionReceipt } from 'wagmi/actions';
 import { elysiumChain } from '@qsd/elysium/chain';
 import { publicCluster } from '@/lib/env';
@@ -11,7 +11,8 @@ import type { QuantumEvent } from '@qsd/quantum';
 import { LAUNCH, PAGES } from '@/copy';
 import { parseHypeToWei } from '@/lib/hype';
 import { normalizeSocial, type SocialKind } from '@/lib/socials';
-import { isUnavailable } from '@/lib/api';
+import { apiPost, isUnavailable } from '@/lib/api';
+import type { LaunchChallengeResponse } from '@/lib/types';
 import { formatHype, shortAddress } from '@/lib/format';
 import { routes } from '@/lib/links';
 import { useLaunchQuote } from '@/hooks/useApi';
@@ -62,6 +63,7 @@ export function LaunchView() {
   const quote = useLaunchQuote();
   const { address } = useAccount();
   const { sendTransactionAsync } = useSendTransaction();
+  const { signMessageAsync } = useSignMessage();
   const wagmiConfig = useConfig();
   const [phase, setPhase] = useState<Phase>('form');
   const [status, setStatus] = useState<string | null>(null);
@@ -148,6 +150,26 @@ export function LaunchView() {
       setError(`${LAUNCH.notCharged} ${e instanceof Error ? e.message : String(e)}`);
       return;
     }
+    if (!signMessageAsync) {
+      setPhase('failed');
+      setError(`${LAUNCH.notCharged} ${LAUNCH.form.signing}`);
+      return;
+    }
+    setStatus(LAUNCH.form.signing);
+    const challenge = await apiPost<LaunchChallengeResponse>('/api/launch/challenge', { wallet: address, ticker: ticker.toUpperCase() });
+    if (isUnavailable(challenge)) {
+      setPhase('failed');
+      setError(`${LAUNCH.notCharged} ${challenge.unavailable.reason}`);
+      return;
+    }
+    let walletSignature = '';
+    try {
+      walletSignature = await signMessageAsync({ message: challenge.message });
+    } catch (e) {
+      setPhase('failed');
+      setError(`${LAUNCH.notCharged} ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
     let paymentSignature = '';
     if (firstBuyWei > 0n) {
       setStatus(LAUNCH.form.paying);
@@ -172,6 +194,8 @@ export function LaunchView() {
     fd.set('devBuyWei', firstBuyWei.toString());
     fd.set('image', image);
     fd.set('wallet', address);
+    fd.set('walletNonce', challenge.nonce);
+    fd.set('walletSignature', walletSignature);
     fd.set('paymentSignature', paymentSignature);
     let res: Response;
     try {

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { MeasurementUnavailableError } from '@qsd/quantum';
 import { AuthError, verifyChallenge } from '@/server/auth';
+import { HOUR_MS, MEASURE_LIMIT_MESSAGE, clientIp, measureGlobalLimit, measureIpLimit, measureWalletLimit, spendBudget } from '@/server/budget';
 import { MeasureError, performMeasurement } from '@/server/measure';
 import { coinToDto, loadCoin, measurementToDto } from '@/server/coins';
 import { chainStatus } from '@/server/chain';
@@ -20,6 +21,9 @@ export const maxDuration = 120;
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   return guarded(async () => {
+    if (!(await spendBudget(`measure:ip:${clientIp(req)}`, measureIpLimit(), HOUR_MS))) {
+      return NextResponse.json({ error: MEASURE_LIMIT_MESSAGE }, { status: 429 });
+    }
     const body = (await req.json().catch(() => ({}))) as { ca?: string; wallet?: string; nonce?: string; signature?: string };
     if (!body.ca) return NextResponse.json({ error: 'ca is required' }, { status: 400 });
     if (!body.wallet || !body.nonce || !body.signature) {
@@ -35,6 +39,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!q.configured) return unavailable(`the quantum random number provider is not configured (${q.reason ?? 'unknown'})`);
     const c = chainStatus();
     if (!c.configured) return unavailable(`the chain is not configured (${c.reason ?? 'unknown'})`);
+    const wallet = body.wallet.toLowerCase();
+    if (!(await spendBudget(`measure:wallet:${wallet}`, measureWalletLimit(), HOUR_MS))) {
+      return NextResponse.json({ error: MEASURE_LIMIT_MESSAGE }, { status: 429 });
+    }
+    if (!(await spendBudget('measure:global', measureGlobalLimit(), HOUR_MS))) {
+      return NextResponse.json({ error: MEASURE_LIMIT_MESSAGE }, { status: 429 });
+    }
     try {
       const r = await performMeasurement(body.ca, body.wallet);
       const row = await loadCoin(body.ca);

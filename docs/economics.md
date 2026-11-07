@@ -3,7 +3,7 @@
 This page is the public description of the INFINITWAP protocol rules. Coins
 launch on Elysium and are paid for in HYPE. A launch on mainnet puts the whole
 supply into a Uniswap v2 pool against HYPE and locks the liquidity. A ticker
-can be launched once. The wallet that pays is the creator of that ticker, and
+can be launched once. The wallet that signs the launch is the creator of that ticker, and
 creator rewards for it stay with that wallet. Daughter coin creation is not
 available on Elysium yet: a collapse does not create a second coin and does
 not spend HYPE to buy one.

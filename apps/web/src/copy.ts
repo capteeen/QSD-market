@@ -53,7 +53,7 @@ export const HOME = {
     },
     {
       title: 'Creator',
-      body: 'The wallet that pays for the launch is stored as the creator of that ticker.',
+      body: 'The wallet that signs the launch is stored as the creator of that ticker.',
     },
     {
       title: 'Creator reward',
@@ -232,7 +232,7 @@ export const PAGES = {
     arrows: ['ONE BURN PER HOUR', 'EVERY TRANSACTION LINKED', 'TOTALS FROM THE LEDGER, NOT A COUNTER'],
   },
   how: {
-    body: 'INFINITWAP on Elysium, written down and rendered verbatim: the physics the mechanics borrow from, and the economics they implement. A ticker launches once. The wallet that pays is the creator.',
+    body: 'INFINITWAP on Elysium, written down and rendered verbatim: the physics the mechanics borrow from, and the economics they implement. A ticker launches once. The wallet that signs the launch is the creator.',
     arrows: ['PHYSICS, HONESTLY', 'ECONOMICS, EXACTLY', 'VERIFY A SIGNATURE WHILE YOU READ'],
   },
   me: {
@@ -461,7 +461,7 @@ export const LAUNCH = {
     name: 'name',
     ticker: 'ticker',
     tickerTaken: 'already launched',
-    noVamp: 'This ticker can be used once. The wallet that pays becomes its creator.',
+    noVamp: 'This ticker can be used once. The wallet that signs the launch becomes its creator.',
     image: 'image',
     imageHint: 'PNG, JPG, GIF or WebP',
     description: 'description',
@@ -477,6 +477,7 @@ export const LAUNCH = {
     launch: 'Launch',
     submit: 'Pay and launch',
     checking: 'checking the launch services',
+    signing: 'sign the launch in your wallet',
     paying: 'confirm the payment in your wallet',
     launching: 'launching — every stage below is a real operation',
   },

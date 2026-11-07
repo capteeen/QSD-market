@@ -241,6 +241,12 @@ export interface MeasureChallengeResponse {
   expiresAt: string;
 }
 
+export interface LaunchChallengeResponse {
+  nonce: string;
+  message: string;
+  expiresAt: string;
+}
+
 export interface MeasureResponse {
   measurement: MeasurementDto;
   coin: CoinDto;

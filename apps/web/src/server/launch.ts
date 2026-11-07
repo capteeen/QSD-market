@@ -11,6 +11,8 @@ import { redactSecrets, type ChainEvent as ReserveChainEvent } from '@qsd/solana
 import { encodeCryptoEvents } from '@qsd/scene/model';
 import type { ChainEvent as SceneChainEvent, LineageInput, SuperpositionInput } from '@qsd/scene/model';
 import { normalizeSocial } from '@/lib/socials';
+import { AuthError, verifyChallenge } from './auth';
+import { DAY_MS, LAUNCH_GLOBAL_LIMIT_MESSAGE, LAUNCH_WALLET_LIMIT_MESSAGE, launchGlobalLimit, launchWalletLimit, spendBudget } from './budget';
 import { getChain } from './chain';
 import { db } from './db';
 import { insertCoinWith } from './coins';
@@ -63,6 +65,10 @@ export interface LaunchForm {
   image: { bytes: Uint8Array; mime: string };
   wallet: string;
   paymentSignature: string;
+  /** Nonce from POST /api/launch/challenge, bound to this ticker. */
+  walletNonce: string;
+  /** Personal signature by `wallet` over that challenge. */
+  walletSignature: string;
 }
 
 export type LaunchFrame = { event: string; data: string };
@@ -149,6 +155,8 @@ export function validateLaunchForm(f: Partial<LaunchForm>): asserts f is LaunchF
   const paid = BigInt(f.devBuyWei) > 0n;
   if (paid && (!f.paymentSignature || !/^0x[0-9a-fA-F]{64}$/.test(f.paymentSignature))) throw new LaunchValidationError('payment signature is required');
   if (!paid) f.paymentSignature = '';
+  if (!f.walletNonce || !/^[0-9a-f]{32}$/.test(f.walletNonce)) throw new LaunchValidationError('wallet signature is required');
+  if (!f.walletSignature || !/^0x[0-9a-fA-F]{130}$/.test(f.walletSignature)) throw new LaunchValidationError('wallet signature is required');
 }
 
 export interface LaunchCosts {
@@ -332,6 +340,22 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     const chain = getChain();
     const genesis = genesisConfig();
     const preset = launchPresets().find((p) => p.id === form.halfLifePreset)!;
+    try {
+      await verifyChallenge({ purpose: 'launch', wallet: form.wallet, subject: form.ticker, nonce: form.walletNonce, signature: form.walletSignature });
+    } catch (e) {
+      throw new LaunchValidationError(e instanceof AuthError ? e.message : e instanceof Error ? e.message : String(e));
+    }
+
+    push('status', { step: 'payment', message: 'verifying payment' });
+    yield* drain();
+    await verifyPayment(form, chain.creatorAddress());
+    timer.mark('payment check');
+
+    // The signature is already consumed. Count the launch before any keygen,
+    // randomness draw, or pool deposit the deployer wallet pays for.
+    if (!(await spendBudget(`launch:wallet:${form.wallet.toLowerCase()}`, launchWalletLimit(), DAY_MS))) throw new LaunchValidationError(LAUNCH_WALLET_LIMIT_MESSAGE);
+    if (!(await spendBudget('launch:global', launchGlobalLimit(), DAY_MS))) throw new LaunchValidationError(LAUNCH_GLOBAL_LIMIT_MESSAGE);
+
     const session = await chain.withCreator();
     const { address, anchor } = session;
     const tokenDecimals = 18;
@@ -346,11 +370,6 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     } else {
       ca = session.predictedCa;
     }
-
-    push('status', { step: 'payment', message: 'verifying payment' });
-    yield* drain();
-    await verifyPayment(form, address);
-    timer.mark('payment check');
 
     // 1. The contract address is reserved before any send and vaulted.
     //    Testnet: CREATE at the deployer's nonce after the two anchors.

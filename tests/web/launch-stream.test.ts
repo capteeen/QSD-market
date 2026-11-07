@@ -16,6 +16,7 @@ import type { Address, Hash } from 'viem';
 import { CryptoObserver, createIdentity, toHex, type CryptoEvent } from '@qsd/crypto';
 import { ChainObserver, IdentityReserve, KeyVault, MemoryKeyStore, MemoryReserveBackend, type AnchorKind } from '@qsd/solana';
 import { decodeCryptoEvents } from '@qsd/scene/model';
+import { resetSpendBudget } from '@/server/budget';
 import { fakeDb } from './fakeDb';
 
 const ROOT = path.resolve(__dirname, '../..');
@@ -176,14 +177,26 @@ function form(overrides: Partial<import('@/server/launch').LaunchForm> = {}): im
     image: { bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]), mime: 'image/png' },
     wallet: wallet.address,
     paymentSignature: PAYMENT_SIG,
+    walletNonce: '',
+    walletSignature: '',
     ...overrides,
   };
 }
 
 async function collect(f: import('@/server/launch').LaunchForm): Promise<{ event: string; data: string }[]> {
-  const { runLaunch } = await import('@/server/launch');
+  const { runLaunch, validateLaunchForm, LaunchValidationError } = await import('@/server/launch');
+  const { issueChallenge } = await import('@/server/auth');
+  const probe: import('@/server/launch').LaunchForm = { ...f, walletNonce: '11'.repeat(16), walletSignature: `0x${'ab'.repeat(65)}` };
+  let signed = f;
+  try {
+    validateLaunchForm(probe);
+    const ch = await issueChallenge('launch', probe.wallet, probe.ticker);
+    signed = { ...probe, walletNonce: ch.nonce, walletSignature: await wallet.signMessage({ message: ch.message }) };
+  } catch (e) {
+    if (!(e instanceof LaunchValidationError)) throw e;
+  }
   const out: { event: string; data: string }[] = [];
-  for await (const fr of runLaunch(f)) out.push(fr);
+  for await (const fr of runLaunch(signed)) out.push(fr);
   return out;
 }
 const json = (fr: { data: string }) => JSON.parse(fr.data) as Record<string, unknown>;
@@ -207,6 +220,10 @@ function freshEnvironment(): void {
   process.env.QSD_IDENTITY_RESERVE_LAMPORTS = RESERVE.toString();
   process.env.QSD_LAUNCH_DEV_BUY_LAMPORTS = '0';
   delete process.env.REDIS_URL;
+  process.env.LAUNCH_MAX_PER_WALLET = '24';
+  process.env.LAUNCH_MAX_GLOBAL = '48';
+  process.env.LAUNCH_MAX_PER_IP = '30';
+  resetSpendBudget();
 }
 
 // ----------------------------------------------------------------- payment first
@@ -270,6 +287,28 @@ describe('payment is verified on-chain BEFORE any identity or key material exist
     expect(frames.map((x) => x.event)).toEqual(['error']);
     expect(state.getTransactionCalls).toEqual([]);
   });
+
+  it('a launch without a wallet signature is refused before payment or identity', async () => {
+    const { runLaunch } = await import('@/server/launch');
+    const frames: { event: string; data: string }[] = [];
+    for await (const fr of runLaunch(form())) frames.push(fr);
+    expect(frames.map((x) => x.event)).toEqual(['error']);
+    expect(String(json(frames[0]!)['message'])).toMatch(/wallet signature is required/);
+    expect(state.getTransactionCalls).toEqual([]);
+    expect(state.vaultWrites).toEqual([]);
+    expect(state.sends.calls).toBe(0);
+  });
+
+  it('a second launch from the same wallet is refused before keygen or a pool deposit', async () => {
+    process.env.LAUNCH_MAX_PER_WALLET = '1';
+    const first = await collect(form({ devBuyWei: '0', ticker: 'FREE', paymentSignature: '' }));
+    expect(first.at(-1)!.event).toBe('done');
+    const writes = state.vaultWrites.length;
+    const second = await collect(form({ devBuyWei: '0', ticker: 'FRE2', paymentSignature: '' }));
+    expect(second.at(-1)!.event).toBe('error');
+    expect(String(json(second.at(-1)!)['message'])).toMatch(/too many launches from this wallet/);
+    expect(state.vaultWrites.length).toBe(writes);
+  }, 120_000);
 });
 
 // ----------------------------------------------------------------- the happy path, examined

@@ -1,7 +1,7 @@
 # The physics behind INFINITWAP, honestly
 
 INFINITWAP is a no-vamp launchpad on Elysium. A ticker can be launched once,
-and the wallet that pays for it is the creator of that ticker. Its game
+and the wallet that signs the launch is the creator of that ticker. Its game
 mechanics are *inspired by* quantum mechanics and its randomness comes from
 a *real* quantum random number generator. Those are two different claims and
 we keep them separate on this page. Coins are paid for in HYPE. This page

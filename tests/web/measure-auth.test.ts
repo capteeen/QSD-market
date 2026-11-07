@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { Hex } from 'viem';
 import { NextRequest } from 'next/server';
+import { resetSpendBudget } from '@/server/budget';
 import { fakeDb } from './fakeDb';
 
 const g = globalThis as unknown as { __qsdPrisma?: unknown; __qsdChain?: unknown; __qsdQrng?: unknown };
@@ -32,6 +33,7 @@ const sign = (msg: string): Promise<Hex> => account.signMessage({ message: msg }
 
 beforeEach(() => {
   fakeDb.reset();
+  resetSpendBudget();
   delete g.__qsdPrisma;
   delete g.__qsdQrng;
   delete g.__qsdChain;
@@ -93,6 +95,15 @@ describe('challenge / signature (auth.ts)', () => {
     // none of those consumed the nonce; the honest signature still works exactly once
     expect(fakeDb.authChallenge.rows[0]!['usedAt']).toBeNull();
     await expect(verifyChallenge({ purpose: 'measure', wallet: WALLET, subject: CA, nonce: ch.nonce, signature: await sign(ch.message) })).resolves.toBeUndefined();
+  });
+
+  it('expired rows are deleted, and a fourth open challenge for the same wallet is refused', async () => {
+    const { issueChallenge, OPEN_CHALLENGES_PER_WALLET } = await import('@/server/auth');
+    await fakeDb.authChallenge.create({ data: { nonce: 'aa'.repeat(16), wallet: WALLET, purpose: 'measure', expiresAt: new Date(Date.now() - 1000) } });
+    for (let i = 0; i < OPEN_CHALLENGES_PER_WALLET; i++) await issueChallenge('measure', WALLET, CA);
+    expect(fakeDb.authChallenge.rows.some((r) => r['nonce'] === 'aa'.repeat(16))).toBe(false);
+    await expect(issueChallenge('measure', WALLET, CA)).rejects.toThrow(/too many open challenges/);
+    expect(fakeDb.authChallenge.rows.filter((r) => r['usedAt'] === null).length).toBe(OPEN_CHALLENGES_PER_WALLET);
   });
 
   it('FINDING H-W6 (MEDIUM): nonce consumption is check-then-set (findUnique … update), not an atomic conditional update — two concurrent requests with the same signed challenge both pass', async () => {

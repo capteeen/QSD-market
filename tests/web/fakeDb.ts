@@ -4,7 +4,7 @@
  * stats.ts …) run unmodified against it. Installed with
  *   vi.mock('@prisma/client', () => ({ PrismaClient: FakePrismaClient }))
  * It implements only the call shapes the app uses (findUnique / findFirst /
- * findMany / create / update / upsert / count / aggregate / groupBy /
+ * findMany / create / update / updateMany / deleteMany / upsert / count / aggregate / groupBy /
  * $transaction) with top-level `where` equality, `in`, `gt`, `gte`, `lt`,
  * `lte`, compound uniques (`a_b_c: {…}`), `orderBy`, `take`, `distinct`,
  * nested `channels: { create: [...] }` and the `include` shapes of coins.ts.
@@ -175,6 +175,18 @@ export class FakeTable {
     const rs = this.rows.filter((row) => matches(row, args['where'] as Row, this.relations()));
     for (const r of rs) Object.assign(r, args['data'] as Row);
     return { count: rs.length };
+  }
+  async deleteMany(args: Row = {}): Promise<{ count: number }> {
+    this.db.touch();
+    const where = args['where'] as Row | undefined;
+    const keep: Row[] = [];
+    let count = 0;
+    for (const row of this.rows) {
+      if (matches(row, where, this.relations())) count += 1;
+      else keep.push(row);
+    }
+    this.rows = keep;
+    return { count };
   }
   async upsert(args: Row): Promise<Row> {
     const r = this.rows.find((row) => matches(row, args['where'] as Row, this.relations()));

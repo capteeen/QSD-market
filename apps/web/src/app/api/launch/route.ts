@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { clientIp, LAUNCH_IP_LIMIT_MESSAGE, launchIpLimit, HOUR_MS, spendBudget } from '@/server/budget';
 import { LaunchValidationError, runLaunch, type LaunchForm } from '@/server/launch';
 
 export const dynamic = 'force-dynamic';
@@ -7,10 +8,14 @@ export const maxDuration = 300;
 
 /**
  * POST multipart/form-data (name, ticker, description, website, twitter,
- * telegram, devBuyWei, image, wallet, paymentSignature) → text/event-stream of the real
- * launch (see src/server/launch.ts for the frame protocol).
+ * telegram, devBuyWei, image, wallet, walletNonce, walletSignature,
+ * paymentSignature) → text/event-stream of the real launch
+ * (see src/server/launch.ts for the frame protocol).
  */
 export async function POST(req: NextRequest): Promise<Response> {
+  if (!(await spendBudget(`launch:ip:${clientIp(req)}`, launchIpLimit(), HOUR_MS))) {
+    return NextResponse.json({ error: LAUNCH_IP_LIMIT_MESSAGE }, { status: 429 });
+  }
   let fd: FormData;
   try {
     fd = await req.formData();
@@ -29,6 +34,8 @@ export async function POST(req: NextRequest): Promise<Response> {
     devBuyWei: String(fd.get('devBuyWei') ?? ''),
     wallet: String(fd.get('wallet') ?? ''),
     paymentSignature: String(fd.get('paymentSignature') ?? ''),
+    walletNonce: String(fd.get('walletNonce') ?? ''),
+    walletSignature: String(fd.get('walletSignature') ?? ''),
   };
   if (image instanceof Blob) form.image = { bytes: new Uint8Array(await image.arrayBuffer()), mime: image.type };
   const gen = runLaunch(form as LaunchForm);

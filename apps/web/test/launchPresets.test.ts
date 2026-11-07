@@ -36,6 +36,8 @@ describe('launchPresets', () => {
       image: { bytes: new Uint8Array([1]), mime: 'image/png' },
       wallet: `0x${'11'.repeat(20)}`,
       paymentSignature: `0x${'ab'.repeat(32)}`,
+      walletNonce: '11'.repeat(16),
+      walletSignature: `0x${'cd'.repeat(65)}`,
       website: '',
       twitter: '@hypiobeat',
       telegram: 't.me/hypiobeat',

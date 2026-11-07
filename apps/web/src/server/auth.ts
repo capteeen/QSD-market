@@ -5,23 +5,30 @@ import { db } from './db';
 
 export const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 
-export function challengeMessage(purpose: string, wallet: string, nonce: string, subject: string): string {
-  return `INFINITWAP\npurpose: ${purpose}\nwallet: ${wallet}\nsubject: ${subject}\nnonce: ${nonce}`;
-}
-
-/** Issue a one-time nonce the wallet must sign (stored in Postgres with a TTL). */
-export async function issueChallenge(purpose: string, wallet: string, subject: string): Promise<{ nonce: string; message: string; expiresAt: string }> {
-  const nonce = randomBytes(16).toString('hex');
-  const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS);
-  await db().authChallenge.create({ data: { nonce, wallet, purpose, expiresAt } });
-  return { nonce, message: challengeMessage(purpose, wallet, nonce, subject), expiresAt: expiresAt.toISOString() };
-}
-
 export class AuthError extends Error {
   override readonly name = 'AuthError';
 }
 
-/** Verify an Ed25519 signature over the challenge message and consume the nonce. */
+export function challengeMessage(purpose: string, wallet: string, nonce: string, subject: string): string {
+  return `INFINITWAP\npurpose: ${purpose}\nwallet: ${wallet}\nsubject: ${subject}\nnonce: ${nonce}`;
+}
+
+/** Unused, unexpired challenges one wallet may hold for one purpose. */
+export const OPEN_CHALLENGES_PER_WALLET = 3;
+
+/** Issue a one-time nonce the wallet must sign (stored in Postgres with a TTL). */
+export async function issueChallenge(purpose: string, wallet: string, subject: string): Promise<{ nonce: string; message: string; expiresAt: string }> {
+  const now = new Date();
+  await db().authChallenge.deleteMany({ where: { expiresAt: { lt: now } } });
+  const open = await db().authChallenge.count({ where: { wallet, purpose, usedAt: null } });
+  if (open >= OPEN_CHALLENGES_PER_WALLET) throw new AuthError('too many open challenges for this wallet');
+  const nonce = randomBytes(16).toString('hex');
+  const expiresAt = new Date(now.getTime() + CHALLENGE_TTL_MS);
+  await db().authChallenge.create({ data: { nonce, wallet, purpose, expiresAt } });
+  return { nonce, message: challengeMessage(purpose, wallet, nonce, subject), expiresAt: expiresAt.toISOString() };
+}
+
+/** Verify the wallet signature over the challenge message and consume the nonce. */
 export async function verifyChallenge(args: { purpose: string; wallet: string; subject: string; nonce: string; signature: string }): Promise<void> {
   const { purpose, wallet, subject, nonce, signature } = args;
   if (!wallet || !nonce || !signature) throw new AuthError('wallet, nonce and signature are required');

@@ -195,7 +195,7 @@ const REVIEWED: Record<string, Review> = {
   'Coins on Elysium nearest to their auto-measurement, soonest first. Anyone can measure any of them before the protocol does.': { section: 'economics §3 auto-measurement window; MeasureQueueView sorts by nextAutoMeasureAt', verdict: 'ok' },
   'REWARD PAID ON COLLAPSE': { section: 'economics §3 measurer share of the collapse burn (MEASURER_SHARE_OF_BURN_BPS)', verdict: 'ok' },
   'THE PROTOCOL MEASURES WHAT NOBODY DOES': { section: 'economics §3 auto-measurement (AUTO_MEASURER_ID)', verdict: 'ok' },
-  'INFINITWAP on Elysium, written down and rendered verbatim: the physics the mechanics borrow from, and the economics they implement. A ticker launches once. The wallet that pays is the creator.': { section: 'docs/physics.md and docs/economics.md, rendered verbatim by HowView', verdict: 'ok' },
+  'INFINITWAP on Elysium, written down and rendered verbatim: the physics the mechanics borrow from, and the economics they implement. A ticker launches once. The wallet that signs the launch is the creator.': { section: 'docs/physics.md and docs/economics.md, rendered verbatim by HowView', verdict: 'ok' },
   'PHYSICS, HONESTLY': { section: 'physics.md title "The physics behind INFINITWAP, honestly"', verdict: 'ok' },
   'VERIFY A SIGNATURE WHILE YOU READ': { section: '@qsd/crypto README; the XMSS verify terminal on /how', verdict: 'ok' },
   'One lineage, from its generation-one coin through every collapse and every daughter born from it.': { section: 'economics §5 lineage (mother → daughter at collapse)', verdict: 'ok' },
