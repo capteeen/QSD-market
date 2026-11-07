@@ -21,7 +21,7 @@ describe('launchPresets', () => {
     const { directLaunchPreset, validateLaunchForm } = await import('@/server/launch');
     expect(directLaunchPreset().id).toBe('24h');
     const form = { name: 'Photon', ticker: 'PHO', description: '', halfLifePreset: '' };
-    expect(() => validateLaunchForm(form)).toThrow(/dev buy/);
+    expect(() => validateLaunchForm(form)).toThrow(/first buy/);
     expect(form.halfLifePreset).toBe('24h');
   });
 

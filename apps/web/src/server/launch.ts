@@ -140,8 +140,8 @@ export function validateLaunchForm(f: Partial<LaunchForm>): asserts f is LaunchF
   }
   if (!f.halfLifePreset) f.halfLifePreset = directLaunchPreset().id;
   if (!launchPresets().some((p) => p.id === f.halfLifePreset)) throw new LaunchValidationError('half-life preset is not one of the presets offered');
-  if (typeof f.devBuyWei !== 'string' || !/^\d+$/.test(f.devBuyWei)) throw new LaunchValidationError('dev buy must be an integer number of wei');
-  if (BigInt(f.devBuyWei) > 100n * 10n ** 18n) throw new LaunchValidationError('dev buy must be a number of HYPE between 0 and 100');
+  if (typeof f.devBuyWei !== 'string' || !/^\d+$/.test(f.devBuyWei)) throw new LaunchValidationError('first buy must be an integer number of wei');
+  if (BigInt(f.devBuyWei) > 100n * 10n ** 18n) throw new LaunchValidationError('first buy must be a number of HYPE between 0 and 100');
   if (!f.image || !(f.image.bytes instanceof Uint8Array) || f.image.bytes.length === 0 || f.image.bytes.length > 2_000_000) throw new LaunchValidationError('image must be 1 byte to 2 MB');
   if (!/^image\/(png|jpeg|gif|webp)$/.test(f.image.mime)) throw new LaunchValidationError('image must be png, jpeg, gif or webp');
   if (!f.wallet || !isAddress(f.wallet)) throw new LaunchValidationError('wallet is not a valid address');
