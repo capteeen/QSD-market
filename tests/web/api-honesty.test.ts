@@ -165,6 +165,6 @@ describe('other handlers', () => {
     expect(proofAnchorSlot({ measurements: [{ index: 0, outcomeKind: 'survive', proofSlot: 10 }, { index: 1, outcomeKind: 'collapse', proofSlot: 42 }] })).toBe(42);
     expect(proofAnchorSlot({ measurements: [{ index: 0, outcomeKind: 'survive', proofSlot: 10 }] })).toBeNull();
     expect(proofAnchorSlot({ measurements: [{ index: 0, outcomeKind: 'collapse', proofSlot: null }] })).toBeNull();
-    await expect(runCollapse('ca-without-a-pool', () => undefined)).rejects.toThrow(/no pool is published, so no daughter coin was created/);
+    await expect(runCollapse('ca-without-a-pool', () => undefined)).rejects.toThrow(/coming soon — no daughter coin was created/);
   });
 });

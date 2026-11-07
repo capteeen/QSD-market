@@ -106,6 +106,17 @@ export class LaunchValidationError extends Error {
   override readonly name = 'LaunchValidationError';
 }
 
+/** True when a coin with this ticker is already stored. Comparison is on the stored uppercase ticker. */
+export async function tickerTaken(ticker: string): Promise<boolean> {
+  if (!/^[A-Z0-9]{1,10}$/.test(ticker)) return false;
+  const row = await db().coin.findFirst({ where: { ticker }, select: { ca: true } });
+  return row !== null;
+}
+
+export function tickerTakenMessage(ticker: string): string {
+  return `ticker ${ticker} is already launched`;
+}
+
 export function validateLaunchForm(f: Partial<LaunchForm>): asserts f is LaunchForm {
   if (!f.name || f.name.trim().length < 1 || f.name.length > 32) throw new LaunchValidationError('name must be 1–32 characters');
   if (!f.ticker || !/^[A-Z0-9]{1,10}$/.test(f.ticker)) throw new LaunchValidationError('ticker must be 1–10 uppercase letters or digits');
@@ -174,6 +185,14 @@ const PAYMENT_USED = 'this payment was already used for a launch';
 async function assertPaymentUnused(client: Prisma.TransactionClient, paymentTx: string): Promise<void> {
   const used = await client.coin.findFirst({ where: { paymentTx } });
   if (used) throw new LaunchValidationError(PAYMENT_USED);
+}
+
+function isTickerUniqueViolation(e: unknown): boolean {
+  const err = e as { code?: string; meta?: { target?: unknown } };
+  if (err?.code !== 'P2002') return false;
+  const target = err.meta?.target;
+  const fields = Array.isArray(target) ? target.map(String) : typeof target === 'string' ? [target] : [];
+  return fields.some((field) => field.toLowerCase().includes('ticker'));
 }
 
 function isPaymentUniqueViolation(e: unknown): boolean {
@@ -285,6 +304,7 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
   const timer = stepTimer();
   try {
     validateLaunchForm(form);
+    if (await tickerTaken(form.ticker)) throw new LaunchValidationError(tickerTakenMessage(form.ticker));
     const chain = getChain();
     const genesis = genesisConfig();
     const preset = launchPresets().find((p) => p.id === form.halfLifePreset)!;
@@ -414,6 +434,7 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
         await insertCoinWith(tx, coin, { launchPath: launch.path, launchTx: launch.txHash, launchBundle: bundle as unknown as ProofBundle, createdBy: form.wallet, paymentTx: form.paymentSignature });
       });
     } catch (e) {
+      if (isTickerUniqueViolation(e)) throw new LaunchValidationError(tickerTakenMessage(form.ticker));
       if (isPaymentUniqueViolation(e)) throw new LaunchValidationError(PAYMENT_USED);
       throw e;
     }

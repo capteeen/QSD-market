@@ -27,7 +27,8 @@ enum MeasurementOutcomeKind {
 model Coin {
   ca             String    @id
   name           String
-  ticker         String
+  /// One ticker, one coin. A second launch with the same ticker is refused.
+  ticker         String    @unique
   imageUri       String
   imageHash      String
   imageLineage   String

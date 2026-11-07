@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { DataRow, HashDisplay, LineageBreadcrumb, Panel, ProofBadge, type AttestationKind } from '@qsd/ui-tokens';
-import { AIRDROP, LINEAGE, PAGES, SHARED } from '@/copy';
+import { AIRDROP, COIN, LINEAGE, PAGES, SHARED } from '@/copy';
 import { isUnavailable } from '@/lib/api';
 import { formatBps, formatUnits, formatUnix, shortAddress } from '@/lib/format';
 import { routes } from '@/lib/links';
@@ -56,7 +56,7 @@ export function LineageView({ id }: { id: string }) {
                 </div>
                 <div className="qsd-datarow" role="row">
                   <span className="qsd-datarow__label">daughter</span>
-                  <span className="qsd-datarow__value">{c.daughterCa ? <CoinLink ca={c.daughterCa} /> : <span className="text-muted">— the collapse is still executing</span>}</span>
+                  <span className="qsd-datarow__value">{c.daughterCa ? <CoinLink ca={c.daughterCa} /> : <span className="text-muted">{COIN.daughterComingSoon}</span>}</span>
                 </div>
                 <DataRow label={LINEAGE.measurementsSurvived} value={c.measurementsSurvived} />
                 {c.channelLabel ? <DataRow label={LINEAGE.channel} value={c.channelLabel} /> : <DataRow label={LINEAGE.channel} unavailable={{ reason: 'no channel recorded' }} />}

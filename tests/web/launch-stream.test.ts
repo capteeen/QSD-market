@@ -251,6 +251,17 @@ describe('payment is verified on-chain BEFORE any identity or key material exist
     expect(state.vaultWrites).toEqual([]);
   });
 
+  it('a ticker that is already launched is refused before any payment check or transaction', async () => {
+    await fakeDb.coin.create({ data: { ca: '0x' + 'ab'.repeat(20), ticker: 'PHO', name: 'Photon' } });
+    const frames = await collect(form());
+    expect(frames.at(-1)!.event).toBe('error');
+    expect(String(json(frames.at(-1)!)['message'])).toMatch(/ticker PHO is already launched/);
+    expect(state.getTransactionCalls).toEqual([]);
+    expect(state.sends.calls).toBe(0);
+    expect(state.vaultWrites).toEqual([]);
+    expect(fakeDb.coin.rows.length).toBe(1);
+  });
+
   it('an invalid form never reaches the chain', async () => {
     const frames = await collect(form({ ticker: 'lower' }));
     expect(frames.map((x) => x.event)).toEqual(['error']);
@@ -406,7 +417,7 @@ describe('a successful Elysium testnet launch', () => {
   it('FINDING H-W1 (HIGH): the payment replay check looks for the payment signature in Coin.launchTx, which holds the MINT transaction — so the same payment launches a second coin', async () => {
     // same chain, same database, same payment signature, a fresh form
     expect(fakeDb.coin.rows.length).toBe(1);
-    const again = await collect(form({ name: 'Photon again' }));
+    const again = await collect(form({ name: 'Photon again', ticker: 'PHO2' }));
     const last = again.at(-1)!;
     expect(last.event, `second launch with the same payment must fail; got: ${again.map((f) => f.event).join(',')}`).toBe('error');
     expect(String(json(last)['message'])).toMatch(/already used/);

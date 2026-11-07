@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAccount, useConfig, useSendTransaction } from 'wagmi';
 import { waitForTransactionReceipt } from 'wagmi/actions';
 import { elysiumTestnet } from '@qsd/elysium/chain';
@@ -84,7 +84,30 @@ export function LaunchView() {
   const preset = presets.some((p) => p.id === presetChoice) ? presetChoice : presets[0]!.id;
   const devBuyLamports = q && q.devBuyLamports !== null ? BigInt(q.devBuyLamports) : null;
   const total = q && q.launchCostLamports !== null && q.identityReserveLamports !== null && devBuyLamports !== null ? BigInt(q.launchCostLamports) + BigInt(q.identityReserveLamports) + devBuyLamports : null;
-  const canLaunch = !!q && !!q.payTo && total !== null && !!address && !!image && name.trim().length > 0 && /^[A-Za-z0-9]{1,10}$/.test(ticker) && (phase === 'form' || phase === 'failed');
+  const tickerOk = /^[A-Za-z0-9]{1,10}$/.test(ticker);
+  const [tickerFree, setTickerFree] = useState(true);
+  useEffect(() => {
+    if (!tickerOk) {
+      setTickerFree(true);
+      return;
+    }
+    let alive = true;
+    setTickerFree(false);
+    void fetch(`/api/launch/preflight?ticker=${encodeURIComponent(ticker)}`, { cache: 'no-store' })
+      .then((r) => r.json() as Promise<{ problems?: string[] }>)
+      .then((body) => {
+        if (!alive) return;
+        const taken = (body.problems ?? []).some((p) => p.includes(LAUNCH.form.tickerTaken));
+        setTickerFree(!taken);
+      })
+      .catch(() => {
+        if (alive) setTickerFree(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [ticker, tickerOk]);
+  const canLaunch = !!q && !!q.payTo && total !== null && !!address && !!image && name.trim().length > 0 && tickerOk && tickerFree && (phase === 'form' || phase === 'failed');
 
   const launch = async () => {
     if (!q || !q.payTo || total === null || !address || !image) return;
@@ -93,7 +116,7 @@ export function LaunchView() {
     setStatus(LAUNCH.form.checking);
     // Never ask for payment while a service the launch needs is down.
     try {
-      const pre = (await (await fetch('/api/launch/preflight', { cache: 'no-store' })).json()) as { ok?: boolean; problems?: string[]; error?: string };
+      const pre = (await (await fetch(`/api/launch/preflight?ticker=${encodeURIComponent(ticker)}`, { cache: 'no-store' })).json()) as { ok?: boolean; problems?: string[]; error?: string };
       if (!pre.ok) {
         setPhase('failed');
         setError(`${LAUNCH.notCharged} ${pre.problems?.join('; ') ?? pre.error ?? 'preflight failed'}`);
@@ -299,7 +322,7 @@ export function LaunchView() {
               {q!.payTo ? <DataRow label={LAUNCH.cost.payTo} value={q!.payTo} /> : <DataRow label={LAUNCH.cost.payTo} unavailable={{ reason: q!.reasons.payTo ?? LAUNCH.cost.unavailableReason }} />}
             </Panel>
             <div className="qsd-pblock">
-              <LaunchPreflightTerminal quote={q!} wallet={address ?? null} name={name} ticker={ticker} image={image} devBuyLamports={devBuyLamports} total={total} />
+              <LaunchPreflightTerminal quote={q!} wallet={address ?? null} name={name} ticker={ticker} tickerTaken={!tickerFree && tickerOk} image={image} devBuyLamports={devBuyLamports} total={total} />
             </div>
             <p className="qsd-note mt-4">{LAUNCH.identityNote}</p>
           </div>

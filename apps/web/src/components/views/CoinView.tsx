@@ -6,7 +6,6 @@ import { DataRow, HashDisplay, LineageBreadcrumb, MeasureButton, Panel, ProofBad
 import {
   PROTOCOL_PARAMS,
   collapseRewards,
-  computeAllocation,
   decayProgressPpbFromInputs,
   isMeasurable,
   measurementResolver,
@@ -94,7 +93,7 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
           </Row>
           <DataRow label={COIN.rows.generation} value={coin.generation} />
           <Row label={COIN.rows.mother}>{coin.motherCa ? <CoinLink ca={coin.motherCa} /> : <span className="text-muted">— generation one</span>}</Row>
-          <Row label={COIN.rows.daughter}>{coin.daughterCa ? <CoinLink ca={coin.daughterCa} /> : <span className="text-muted">— none born</span>}</Row>
+          <Row label={COIN.rows.daughter}>{coin.daughterCa ? <CoinLink ca={coin.daughterCa} /> : <span className="text-muted">{COIN.daughterComingSoon}</span>}</Row>
           <Row label={COIN.rows.identityRoot}>
             <HashDisplay hash={coin.identityRoot} />
           </Row>
@@ -398,7 +397,7 @@ function MeasurePanel({ coin, decay, measurable }: { coin: CoinDto; decay: numbe
     setLast(r.measurement);
     setPhase('done');
     setMessage(`${COIN.measureDone}: ${r.measurement.outcome.kind}`);
-    setDaughterNote(r.daughterLaunch ? (r.daughterLaunch.status === 'scheduled' ? COIN.daughterScheduled : `${COIN.daughterNotScheduled} (${r.daughterLaunch.reason})`) : null);
+    setDaughterNote(r.daughterLaunch ? COIN.daughterComingSoon : null);
     void qc.invalidateQueries({ queryKey: ['coin', coin.ca] });
   };
 
@@ -419,54 +418,15 @@ function MeasurePanel({ coin, decay, measurable }: { coin: CoinDto; decay: numbe
 
 // ───────────────────────────── daughter ghost ─────────────────────────────
 
-function DaughterGhost({ coin, now }: { coin: CoinDto; now: number }) {
-  const { address } = useAccount();
-  const holders = useHolders(coin.ca, true);
-  const wallet = address ?? null;
-  const projection = useMemo(() => projectAllocation(coin, holders.data, wallet, now), [coin, holders.data, wallet, now]);
+function DaughterGhost(_props: { coin: CoinDto; now: number }) {
   return (
     <Panel eyebrow={COIN.daughterEyebrow} title={COIN.daughterTitle}>
-      <p className="qsd-note mb-3">{COIN.daughterCaption}</p>
-      {'reason' in projection ? (
-        <>
-          <DataRow label={COIN.projectedShare} unavailable={{ reason: projection.reason }} />
-          <DataRow label={COIN.projectedUnits} unavailable={{ reason: projection.reason }} />
-          <DataRow label={COIN.projectedWeight} unavailable={{ reason: projection.reason }} />
-        </>
-      ) : (
-        <>
-          <DataRow label={COIN.projectedShare} value={formatPercent(projection.sharePpb / 1e9, 3)} />
-          <DataRow label={COIN.projectedUnits} value={`${formatUnits(projection.unitsAtMin, coin.supply.decimals)} (at the band minimum)`} />
-          <DataRow label={COIN.projectedWeight} value={`${formatBps(projection.weightBps - 10_000, 2)} above base (${(projection.weightBps / 10_000).toFixed(4)}×)`} />
-        </>
-      )}
+      <p className="qsd-note mb-3">{COIN.daughterComingSoon}</p>
+      <DataRow label={COIN.projectedShare} unavailable={{ reason: COIN.daughterComingSoon }} />
+      <DataRow label={COIN.projectedUnits} unavailable={{ reason: COIN.daughterComingSoon }} />
+      <DataRow label={COIN.projectedWeight} unavailable={{ reason: COIN.daughterComingSoon }} />
     </Panel>
   );
-}
-
-function projectAllocation(coin: CoinDto, data: HoldersResponse | { unavailable: { reason: string } } | undefined, wallet: string | null, now: number): { reason: string } | { sharePpb: number; unitsAtMin: bigint; weightBps: number } {
-  if (!wallet) return { reason: COIN.daughterNoWallet };
-  if (coin.state === 'collapsed') return { reason: COIN.daughterCollapsed };
-  if (!data) return { reason: SHARED.loading };
-  if (isUnavailable(data)) return { reason: data.unavailable.reason };
-  if (!data.holders || data.holders.length === 0) return { reason: COIN.daughterNoSnapshot };
-  if (!data.holders.some((h) => h.wallet === wallet)) return { reason: COIN.daughterNotHolder };
-  try {
-    const collapseAt = Math.max(now, coin.bornAt + 1);
-    const table = computeAllocation({
-      snapshot: data.holders.map((h) => ({ ...h, balance: BigInt(h.balance), firstAcquiredAt: Math.min(h.firstAcquiredAt, collapseAt) })),
-      measurements: data.measurements,
-      bornAt: coin.bornAt,
-      collapseAt,
-      quietPeriodStart: Math.min(coin.lastActivityAt, collapseAt),
-      totalDaughterUnits: BigInt(coin.superposition.supplyMin),
-    });
-    const e = table.entries.find((x) => x.wallet === wallet);
-    if (!e) return { reason: COIN.daughterNotHolder };
-    return { sharePpb: e.sharePpb, unitsAtMin: e.units, weightBps: e.weightBps };
-  } catch (err) {
-    return { reason: err instanceof Error ? err.message : String(err) };
-  }
 }
 
 // ───────────────────────────── holders ─────────────────────────────

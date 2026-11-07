@@ -11,7 +11,7 @@ export function proofAnchorSlot(row: { measurements: { outcomeKind: string; proo
  * Elysium has no published pool to buy against, so a collapse does not invent a daughter coin.
  */
 export async function runCollapse(ca: string, log: (line: string) => void = console.log): Promise<void> {
-  const message = `collapse ${ca}: launching a daughter on Elysium is not available — no pool is published, so no daughter coin was created`;
+  const message = `collapse ${ca}: daughter coin creation is coming soon — no daughter coin was created`;
   log(message);
   throw new Error(message);
 }

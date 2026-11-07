@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { PROTOCOL_PARAMS, collapseRewards, isMeasurable, measurementResolver } from '@qsd/protocol';
 import { describeEvent, type CryptoEvent } from '@qsd/crypto';
 import { bundleHash, verify } from '@qsd/quantum';
-import { BURNS, HOME, MEASURE, SHARED } from '@/copy';
+import { BURNS, HOME, LAUNCH, MEASURE, SHARED } from '@/copy';
 import { isUnavailable } from '@/lib/api';
 import { liveDecay } from '@/lib/coin';
 import { publicCluster, publicWitnessKeys } from '@/lib/env';
@@ -366,6 +366,7 @@ export function LaunchPreflightTerminal({
   wallet,
   name,
   ticker,
+  tickerTaken = false,
   image,
   devBuyLamports,
   total,
@@ -374,6 +375,7 @@ export function LaunchPreflightTerminal({
   wallet: string | null;
   name: string;
   ticker: string;
+  tickerTaken?: boolean;
   image: File | null;
   devBuyLamports: bigint | null;
   total: bigint | null;
@@ -402,7 +404,9 @@ export function LaunchPreflightTerminal({
       <Cmd>infinitwap launch --dry-run</Cmd>
       <Status tone={wallet ? 'ok' : 'fail'}>wallet {wallet ? shortAddress(wallet, 6, 6) : 'not connected'}</Status>
       <Status tone={name.trim() ? 'ok' : 'dim'}>name {name.trim() ? `"${name.trim()}"` : 'empty'}</Status>
-      <Status tone={tickerOk ? 'ok' : ticker ? 'fail' : 'dim'}>ticker {ticker ? `$${ticker}${tickerOk ? '' : ' · letters and digits only, ten at most'}` : 'empty'}</Status>
+      <Status tone={tickerTaken ? 'fail' : tickerOk ? 'ok' : ticker ? 'fail' : 'dim'}>
+        ticker {ticker ? `$${ticker}${tickerOk ? '' : ' · letters and digits only, ten at most'}${tickerTaken ? ` · ${LAUNCH.form.tickerTaken}` : ''}` : 'empty'}
+      </Status>
       <Status tone={image ? (imageHash ? 'ok' : 'dim') : 'dim'}>
         image {image ? `${image.name} · ${(image.size / 1024).toFixed(1)} KB · sha256 ${imageHash ? `${imageHash.slice(0, 16)}…` : 'hashing…'}` : 'none chosen'}
       </Status>
