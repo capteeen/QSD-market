@@ -479,7 +479,7 @@ export const LAUNCH = {
     submit: 'Pay and launch',
     checking: 'checking the launch services',
     signing: 'sign the launch in your wallet',
-    paying: 'confirm the payment in your wallet',
+    paying: 'confirm the payment in your wallet, then this page deploys the coin',
     launching: 'launching — every stage below is a real operation',
   },
   previewEyebrow: 'PREVIEW',

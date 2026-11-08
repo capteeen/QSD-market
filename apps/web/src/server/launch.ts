@@ -166,13 +166,19 @@ async function verifyPayment(form: LaunchForm, payTo: Address): Promise<bigint> 
   if (firstBuy === 0n) return 0n;
   const total = firstBuy;
   const chain = getChain();
-  let payment;
-  try {
-    payment = await readNativeTransfer(chain.publicClient, form.paymentSignature as Hash);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (/not found|could not be found/i.test(msg)) payment = null;
-    else throw e;
+  // The browser continues as soon as the wallet returns a hash. The public RPC can lag that by a few seconds.
+  const pauses = process.env.NODE_ENV === 'test' ? [0] : [0, 1500, 2500, 4000, 6000, 8000];
+  let payment = null;
+  for (const pause of pauses) {
+    if (pause > 0) await new Promise((resolve) => setTimeout(resolve, pause));
+    try {
+      payment = await readNativeTransfer(chain.publicClient, form.paymentSignature as Hash);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/not found|could not be found/i.test(msg)) payment = null;
+      else throw e;
+    }
+    if (payment) break;
   }
   if (!payment) throw new LaunchValidationError('payment transaction not found or not confirmed');
   if (payment.status !== 'success') throw new LaunchValidationError('payment transaction failed on-chain');

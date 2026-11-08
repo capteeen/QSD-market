@@ -1,8 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { useAccount, useConfig, useSendTransaction, useSignMessage } from 'wagmi';
-import { waitForTransactionReceipt } from 'wagmi/actions';
+import { useAccount, useSendTransaction, useSignMessage } from 'wagmi';
 import { elysiumChain } from '@qsd/elysium/chain';
 import { publicCluster } from '@/lib/env';
 import { DataRow, Panel } from '@qsd/ui-tokens';
@@ -64,7 +63,6 @@ export function LaunchView() {
   const { address } = useAccount();
   const { sendTransactionAsync } = useSendTransaction();
   const { signMessageAsync } = useSignMessage();
-  const wagmiConfig = useConfig();
   const [phase, setPhase] = useState<Phase>('form');
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -175,13 +173,13 @@ export function LaunchView() {
       setStatus(LAUNCH.form.paying);
       try {
         paymentSignature = await sendTransactionAsync({ to: q.payTo as `0x${string}`, value: firstBuyWei, chainId: elysiumChain(publicCluster()).id });
-        await waitForTransactionReceipt(wagmiConfig, { hash: paymentSignature as `0x${string}` });
       } catch (e) {
         setPhase('failed');
         setError(e instanceof Error ? e.message : String(e));
         return;
       }
     }
+    // The wallet has returned the transaction. Deploy now; the server reads the payment from the chain.
     setPhase('launching');
     setStatus(LAUNCH.form.launching);
     const fd = new FormData();
