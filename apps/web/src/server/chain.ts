@@ -5,6 +5,7 @@ import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 import {
   ELYSIUM_MAINNET_ALCHEMY_RPC,
   ELYSIUM_MAINNET_PUBLIC_RPC,
+  mainnetWriteRpc,
   ELYSIUM_TESTNET_ALCHEMY_RPC,
   ELYSIUM_TESTNET_RPC,
   UNISWAP_V3_POSITION_MANAGER_MAINNET,
@@ -105,6 +106,17 @@ export function rpcUrlFromEnv(env: NodeJS.ProcessEnv): string {
   return network === 'mainnet' ? ELYSIUM_MAINNET_PUBLIC_RPC : ELYSIUM_TESTNET_RPC;
 }
 
+/** Where signed transactions are broadcast. Reads stay on `rpcUrlFromEnv`. */
+export function sendRpcUrlFromEnv(env: NodeJS.ProcessEnv): string {
+  const explicit = env.ELYSIUM_WRITE_RPC_URL?.trim();
+  if (explicit) {
+    if (!/^https?:\/\//.test(explicit)) throw new Error('ELYSIUM_WRITE_RPC_URL must be an http(s) URL');
+    return explicit;
+  }
+  const read = rpcUrlFromEnv(env);
+  return networkFromEnv(env) === 'mainnet' ? mainnetWriteRpc(read) : read;
+}
+
 export function networkFromEnv(env: NodeJS.ProcessEnv): ElysiumNetwork {
   const network = (env.ELYSIUM_NETWORK ?? 'mainnet').trim();
   if (network !== 'mainnet' && network !== 'testnet') throw new Error("ELYSIUM_NETWORK must be 'mainnet' or 'testnet'");
@@ -172,6 +184,7 @@ function build(env: NodeJS.ProcessEnv): ElysiumChain {
   const kek = readHex32('the launch encryption key', env.QSD_KEY_ENCRYPTION_KEY);
   const account: PrivateKeyAccount = privateKeyToAccount(readPrivateKey(env.ELYSIUM_DEPLOYER_PRIVATE_KEY));
   const rpcUrl = rpcUrlFromEnv(env);
+  const sendUrl = sendRpcUrlFromEnv(env);
   const chainDef = network === 'mainnet' ? elysiumMainnet : elysiumTestnet;
   const storage = chainStorageFromEnv(env);
   const keyStore = storage?.keyStore ?? (env.QSD_KEYSTORE_PATH?.trim() ? new FileKeyStore(env.QSD_KEYSTORE_PATH.trim()) : new MemoryKeyStore());
@@ -180,7 +193,7 @@ function build(env: NodeJS.ProcessEnv): ElysiumChain {
   const reserve = new IdentityReserve(vault, backend);
   const observer = new ChainObserver();
   const publicClient = createPublicClient({ chain: chainDef, transport: http(rpcUrl) });
-  const walletClient: WalletClient = createWalletClient({ account, chain: chainDef, transport: http(rpcUrl) });
+  const walletClient: WalletClient = createWalletClient({ account, chain: chainDef, transport: http(sendUrl) });
   const journalDir = env.QSD_JOURNAL_DIR?.trim();
   const clients = { publicClient, walletClient, account: account.address };
 

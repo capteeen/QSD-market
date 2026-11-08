@@ -3,6 +3,8 @@ import { getAddress } from 'viem';
 import {
   ELYSIUM_MAINNET_ID,
   ELYSIUM_MAINNET_PUBLIC_RPC,
+  ELYSIUM_MAINNET_WRITE_RPC,
+  mainnetWriteRpc,
   ELYSIUM_TESTNET_EXPLORER,
   ELYSIUM_TESTNET_ID,
   ELYSIUM_TESTNET_RPC,
@@ -36,6 +38,9 @@ describe('Elysium testnet, from the Kinetiq docs', () => {
     expect(elysiumMainnet.id).toBe(99901);
     expect(elysiumMainnet.nativeCurrency).toEqual({ name: 'HYPE', symbol: 'HYPE', decimals: 18 });
     expect(elysiumMainnet.rpcUrls.default.http[0]).toBe(ELYSIUM_MAINNET_PUBLIC_RPC);
+    expect(ELYSIUM_MAINNET_WRITE_RPC).toBe('https://rpc-elysium.perpme.fun');
+    expect(mainnetWriteRpc(ELYSIUM_MAINNET_PUBLIC_RPC)).toBe(ELYSIUM_MAINNET_WRITE_RPC);
+    expect(mainnetWriteRpc('https://example.invalid/rpc')).toBe('https://example.invalid/rpc');
     expect(elysiumMainnet.blockExplorers).toBeUndefined();
     expect(getAddress(WHYPE_MAINNET)).toBe('0xbA876237B0F021A6c6D852d6c26E107997cC5E81');
     expect(getAddress(UNISWAP_V2_FACTORY_MAINNET)).toBe('0xBbBcC62853a5fA27b93d6Bab3E6F7ce841E25Df2');
