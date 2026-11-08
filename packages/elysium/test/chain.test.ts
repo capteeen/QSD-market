@@ -20,6 +20,7 @@ import {
   anchorCalldata,
   elysiumMainnet,
   elysiumTestnet,
+  predictedPoolTokenAddress,
   predictedTokenAddress,
 } from '../src/index';
 
@@ -54,6 +55,16 @@ describe('Elysium testnet, from the Kinetiq docs', () => {
     expect(getAddress(WHYPE_TESTNET)).toBe('0xCD57F65c2B0e5881CFC2E609F7CD53b746E1F234');
     expect(getAddress(USDC_TESTNET)).toBe('0x7D29d8047B905000459c0E80c34a26CeedcB47b2');
     expect(getAddress(MULTICALL3_TESTNET)).toBe('0xcA11bde05977b3631167028862bE2a173976CA11');
+  });
+
+  it('predicts the CREATE2 address the deployed v3 launcher actually mints', () => {
+    const ca = predictedPoolTokenAddress('0x54345d7640c4fdea5b14e8fdb2777d747e41de07', '0x5d443c43645766e70340080e876155e21b37e4f1c57666e2cf5e6f313d7d365c', {
+      name: 'test',
+      symbol: 'TEST',
+      supply: 1_000_000_000_000_000_000_000_000_000n,
+      recipient: '0x54345d7640c4fdea5b14e8fdb2777d747e41de07',
+    });
+    expect(ca).toBe('0xfDe03E62992270F21B84Ec4d1Aa2fcf64386427e');
   });
 
   it('anchor calldata is the protocol memo, and a predicted CREATE address is 20 bytes', () => {
