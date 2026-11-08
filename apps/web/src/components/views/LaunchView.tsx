@@ -168,8 +168,9 @@ export function LaunchView() {
       setError(`${LAUNCH.notCharged} ${e instanceof Error ? e.message : String(e)}`);
       return;
     }
+    const fundsItself = address.toLowerCase() === q.payTo.toLowerCase();
     let paymentSignature = '';
-    if (firstBuyWei > 0n) {
+    if (firstBuyWei > 0n && !fundsItself) {
       setStatus(LAUNCH.form.paying);
       try {
         paymentSignature = await sendTransactionAsync({ to: q.payTo as `0x${string}`, value: firstBuyWei, chainId: elysiumChain(publicCluster()).id });
@@ -366,11 +367,11 @@ export function LaunchView() {
                   <span className="qsd-form__unit">HYPE</span>
                 </span>
               </label>
-              {devBuyParsed.error ? <p className="qsd-form__error">{devBuyParsed.error}</p> : <span className="qsd-note">{q?.poolSeedWei === '0' ? LAUNCH.form.zeroOpenNote : LAUNCH.form.firstBuyNote}</span>}
+              {devBuyParsed.error ? <p className="qsd-form__error">{devBuyParsed.error}</p> : <span className="qsd-note">{address && q?.payTo && address.toLowerCase() === q.payTo.toLowerCase() && firstBuyWei !== null && firstBuyWei > 0n ? LAUNCH.form.ownWalletNote : q?.poolSeedWei === '0' ? LAUNCH.form.zeroOpenNote : LAUNCH.form.firstBuyNote}</span>}
               {!address ? <Empty eyebrow={LAUNCH.noWalletEyebrow} sentence={LAUNCH.noWalletSentence} /> : null}
               <div className="qsd-form__actions">
                 <button type="submit" className="qsd-btn" data-primary="true" disabled={!canLaunch}>
-                  {phase === 'paying' ? status ?? LAUNCH.form.paying : !address ? LAUNCH.form.connect : firstBuyWei !== null && firstBuyWei > 0n ? LAUNCH.form.submit : LAUNCH.form.launch}
+                  {phase === 'paying' ? status ?? LAUNCH.form.paying : !address ? LAUNCH.form.connect : firstBuyWei !== null && firstBuyWei > 0n && address.toLowerCase() !== q?.payTo?.toLowerCase() ? LAUNCH.form.submit : LAUNCH.form.launch}
                 </button>
                 {error ? (
                   <p className="qsd-form__error">

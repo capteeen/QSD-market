@@ -1,9 +1,8 @@
 import 'server-only';
 import type { Prisma } from '@prisma/client';
-import { isAddress, keccak256, toHex as toHex0x, type Address, type Hash, type Hex } from 'viem';
-import { predictedPoolTokenAddress } from '@qsd/elysium';
+import { createPublicClient, http, isAddress, keccak256, toHex as toHex0x, type Address, type Hash, type Hex, type PublicClient } from 'viem';
+import { ELYSIUM_MAINNET_PUBLIC_RPC, elysiumMainnet, predictedPoolTokenAddress, readNativeTransfer } from '@qsd/elysium';
 import { sha256 } from '@noble/hashes/sha256';
-import { readNativeTransfer } from '@qsd/elysium';
 import { CryptoObserver, redactEvent, toHex, type CryptoEvent } from '@qsd/crypto';
 import { HALF_LIFE_PRESETS, initialImageLineage, maxWindowSec, type Coin } from '@qsd/protocol';
 import { canonicalJson } from '@qsd/quantum';
@@ -129,9 +128,8 @@ export function validateLaunchForm(f: Partial<LaunchForm>): asserts f is LaunchF
   if (!f.image || !(f.image.bytes instanceof Uint8Array) || f.image.bytes.length === 0 || f.image.bytes.length > 2_000_000) throw new LaunchValidationError('image must be 1 byte to 2 MB');
   if (!/^image\/(png|jpeg|gif|webp)$/.test(f.image.mime)) throw new LaunchValidationError('image must be png, jpeg, gif or webp');
   if (!f.wallet || !isAddress(f.wallet)) throw new LaunchValidationError('wallet is not a valid address');
-  const paid = BigInt(f.devBuyWei) > 0n;
-  if (paid && (!f.paymentSignature || !/^0x[0-9a-fA-F]{64}$/.test(f.paymentSignature))) throw new LaunchValidationError('payment signature is required');
-  if (!paid) f.paymentSignature = '';
+  if (f.paymentSignature && !/^0x[0-9a-fA-F]{64}$/.test(f.paymentSignature)) throw new LaunchValidationError('payment signature is required');
+  if (!f.paymentSignature || BigInt(f.devBuyWei) === 0n) f.paymentSignature = '';
   if (!f.walletNonce || !/^[0-9a-f]{32}$/.test(f.walletNonce)) throw new LaunchValidationError('wallet signature is required');
   if (!f.walletSignature || !/^0x[0-9a-fA-F]{130}$/.test(f.walletSignature)) throw new LaunchValidationError('wallet signature is required');
 }
@@ -160,23 +158,41 @@ export function poolSeedWei(): bigint {
   return DEFAULT_POOL_SEED_WEI;
 }
 
+/** Public mainnet relays. A configured RPC can miss a transfer another relay already has. */
+const MAINNET_PAYMENT_RELAYS = [ELYSIUM_MAINNET_PUBLIC_RPC, 'https://rpc-elysium.perpme.fun', 'https://node.eleos.fun'];
+
+async function readConfirmedPayment(client: PublicClient, hash: Hash) {
+  try {
+    return await readNativeTransfer(client, hash);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/not found|could not be found/i.test(msg)) return null;
+    throw e;
+  }
+}
+
 /** The wallet pays only the first buy it chose. A launch with no first buy sends no HYPE. */
 async function verifyPayment(form: LaunchForm, payTo: Address): Promise<bigint> {
   const firstBuy = BigInt(form.devBuyWei);
   if (firstBuy === 0n) return 0n;
   const total = firstBuy;
   const chain = getChain();
-  // The browser continues as soon as the wallet returns a hash. The public RPC can lag that by a few seconds.
+  // The connected wallet is the protocol wallet. The launch transaction spends the first buy from it.
+  // A separate transfer to the same address does not fund anything, and its receipt is what was failing the launch.
+  if (form.wallet.toLowerCase() === payTo.toLowerCase()) return total;
+  if (!form.paymentSignature) throw new LaunchValidationError('payment signature is required');
+  const clients: PublicClient[] = [chain.publicClient];
+  if (chain.network === 'mainnet' && process.env.NODE_ENV !== 'test') {
+    for (const url of MAINNET_PAYMENT_RELAYS) clients.push(createPublicClient({ chain: elysiumMainnet, transport: http(url, { timeout: 8_000 }) }));
+  }
+  // The wallet can return a hash before the public relays have the receipt.
   const pauses = process.env.NODE_ENV === 'test' ? [0] : [0, 1500, 2500, 4000, 6000, 8000];
   let payment = null;
   for (const pause of pauses) {
     if (pause > 0) await new Promise((resolve) => setTimeout(resolve, pause));
-    try {
-      payment = await readNativeTransfer(chain.publicClient, form.paymentSignature as Hash);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (/not found|could not be found/i.test(msg)) payment = null;
-      else throw e;
+    for (const client of clients) {
+      payment = await readConfirmedPayment(client, form.paymentSignature as Hash);
+      if (payment) break;
     }
     if (payment) break;
   }
@@ -459,7 +475,7 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     };
     try {
       await db().$transaction(async (tx) => {
-        const paymentTx = BigInt(form.devBuyWei) > 0n ? form.paymentSignature : null;
+        const paymentTx = form.paymentSignature ? form.paymentSignature : null;
         if (paymentTx) await assertPaymentUnused(tx, paymentTx);
         await insertCoinWith(tx, coin, {
           launchPath: launch.path,

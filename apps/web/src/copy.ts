@@ -474,6 +474,7 @@ export const LAUNCH = {
     firstBuy: 'first buy',
     firstBuyNote: 'Optional. Buys this coin in the launch, before anyone else can trade.',
     zeroOpenNote: 'No HYPE is deposited to open the pool. A first buy is optional.',
+    ownWalletNote: 'This wallet runs the launch, so the first buy is spent in the launch itself. There is no separate payment.',
     connect: 'Connect and launch',
     launch: 'Launch',
     submit: 'Pay and launch',

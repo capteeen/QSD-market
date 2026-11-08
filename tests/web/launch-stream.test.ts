@@ -191,7 +191,8 @@ async function collect(f: import('@/server/launch').LaunchForm): Promise<{ event
   try {
     validateLaunchForm(probe);
     const ch = await issueChallenge('launch', probe.wallet, probe.ticker);
-    signed = { ...probe, walletNonce: ch.nonce, walletSignature: await wallet.signMessage({ message: ch.message }) };
+    const signer = probe.wallet.toLowerCase() === creator.address.toLowerCase() ? creator : probe.wallet.toLowerCase() === other.address.toLowerCase() ? other : wallet;
+    signed = { ...probe, walletNonce: ch.nonce, walletSignature: await signer.signMessage({ message: ch.message }) };
   } catch (e) {
     if (!(e instanceof LaunchValidationError)) throw e;
   }
@@ -253,6 +254,13 @@ describe('payment is verified on-chain BEFORE any identity or key material exist
       expect(fakeDb.eventLog.rows.length).toBe(0);
     });
   }
+
+  it('the protocol wallet spends the first buy in the launch and does not look up a separate payment', async () => {
+    const frames = await collect(form({ wallet: creator.address, paymentSignature: '', devBuyWei: '1', ticker: 'SELF' }));
+    expect(state.getTransactionCalls).toEqual([]);
+    expect(frames.at(-1)!.event).toBe('done');
+    expect(fakeDb.coin.rows[0]?.['paymentTx'] ?? null).toBeNull();
+  });
 
   it('a dev buy above 100 HYPE is refused before the chain is read', async () => {
     const frames = await collect(form({ devBuyWei: (100n * 10n ** 18n + 1n).toString() }));
