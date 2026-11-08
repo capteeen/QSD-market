@@ -19,10 +19,12 @@ import {
 import { DataRow, Panel } from '@qsd/ui-tokens';
 import { COIN } from '@/copy';
 import { publicCluster } from '@/lib/env';
-import { formatHype, formatUnits } from '@/lib/format';
+import { formatHype, formatUnits, shortAddress } from '@/lib/format';
 import { parseAmountWei } from '@/lib/hype';
 
 const DEADLINE_SEC = 20 * 60;
+/** The coin contract is an 18-decimal ERC-20. Genesis decimals are a different unit and must not size a swap. */
+const TOKEN_DECIMALS = 18;
 
 interface ReadyPool {
   pool: Address;
@@ -31,7 +33,7 @@ interface ReadyPool {
   reserveToken: bigint;
 }
 
-export function TradePanel({ ca, ticker, decimals }: { ca: string; ticker: string; decimals: number }) {
+export function TradePanel({ ca, ticker }: { ca: string; ticker: string }) {
   const client = usePublicClient();
   const { address, chainId } = useAccount();
   const { writeContractAsync } = useWriteContract();
@@ -141,7 +143,7 @@ export function TradePanel({ ca, ticker, decimals }: { ca: string; ticker: strin
         value,
         chainId: elysiumMainnet.id,
       });
-      setStatus(`${formatUnits(out, decimals)} ${ticker}`);
+      setStatus(`${formatUnits(out, TOKEN_DECIMALS)} ${ticker}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setStatus(null);
@@ -155,7 +157,7 @@ export function TradePanel({ ca, ticker, decimals }: { ca: string; ticker: strin
     setError(null);
     setBusy('sell');
     try {
-      const amount = parseAmountWei(sell, decimals);
+      const amount = parseAmountWei(sell, TOKEN_DECIMALS);
       if (amount === null || amount === 0n) throw new Error('enter a token amount');
       await ensureChain();
       const token = getAddress(ca);
@@ -217,8 +219,9 @@ export function TradePanel({ ca, ticker, decimals }: { ca: string; ticker: strin
     <Panel eyebrow={COIN.trade}>
       <p className="qsd-note mb-3">{COIN.tradeFee}</p>
       <DataRow label={COIN.tradeHype} value={formatHype(ready.reserveHype)} />
-      <DataRow label={ticker} value={formatUnits(ready.reserveToken, decimals)} />
+      <DataRow label={ticker} value={formatUnits(ready.reserveToken, TOKEN_DECIMALS)} />
       <p className="qsd-note mt-3">{COIN.tradeSlippage}</p>
+      <p className="qsd-note mt-3">{COIN.tradeApprove} {shortAddress(UNISWAP_V3_ROUTER_MAINNET)}</p>
       <div className="qsd-pgrid qsd-pgrid--2 mt-4">
         <label>
           {COIN.tradeBuy}

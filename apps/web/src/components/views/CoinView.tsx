@@ -69,7 +69,7 @@ function CoinLoaded({ coin }: { coin: CoinDto }) {
       <PageHero accent={coin.state === 'collapsed' ? ACCENT.collapse : coin.state === 'tunnelled' ? ACCENT.decay : ACCENT.probability} eyebrow={`${SHARED.coin} · generation ${coin.generation}`} title={`${coin.name} · ${coin.ticker}`}>
         <StateLabel state={coin.state} />
       </PageHero>
-      <TradePanel ca={coin.ca} ticker={coin.ticker} decimals={supplyDecimals} />
+      <TradePanel ca={coin.ca} ticker={coin.ticker} />
       <div className="mb-6">
         <LineageBreadcrumb nodes={nodes} renderLink={(n, children) => <Link href={n.href!}>{children}</Link>} />{' '}
         <Link className="qsd-link ml-3 text-xs" href={routes.lineage(coin.lineageId)}>

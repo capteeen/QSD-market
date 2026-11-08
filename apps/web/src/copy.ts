@@ -426,6 +426,7 @@ export const COIN = {
   tradeChecking: 'checking the pool',
   tradeFee: 'Uniswap v3 · 1% fee',
   tradeSlippage: '5% slippage',
+  tradeApprove: 'A sell asks the wallet to let the Uniswap router spend the amount you typed. MetaMask warns on that approval because the coin is new.',
   tradeHype: 'HYPE in pool',
   explorer: 'explorer',
   tunnelledNote:
