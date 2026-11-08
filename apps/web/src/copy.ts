@@ -506,7 +506,7 @@ export const LAUNCH = {
   zeroNotice: 'The coin opens in a Uniswap v3 pool against HYPE. No HYPE is deposited. The whole supply sits in the pool and the position is locked. You pay gas and, if you set one, a first buy.',
   mainnetNotice: 'The coin opens in a Uniswap v3 pool against HYPE. No HYPE is deposited. The whole supply sits in the pool and the position is locked. You pay gas and, if you set one, a first buy.',
   stageNote:
-    'Every visual in the sequence is driven by a real event from the key generation, the quantum draw, the signature and the chain. If no event arrives, no stage advances and no value changes; the only motion without an event is the chamber’s ambient drift.',
+    'Every visual in the sequence is driven by a real event from the key generation, the signature and the chain. If no event arrives, no stage advances and no value changes; the only motion without an event is the chamber’s ambient drift.',
   streamLost: 'the launch stream was interrupted; the server may still complete the launch — check the log',
   done: 'Launched',
   viewCoin: 'View coin',

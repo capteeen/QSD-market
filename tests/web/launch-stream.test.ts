@@ -335,10 +335,10 @@ describe('a successful Elysium testnet launch', () => {
     captured.reserve = state.reserve;
   });
 
-  it('frame sequence: payment → mint → identity (crypto) → superposition → quantum → crypto (signing) → chain → launch → lineage → done; no error', () => {
+  it('frame sequence: payment → mint → identity (crypto) → superposition → chain → crypto (signing) → chain → launch → lineage → done; no error', () => {
     const ev = frames.map((f) => f.event);
     expect(ev).not.toContain('error');
-    const order = ['status', 'status', 'status', 'crypto', 'superposition', 'quantum', 'crypto', 'chain', 'chain', 'status', 'launch', 'status', 'lineage', 'done'];
+    const order = ['status', 'status', 'status', 'crypto', 'superposition', 'chain', 'chain', 'crypto', 'chain', 'chain', 'status', 'launch', 'status', 'lineage', 'done'];
     const compact = ev.filter((e, i) => e !== ev[i - 1] || e === 'status' || e === 'chain');
     expect(compact).toEqual(order);
     expect(json(frames[0]!)).toEqual({ step: 'payment', message: 'verifying payment' });
@@ -437,7 +437,7 @@ describe('a successful Elysium testnet launch', () => {
     for (const s of secrets) expect(all).not.toContain(s);
   });
 
-  it('the coin row, image, identity mirror and launch log were persisted with the real mint signature; the lineage id is the quantum draw', async () => {
+  it('the coin row, image, identity mirror and launch log were persisted with the real mint signature; the lineage id is server randomness', async () => {
     const coin = fakeDb.coin.rows.find((r) => r['ca'] === ca)!;
     expect(coin).toBeDefined();
     const launch = json(frames.find((f) => f.event === 'launch')!);
@@ -447,8 +447,7 @@ describe('a successful Elysium testnet launch', () => {
     expect(coin['generation']).toBe(1);
     expect(coin['createdBy']).toBe(wallet.address);
     expect(String(coin['lineageId'])).toMatch(/^[0-9a-f]{32}$/);
-    const q = frames.filter((f) => f.event === 'quantum').map(json);
-    expect(q.some((e) => e['type'] === 'entropyArrived')).toBe(true);
+    expect(frames.some((f) => f.event === 'quantum')).toBe(false);
     expect(fakeDb.coinImage.rows.length).toBe(1);
     expect(fakeDb.identity.rows[0]).toMatchObject({ coinCa: ca, nextIndex: 1 });
     expect(fakeDb.eventLog.rows.map((e) => e['type'])).toEqual(['launch']);

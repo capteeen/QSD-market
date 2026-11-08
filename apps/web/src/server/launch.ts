@@ -6,7 +6,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import { readNativeTransfer } from '@qsd/elysium';
 import { CryptoObserver, redactEvent, toHex, type CryptoEvent } from '@qsd/crypto';
 import { HALF_LIFE_PRESETS, initialImageLineage, maxWindowSec, type Coin } from '@qsd/protocol';
-import { QuantumEventBus, bundleHash, canonicalJson, type JsonValue, type OutcomeResolver, type ProofBundle, type QuantumEvent } from '@qsd/quantum';
+import { canonicalJson } from '@qsd/quantum';
 import { redactSecrets, type ChainEvent as ReserveChainEvent } from '@qsd/solana';
 import { encodeCryptoEvents } from '@qsd/scene/model';
 import type { ChainEvent as SceneChainEvent, LineageInput, SuperpositionInput } from '@qsd/scene/model';
@@ -19,7 +19,6 @@ import { insertCoinWith } from './coins';
 import { logEvent } from './events';
 import { genesisConfig } from './genesis';
 import { syncIdentityMirror } from './identityMirror';
-import { qrngClient, qrngProbe } from './qrng';
 import { publish } from './redis';
 import { nowSeconds } from '@/lib/format';
 
@@ -29,7 +28,6 @@ import { nowSeconds } from '@/lib/format';
  *   event: status        { step, message }
  *   event: crypto        base64 of encodeCryptoEvents(batch)   (@qsd/scene codec; keygen + signing)
  *   event: superposition SuperpositionInput with bigints as strings
- *   event: quantum       QuantumEvent with `bytes` as hex
  *   event: chain         scene ChainEvent { anchorSubmitted | anchored }
  *   event: launch        { ca, txSignature, path }
  *   event: lineage       LineageInput
@@ -46,9 +44,8 @@ import { nowSeconds } from '@/lib/format';
  * commitment"; everything else (tips, leaves, fused nodes, root, the whole
  * signing stream) is the real value. The scene renders exactly what arrives.
  *
- * The quantum draw at launch seeds the lineage id (resolver
- * `qsd/launch-lineage/v1`, bytes 0–15 → hex); its proof bundle is anchored and
- * stored on the coin. The genesis superposition band is the configured
+ * The lineage id is 16 random bytes chosen on the server. It is anchored with
+ * the launch record and stored on the coin. The genesis superposition band is the configured
  * genesis pool range in full (the widest band, as for a coin with no history).
  */
 
@@ -72,26 +69,6 @@ export interface LaunchForm {
 }
 
 export type LaunchFrame = { event: string; data: string };
-
-export const LAUNCH_LINEAGE_RESOLVER_ID = 'qsd/launch-lineage/v1';
-
-interface LaunchInputs {
-  [key: string]: JsonValue;
-  ca: string;
-  identityRoot: string;
-  halfLifeSec: number;
-  imageHash: string;
-}
-
-/** bytes 0–15 → lineage id (hex). Deterministic and public. */
-export const launchLineageResolver: OutcomeResolver<LaunchInputs> = {
-  id: LAUNCH_LINEAGE_RESOLVER_ID,
-  resolve(bytes) {
-    if (bytes.length < 16) throw new Error('launch draw needs at least 16 bytes');
-    const lineageId = toHex(bytes.slice(0, 16));
-    return { value: { lineageId }, label: `lineage:${lineageId}` };
-  },
-};
 
 export interface LaunchPreset {
   id: string;
@@ -235,11 +212,6 @@ function isPaymentUniqueViolation(e: unknown): boolean {
   return Array.isArray(target) ? target.includes('paymentTx') : typeof target === 'string' ? target.includes('paymentTx') : true;
 }
 
-function hexBytes(e: QuantumEvent): JsonValue {
-  if (e.type === 'entropyArrived') return { ...e, bytes: toHex(e.bytes) } as unknown as JsonValue;
-  return e as unknown as JsonValue;
-}
-
 const CRYPTO_BATCH = 4096;
 
 /**
@@ -288,13 +260,11 @@ const pf = globalThis as unknown as { __qsdPreflight?: { at: number; result: Lau
 
 /**
  * Cheap checks that every service a launch touches answers: genesis config,
- * cost config, the protocol key, the RPC, the protocol wallet's balance, the
- * the Elysium RPC and one byte from the quantum provider.
- * A good result is cached for 30 s (a failure for 10 s) so callers do not spend QRNG quota.
+ * the protocol key, the RPC, and the protocol wallet's balance.
+ * A good result is cached for 30 s and a failure for 10 s.
  */
 export async function launchPreflight(): Promise<LaunchPreflight> {
   const cached = pf.__qsdPreflight;
-  // failures are cached briefly too, so a public endpoint cannot be used to hammer the quantum provider
   if (cached && Date.now() - cached.at < (cached.result.ok ? PREFLIGHT_TTL_MS : 10_000)) return cached.result;
   const problems: string[] = [];
   const check = async (what: string, fn: () => unknown): Promise<void> => {
@@ -312,7 +282,6 @@ export async function launchPreflight(): Promise<LaunchPreflight> {
       if (wei < PREFLIGHT_MIN_CREATOR_WEI) throw new Error(`holds ${wei} wei of HYPE, needs at least ${PREFLIGHT_MIN_CREATOR_WEI} wei to pay network fees`);
       await chain.publicClient.getBlockNumber();
     }),
-    check('quantum provider', () => qrngProbe()),
   ]);
   const result: LaunchPreflight = { ok: problems.length === 0, problems };
   pf.__qsdPreflight = { at: Date.now(), result };
@@ -407,26 +376,23 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     push('superposition', superposition);
     yield* drain();
 
-    // 4. quantum draw → lineage id. Pre-commit anchored before the draw (same discipline as a measurement).
-    const bus = new QuantumEventBus();
-    bus.subscribe((e) => push('quantum', hexBytes(e)));
-    const client = qrngClient(bus);
+    // 4. Lineage id from server randomness. Two anchors stay in front of the testnet CREATE.
     const imageHash = toHex(sha256(form.image.bytes));
-    const inputs: LaunchInputs = { ca, identityRoot, halfLifeSec: preset.halfLifeSec, imageHash };
     let chainSeq = 0;
     const chainFrame = (e: ReserveChainEvent): void => {
       if (e.type === 'anchorRequested') push('chain', { type: 'anchorSubmitted', seq: chainSeq++ } satisfies SceneChainEvent);
       if (e.type === 'anchored') push('chain', { type: 'anchored', seq: chainSeq++, txSignature: e.txSignature } satisfies SceneChainEvent);
     };
-    const { bundle } = await client.measure(inputs, launchLineageResolver, {
-      beforeDraw: async (b) => {
-        await anchor(b.inputsHash, 'precommit', b.nonce);
-      },
-    });
+    const unsubChain = chain.observer.subscribe(chainFrame);
+    const precommitHash = toHex(sha256(new TextEncoder().encode(canonicalJson({ ca, identityRoot, imageHash, halfLifeSec: preset.halfLifeSec }))));
+    await anchor(precommitHash, 'precommit');
+    const lineageBytes = new Uint8Array(16);
+    crypto.getRandomValues(lineageBytes);
+    const lineageId = toHex(lineageBytes);
+    const launchRecord = { source: 'local', ca, identityRoot, lineageId, imageHash, halfLifeSec: preset.halfLifeSec };
+    const launchBundleHash = toHex(sha256(new TextEncoder().encode(canonicalJson(launchRecord))));
     yield* drain();
-    timer.mark('precommit anchor + quantum draw');
-    const lineageId = (bundle.outcome.value as { lineageId: string }).lineageId;
-    const launchBundleHash = bundleHash(bundle);
+    timer.mark('precommit anchor + lineage id');
 
     // 5. sign the launch statement with the identity's first one-time key (through the reserve's Signer).
     const statement = canonicalJson({ ca, identityRoot, lineageId, launchBundleHash, imageHash, halfLifeSec: preset.halfLifeSec });
@@ -441,7 +407,6 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
     yield* drain();
 
     // 6. anchor the launch bundle on-chain (stage 7).
-    const unsubChain = chain.observer.subscribe(chainFrame);
     const proofAnchor = await anchor(launchBundleHash, 'proof');
     unsubChain();
     yield* drain();
@@ -493,7 +458,7 @@ export async function* runLaunch(form: LaunchForm): AsyncGenerator<LaunchFrame> 
         await insertCoinWith(tx, coin, {
           launchPath: launch.path,
           launchTx: launch.txHash,
-          launchBundle: bundle as unknown as ProofBundle,
+          launchBundle: launchRecord,
           createdBy: form.wallet,
           paymentTx,
           website: form.website,

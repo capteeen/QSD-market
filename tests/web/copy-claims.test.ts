@@ -113,11 +113,6 @@ const REVIEWED: Record<string, Review> = {
   'measurements survived': { section: 'economics §5', verdict: 'ok' },
   // ── launch
   'launching — every stage below is a real operation': { section: 'SPEC §7 CORE RULE; verified by tests/web/launch-stream.test.ts', verdict: 'ok' },
-  'Every visual in the sequence is driven by a real event from the key generation, the quantum draw, the signature and the chain. If no event arrives, no stage advances and no value changes; the only motion without an event is the chamber’s ambient drift.': {
-    section: 'SPEC §7 CORE RULE; packages/scene README §3 (documented ambient motion); tests/scene/stillness (no stage / count / value changes without an event)',
-    verdict: 'ok',
-    note: 'H-W5 fixed: the sentence now claims exactly what the scene tests prove (no state change without an event) and names the documented ambient motion.',
-  },
   'The launch identity is generated on the server, in the protocol’s identity reserve. The hash chain values at depths below the tip are one-time secret key material, so the stream you see carries their SHA-256 commitments; every other hash is the real value.': { section: 'crypto README §3; verified byte-for-byte in tests/web/launch-stream.test.ts', verdict: 'ok' },
   // ── measure queue
   'MEASUREMENT QUEUE': { section: 'economics §3', verdict: 'ok' },
