@@ -18,6 +18,8 @@ const nextConfig = {
     outputFileTracingIncludes: {
       '/api/how': ['../../docs/physics.md', '../../docs/economics.md'],
       '/how': ['../../docs/physics.md', '../../docs/economics.md'],
+      // The launch compiles these in, and also ships the files so a serverless read of the repo path still resolves.
+      '/api/launch': ['../packages/elysium/artifacts/*.json'],
     },
   },
   webpack: (config, { isServer }) => {

@@ -1,21 +1,21 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { encodeDeployData, getContractAddress, type Abi, type Address, type Hex } from 'viem';
+import tokenArtifactJson from '../artifacts/InfinitwapToken.json';
 
 export interface TokenArtifact {
   abi: Abi;
   bytecode: Hex;
 }
 
-const here = path.dirname(fileURLToPath(import.meta.url));
+/** Compiled contract JSON produced by `forge build` in contracts/. Bundled so a serverless deploy does not read the file from disk. */
+export function compiledArtifact(json: { abi: unknown; bytecode?: { object?: string } }, name: string): TokenArtifact {
+  const bytecode = json.bytecode?.object;
+  if (!bytecode || bytecode === '0x') throw new Error(`${name} bytecode is missing; run forge build in packages/elysium/contracts`);
+  return { abi: json.abi as Abi, bytecode: bytecode as Hex };
+}
 
 /** Compiled InfinitwapToken (OpenZeppelin ERC-20). Produced by `forge build` in contracts/. */
 export function infinitwapTokenArtifact(): TokenArtifact {
-  const file = path.resolve(here, '../artifacts/InfinitwapToken.json');
-  const json = JSON.parse(readFileSync(file, 'utf8')) as { abi: Abi; bytecode: { object: Hex } };
-  if (!json.bytecode?.object || json.bytecode.object === '0x') throw new Error('InfinitwapToken bytecode is missing; run forge build in packages/elysium/contracts');
-  return { abi: json.abi, bytecode: json.bytecode.object };
+  return compiledArtifact(tokenArtifactJson, 'InfinitwapToken');
 }
 
 /** CREATE address of the token deployed by `from` at `nonce`. */

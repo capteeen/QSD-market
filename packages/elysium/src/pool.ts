@@ -1,27 +1,20 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   decodeEventLog,
   encodeDeployData,
   encodeFunctionData,
   getAddress,
   getContractAddress,
-  type Abi,
   type Address,
   type Hash,
   type Hex,
 } from 'viem';
+import launcherArtifactJson from '../artifacts/InfinitwapLauncher.json';
+import launcherV3ArtifactJson from '../artifacts/InfinitwapLauncherV3.json';
 import type { DeployClients } from './deploy.js';
-import { tokenInitCode, type DeployArgs, type TokenArtifact } from './token.js';
-
-const here = path.dirname(fileURLToPath(import.meta.url));
+import { compiledArtifact, tokenInitCode, type DeployArgs, type TokenArtifact } from './token.js';
 
 export function launcherArtifact(): TokenArtifact {
-  const file = path.resolve(here, '../artifacts/InfinitwapLauncher.json');
-  const json = JSON.parse(readFileSync(file, 'utf8')) as { abi: Abi; bytecode: { object: Hex } };
-  if (!json.bytecode?.object || json.bytecode.object === '0x') throw new Error('InfinitwapLauncher bytecode is missing; run forge build in packages/elysium/contracts');
-  return { abi: json.abi, bytecode: json.bytecode.object };
+  return compiledArtifact(launcherArtifactJson, 'InfinitwapLauncher');
 }
 
 /** CREATE2 address of the token a launcher deploys. The v3 open mints to the launcher so it can deposit the supply. */
@@ -115,10 +108,7 @@ export async function launchWithPool(clients: DeployClients, args: PoolLaunchArg
 }
 
 export function launcherV3Artifact(): TokenArtifact {
-  const file = path.resolve(here, '../artifacts/InfinitwapLauncherV3.json');
-  const json = JSON.parse(readFileSync(file, 'utf8')) as { abi: Abi; bytecode: { object: Hex } };
-  if (!json.bytecode?.object || json.bytecode.object === '0x') throw new Error('InfinitwapLauncherV3 bytecode is missing; run forge build in packages/elysium/contracts');
-  return { abi: json.abi, bytecode: json.bytecode.object };
+  return compiledArtifact(launcherV3ArtifactJson, 'InfinitwapLauncherV3');
 }
 
 export async function deployLauncherV3(clients: DeployClients, positionManager: Address, swapRouter: Address): Promise<Address> {
